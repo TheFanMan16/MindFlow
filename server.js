@@ -1711,12 +1711,35 @@ app.use((req, res) => {
   });
 });
 
-app.listen(3000, () => {
-  console.log('✅ Server running on http://localhost:3000');
+// Use the PORT environment variable provided by Render, or fallback to 3000
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+  
   if (process.env.NODE_ENV === 'development') {
-  console.log('🔍 DEBUG: Registered routes include /get-subscription-details');
+    console.log('🔍 DEBUG: Registered routes include /get-subscription-details');
   }
+
   // #region agent log
-  logEntry({location:'server.js:485',message:'Server started',data:{port:3000,hasGetSubscriptionRoute:true,routesRegistered:['/get-subscription-details','/create-portal-session','/cancel-subscription','/create-checkout-session']},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'E'});
+  // Updated to log the dynamic PORT variable instead of hardcoded 3000
+  logEntry({
+    location: 'server.js:485',
+    message: 'Server started',
+    data: {
+      port: PORT,
+      hasGetSubscriptionRoute: true,
+      routesRegistered: [
+        '/get-subscription-details',
+        '/create-portal-session',
+        '/cancel-subscription',
+        '/create-checkout-session'
+      ]
+    },
+    timestamp: Date.now(),
+    sessionId: 'debug-session',
+    runId: 'run2',
+    hypothesisId: 'E'
+  });
   // #endregion
 });
