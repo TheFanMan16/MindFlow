@@ -72,6 +72,12 @@ if (missingVars.length > 0 && isDevelopment) {
   console.warn('   Set these in your .env file for full functionality.');
 }
 
+// Determine API base URL (backend proxy)
+// In production, points to Render backend; in development, points to localhost
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (
+  isProduction ? 'https://mindflow-backend.onrender.com' : 'http://localhost:3000'
+);
+
 // Only create config object if validation passed (or in development)
 // In production, if validation failed above, we never reach this point
 const config = {
@@ -92,6 +98,12 @@ const config = {
   supabase: {
     url: import.meta.env.VITE_SUPABASE_URL,
     anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+  },
+
+  // API Backend (for all fetch requests)
+  // Uses environment variable or auto-detects based on mode
+  api: {
+    baseUrl: apiBaseUrl,
   },
 
   // Environment

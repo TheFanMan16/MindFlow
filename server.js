@@ -158,8 +158,7 @@ app.use(helmet({
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  // Add your production domain here when ready
-  // 'https://your-production-domain.com',
+  'https://mindflow-app.vercel.app', // Production frontend (Vercel)
 ];
 
 app.use(cors({
