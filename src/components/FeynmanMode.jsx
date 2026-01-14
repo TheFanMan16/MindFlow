@@ -1,64 +1,111 @@
-import React, { useState } from 'react';
-import { generateJSONWithGemini } from '../utils/gemini';
+import React, { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 
 const FeynmanMode = () => {
+  const { user, profile, isPro } = useAuth();
+  const [concept, setConcept] = useState('');
   const [explanation, setExplanation] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiUsageCount, setAiUsageCount] = useState(0);
 
-  // Analyze explanation using Gemini API
+  // Fetch AI usage count from profile
+  useEffect(() => {
+    const fetchUsage = async () => {
+      if (!user?.id) {
+        setAiUsageCount(0);
+        return;
+      }
+      
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('ai_usage_count')
+          .eq('id', user.id)
+          .single();
+        
+        if (data) {
+          setAiUsageCount(data.ai_usage_count || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching AI usage:', error);
+        setAiUsageCount(0);
+      }
+    };
+
+    fetchUsage();
+  }, [user?.id]);
+
+  // Analyze explanation using backend API
   const analyzeExplanation = async () => {
+    if (!concept.trim()) {
+      alert('Please enter a target concept first.');
+      return;
+    }
+
     if (!explanation.trim()) {
       alert('Please enter an explanation first.');
       return;
     }
 
     setIsAnalyzing(true);
+    setFeedback(null);
     
     try {
-      const prompt = `Analyze this explanation for simplicity and jargon. Rate the simplicity from 0-100 (higher is simpler). Identify any technical jargon that should be explained in simpler terms.
-
-Explanation to analyze:
-${explanation}
-
-Return a JSON object with this exact structure:
-{
-  "simplicity": 85,
-  "jargon": ["term1", "term2", "term3"]
-}
-
-Return only valid JSON, no additional text or markdown formatting.`;
-
-      const result = await generateJSONWithGemini(prompt, {
-        temperature: 0.5,
-        maxTokens: 1024,
+      const response = await fetch('http://localhost:3000/api/analyze-feynman', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          concept: concept.trim(),
+          explanation: explanation.trim(),
+          userId: user?.id,
+        }),
       });
 
+      if (response.status === 403) {
+        const errorData = await response.json().catch(() => ({ error: 'Daily AI Limit Reached' }));
+        toast.error(errorData.error || 'Daily AI Limit Reached (5/5). Upgrade to Pro for unlimited.');
+        // Optionally navigate to subscription page
+        return;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Error ${response.status}`);
+      }
+
+      // Refresh usage count after successful request
+      if (user?.id) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('ai_usage_count')
+          .eq('id', user.id)
+          .single();
+        if (data) {
+          setAiUsageCount(data.ai_usage_count || 0);
+        }
+      }
+
+      const result = await response.json();
+
       // Validate response
-      if (typeof result.simplicity !== 'number' || !Array.isArray(result.jargon)) {
-        throw new Error('Invalid response format from AI');
+      if (!result || typeof result.score !== 'number') {
+        throw new Error('Invalid response format from server');
       }
 
       setFeedback(result);
     } catch (error) {
       console.error('Feynman analysis error:', error);
-      alert(`Error analyzing explanation: ${error.message}. Please try again.`);
+      toast.error(`Failed to generate analysis: ${error.message || 'Check console for details.'}`);
       setFeedback(null);
     } finally {
+      // CRITICAL: Always turn off loading, even if it crashes
       setIsAnalyzing(false);
     }
-  };
-
-  // Highlight jargon in text
-  const highlightJargon = (text, jargonWords) => {
-    if (!jargonWords || jargonWords.length === 0) return text;
-    
-    let highlighted = text;
-    jargonWords.forEach(word => {
-      const regex = new RegExp(`\\b${word}\\b`, 'gi');
-      highlighted = highlighted.replace(regex, `<mark style="background-color: rgba(239, 68, 68, 0.3); padding: 2px 4px; border-radius: 4px;">${word}</mark>`);
-    });
-    return highlighted;
   };
 
   return (
@@ -70,35 +117,61 @@ Return only valid JSON, no additional text or markdown formatting.`;
       backgroundColor: '#030712',
       overflow: 'hidden',
     }}>
-      {/* Header */}
       <div style={{
-        marginBottom: '32px',
-      }}>
-        <h1 style={{
-          fontSize: '42px',
-          fontWeight: '700',
-          marginBottom: '8px',
-          color: '#ffffff',
-          letterSpacing: '-0.02em',
-        }}>
-          Feynman Method
-        </h1>
-        <p style={{
-          fontSize: '16px',
-          color: 'rgba(255, 255, 255, 0.6)',
-        }}>
-          Explain concepts in simple terms. Get feedback on clarity and jargon.
-        </p>
-      </div>
-
-      {/* Split Screen Layout */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '32px',
+        width: '95%',
+        maxWidth: '1600px',
+        margin: '0 auto',
         flex: 1,
-        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
       }}>
+        {/* Header */}
+        <div style={{
+          marginBottom: '32px',
+          textAlign: 'center',
+        }}>
+          <h1 style={{
+            fontSize: '42px',
+            fontWeight: '700',
+            marginBottom: '8px',
+            color: '#f59e0b',
+            letterSpacing: '-0.02em',
+            textShadow: '0 0 10px rgba(245, 158, 11, 0.5), 0 0 20px rgba(245, 158, 11, 0.4), 0 0 30px rgba(245, 158, 11, 0.3)',
+          }}>
+            Feynman Method
+          </h1>
+          <p style={{
+            fontSize: '16px',
+            color: 'rgba(255, 255, 255, 0.6)',
+            marginBottom: '12px',
+          }}>
+            Explain concepts in simple terms. Get feedback on clarity and jargon.
+          </p>
+          {/* Usage Badge - Only show for free users */}
+          {!isPro && (
+            <div style={{
+              display: 'inline-block',
+              backgroundColor: 'rgba(59, 130, 246, 0.2)',
+              border: '1px solid rgba(59, 130, 246, 0.4)',
+              borderRadius: '20px',
+              padding: '6px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#60a5fa',
+            }}>
+              Daily Credits: {aiUsageCount}/5
+            </div>
+          )}
+        </div>
+
+        {/* Split Screen Layout */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(400px, 100%), 1fr))',
+          gap: '32px',
+          flex: 1,
+          minHeight: 0,
+        }}>
         {/* Left: Editor */}
         <div style={{
           display: 'flex',
@@ -108,7 +181,40 @@ Return only valid JSON, no additional text or markdown formatting.`;
           borderRadius: '24px',
           padding: '32px',
           border: '1px solid rgba(255, 255, 255, 0.1)',
+          minHeight: '70vh',
         }}>
+          <div style={{
+            marginBottom: '20px',
+          }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: 'rgba(255, 255, 255, 0.7)',
+              marginBottom: '8px',
+            }}>
+              Target Concept
+            </label>
+            <input
+              type="text"
+              value={concept}
+              onChange={(e) => setConcept(e.target.value)}
+              placeholder="e.g., TCP vs UDP, Photosynthesis, Quantum Entanglement..."
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                color: '#ffffff',
+                fontSize: '16px',
+                fontFamily: 'inherit',
+                outline: 'none',
+                marginBottom: '20px',
+              }}
+            />
+          </div>
+
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -124,9 +230,9 @@ Return only valid JSON, no additional text or markdown formatting.`;
             </h2>
             <button
               onClick={analyzeExplanation}
-              disabled={isAnalyzing || !explanation.trim()}
+              disabled={isAnalyzing || !concept.trim() || !explanation.trim()}
               style={{
-                background: isAnalyzing || !explanation.trim()
+                background: isAnalyzing || !concept.trim() || !explanation.trim()
                   ? 'rgba(255, 255, 255, 0.1)'
                   : 'linear-gradient(90deg, #f59e0b, #ea580c)',
                 color: '#ffffff',
@@ -135,12 +241,12 @@ Return only valid JSON, no additional text or markdown formatting.`;
                 borderRadius: '12px',
                 fontSize: '16px',
                 fontWeight: '600',
-                cursor: isAnalyzing || !explanation.trim() ? 'not-allowed' : 'pointer',
+                cursor: isAnalyzing || !concept.trim() || !explanation.trim() ? 'not-allowed' : 'pointer',
                 transition: 'all 0.3s ease',
-                opacity: isAnalyzing || !explanation.trim() ? 0.5 : 1,
+                opacity: isAnalyzing || !concept.trim() || !explanation.trim() ? 0.5 : 1,
               }}
               onMouseEnter={(e) => {
-                if (!isAnalyzing && explanation.trim()) {
+                if (!isAnalyzing && concept.trim() && explanation.trim()) {
                   e.currentTarget.style.transform = 'scale(1.02)';
                 }
               }}
@@ -159,6 +265,8 @@ Return only valid JSON, no additional text or markdown formatting.`;
             style={{
               flex: 1,
               width: '100%',
+              height: '100%',
+              minHeight: '500px',
               padding: '20px',
               backgroundColor: 'rgba(0, 0, 0, 0.3)',
               border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -182,6 +290,7 @@ Return only valid JSON, no additional text or markdown formatting.`;
           borderRadius: '24px',
           padding: '32px',
           border: '1px solid rgba(255, 255, 255, 0.1)',
+          minHeight: '70vh',
         }}>
           <h2 style={{
             fontSize: '20px',
@@ -210,72 +319,69 @@ Return only valid JSON, no additional text or markdown formatting.`;
               flexDirection: 'column',
               gap: '24px',
             }}>
-              {/* Simplicity Score */}
+              {/* Score Badge */}
               <div style={{
                 padding: '24px',
-                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                backgroundColor: feedback.score >= 80 
+                  ? 'rgba(34, 197, 94, 0.1)' 
+                  : feedback.score >= 60
+                  ? 'rgba(251, 191, 36, 0.1)'
+                  : 'rgba(239, 68, 68, 0.1)',
                 borderRadius: '16px',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
+                border: `1px solid ${feedback.score >= 80 
+                  ? 'rgba(34, 197, 94, 0.3)' 
+                  : feedback.score >= 60
+                  ? 'rgba(251, 191, 36, 0.3)'
+                  : 'rgba(239, 68, 68, 0.3)'}`,
+                textAlign: 'center',
               }}>
                 <div style={{
                   fontSize: '14px',
                   color: 'rgba(255, 255, 255, 0.6)',
-                  marginBottom: '8px',
+                  marginBottom: '12px',
                   fontWeight: '500',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
                 }}>
-                  Simplicity Score
+                  Overall Score
                 </div>
                 <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '16px',
+                  fontSize: '64px',
+                  fontWeight: '700',
+                  color: feedback.score >= 80 
+                    ? '#22c55e' 
+                    : feedback.score >= 60
+                    ? '#fbbf24'
+                    : '#ef4444',
+                  marginBottom: '12px',
+                  textShadow: `0 0 20px ${feedback.score >= 80 
+                    ? 'rgba(34, 197, 94, 0.5)' 
+                    : feedback.score >= 60
+                    ? 'rgba(251, 191, 36, 0.5)'
+                    : 'rgba(239, 68, 68, 0.5)'}`,
                 }}>
-                  <div style={{
-                    fontSize: '48px',
-                    fontWeight: '700',
-                    color: '#22c55e',
-                  }}>
-                    {feedback.simplicity}
-                  </div>
-                  <div style={{
-                    flex: 1,
-                    height: '8px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    borderRadius: '4px',
-                    overflow: 'hidden',
-                  }}>
-                    <div style={{
-                      width: `${feedback.simplicity}%`,
-                      height: '100%',
-                      background: 'linear-gradient(90deg, #22c55e, #4ade80)',
-                      transition: 'width 0.5s ease',
-                    }} />
-                  </div>
+                  {feedback.score}
                 </div>
                 <div style={{
                   fontSize: '14px',
-                  color: 'rgba(255, 255, 255, 0.6)',
-                  marginTop: '8px',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  lineHeight: '1.5',
                 }}>
-                  {feedback.simplicity >= 80 
-                    ? 'Excellent! Your explanation is very clear and simple.'
-                    : feedback.simplicity >= 60
-                    ? 'Good! Try simplifying a bit more.'
-                    : 'Consider using simpler language and fewer technical terms.'}
+                  {feedback.feedback}
                 </div>
               </div>
 
-              {/* Jargon Detection */}
-              <div>
-                <div style={{
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: '#ffffff',
-                  marginBottom: '12px',
-                }}>
-                  Jargon Detected
-                </div>
-                {feedback.jargon && feedback.jargon.length > 0 ? (
+              {/* Missing Concepts */}
+              {feedback.missing_concepts && feedback.missing_concepts.length > 0 && (
+                <div>
+                  <div style={{
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    color: '#ffffff',
+                    marginBottom: '16px',
+                  }}>
+                    What You Missed
+                  </div>
                   <div style={{
                     padding: '20px',
                     backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -283,62 +389,96 @@ Return only valid JSON, no additional text or markdown formatting.`;
                     border: '1px solid rgba(239, 68, 68, 0.3)',
                   }}>
                     <div style={{
-                      fontSize: '14px',
-                      color: 'rgba(255, 255, 255, 0.7)',
-                      marginBottom: '12px',
-                    }}>
-                      Consider explaining these terms:
-                    </div>
-                    <div style={{
                       display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '8px',
+                      flexDirection: 'column',
+                      gap: '12px',
                     }}>
-                      {feedback.jargon.map((word, index) => (
-                        <span
+                      {feedback.missing_concepts.map((concept, index) => (
+                        <div
                           key={index}
                           style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '12px',
+                            padding: '12px',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
                             borderRadius: '8px',
-                            fontSize: '14px',
-                            color: '#ef4444',
-                            fontWeight: '500',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
                           }}
                         >
-                          {word}
-                        </span>
+                          <div style={{
+                            fontSize: '20px',
+                            color: '#ef4444',
+                            marginTop: '2px',
+                          }}>
+                            ✗
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{
+                              fontSize: '15px',
+                              fontWeight: '600',
+                              color: '#ffffff',
+                              marginBottom: '4px',
+                            }}>
+                              {typeof concept === 'string' ? concept : concept.concept || concept}
+                            </div>
+                            {typeof concept === 'object' && concept.explanation && (
+                              <div style={{
+                                fontSize: '14px',
+                                color: 'rgba(255, 255, 255, 0.7)',
+                                lineHeight: '1.5',
+                              }}>
+                                {concept.explanation}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                    <div style={{
-                      marginTop: '16px',
-                      padding: '12px',
-                      backgroundColor: 'rgba(0, 0, 0, 0.2)',
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      color: 'rgba(255, 255, 255, 0.6)',
-                      lineHeight: '1.5',
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: highlightJargon(explanation, feedback.jargon),
-                    }}
-                    />
                   </div>
-                ) : (
+                </div>
+              )}
+
+              {/* Simplification */}
+              {feedback.simplification && (
+                <div>
                   <div style={{
-                    padding: '20px',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(34, 197, 94, 0.3)',
-                    fontSize: '14px',
-                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    color: '#ffffff',
+                    marginBottom: '16px',
                   }}>
-                    ✓ No jargon detected! Your explanation uses simple, accessible language.
+                    Simpler Version
                   </div>
-                )}
-              </div>
+                  <div style={{
+                    padding: '24px',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderRadius: '16px',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    position: 'relative',
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      top: '16px',
+                      right: '16px',
+                      fontSize: '24px',
+                    }}>
+                      💡
+                    </div>
+                    <div style={{
+                      fontSize: '15px',
+                      color: 'rgba(255, 255, 255, 0.9)',
+                      lineHeight: '1.7',
+                      paddingRight: '40px',
+                    }}>
+                      {feedback.simplification}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>

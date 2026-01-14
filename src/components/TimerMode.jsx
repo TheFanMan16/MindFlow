@@ -1,8 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
 import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision';
+import { RotateCcw, Play, Pause } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useTimer } from '../context/TimerContext';
+import { supabase } from '../lib/supabaseClient';
+import { useAccurateTimer } from '../hooks/useAccurateTimer';
 
 const TimerMode = () => {
+  const navigate = useNavigate();
+  const { isPro, user, setSessionMinutes, sessionMinutes, setSentryTriggered, sentryTriggered } = useAuth();
+  const { updateTimerState, clearTimerState } = useTimer();
   const [mode, setMode] = useState('pomodoro'); // pomodoro, shortBreak, longBreak, flowmodoro
   const [isRunning, setIsRunning] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(25 * 60); // in seconds
@@ -82,6 +91,9 @@ const TimerMode = () => {
   const [faceCount, setFaceCount] = useState(0);
   const [cameraError, setCameraError] = useState(null);
   const [isVideoMinimized, setIsVideoMinimized] = useState(false);
+  // Tab visibility Sentry Mode state
+  const [showFocusBrokenAlert, setShowFocusBrokenAlert] = useState(false);
+  const wasTabHiddenPaused = useRef(false); // Track if pause was due to tab visibility
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
   const webcamRef = useRef(null);
@@ -90,29 +102,144 @@ const TimerMode = () => {
   const detectorRef = useRef(null);
   const detectionIntervalRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
+  const wasAutoPaused = useRef(false); // Track if pause was automatic (Sentry) vs manual
+  const faceAbsenceCount = useRef(0); // Count consecutive frames with no face
+  const facePresenceCount = useRef(0); // Count consecutive frames with face detected
+  const ABSENCE_THRESHOLD = 2; // 2 frames at 500ms = 1 second before pausing
+  const PRESENCE_THRESHOLD = 3; // 3 frames at 500ms = 1.5 seconds before resuming
 
-  // Initialize time based on mode
+  // Calculate initial time for countdown modes
+  const getInitialTime = useCallback(() => {
+    if (customBreakTime !== null && (mode === 'shortBreak' || mode === 'longBreak')) {
+      return customBreakTime;
+    }
+    
+    switch (mode) {
+      case 'pomodoro':
+        return pomodoroDuration * 60;
+      case 'shortBreak':
+        return shortBreakDuration * 60;
+      case 'longBreak':
+        return longBreakDuration * 60;
+      default:
+        return 0;
+    }
+  }, [mode, pomodoroDuration, shortBreakDuration, longBreakDuration, customBreakTime]);
+
+  // Use Web Worker timer for countdown modes (pomodoro, shortBreak, longBreak)
+  // Flowmodoro uses its own setInterval logic (counts up)
+  const isCountdownMode = mode !== 'flowmodoro';
+  const initialTime = isCountdownMode ? getInitialTime() : 0;
+
+  // Completion callback ref (will be set after playNotificationSound and saveSession are defined)
+  const handleTimerCompleteRef = useRef(null);
+
+  // Accurate timestamp-based timer hook (only for countdown modes)
+  // Must be called before any useEffect that uses its return values
+  const {
+    timeLeft: workerTimeLeft,
+    isRunning: workerIsRunning,
+    start: workerStart,
+    pause: workerPause,
+    reset: workerReset,
+    duration: workerDuration,
+  } = useAccurateTimer(
+    isCountdownMode ? initialTime : 0,
+    () => {
+      // Use ref to call the latest version of handleTimerComplete
+      if (handleTimerCompleteRef.current) {
+        handleTimerCompleteRef.current();
+      }
+    }
+  );
+
+  // Sync worker timer state with component state for countdown modes
+  // Use hook values directly - simpler and less conflict-prone
   useEffect(() => {
-    if (!isRunning) {
+    if (isCountdownMode) {
+      setTimeRemaining(workerTimeLeft);
+      setIsRunning(workerIsRunning);
+    }
+  }, [workerTimeLeft, workerIsRunning, isCountdownMode]);
+
+  // Sync timer state to global TimerContext for mini timer display
+  useEffect(() => {
+    if (isRunning) {
+      updateTimerState({
+        mode,
+        isRunning,
+        timeRemaining,
+        timeElapsed,
+      });
+    } else {
+      // Clear global timer state when not running
+      clearTimerState();
+    }
+  }, [mode, isRunning, timeRemaining, timeElapsed, updateTimerState, clearTimerState]);
+
+  // Track previous mode and initialTime to detect actual changes (not pause/resume)
+  const previousModeRef = useRef(mode);
+  const previousInitialTimeRef = useRef(initialTime);
+  const previousCustomBreakTimeRef = useRef(customBreakTime);
+
+  // Initialize time based on mode and reset worker timer ONLY when mode/duration actually changes
+  useEffect(() => {
+    const modeChanged = previousModeRef.current !== mode;
+    const durationChanged = previousInitialTimeRef.current !== initialTime;
+    const customBreakTimeChanged = previousCustomBreakTimeRef.current !== customBreakTime;
+
+    // Only reset if mode or duration actually changed (not when pausing)
+    if (modeChanged || durationChanged || customBreakTimeChanged) {
+      // Update refs to track current values
+      previousModeRef.current = mode;
+      previousInitialTimeRef.current = initialTime;
+      previousCustomBreakTimeRef.current = customBreakTime;
+
+      // Always reset when mode/duration changes (even if running - stop and reset)
+      if (modeChanged || durationChanged) {
+        // Stop timer if running
+        if (isRunning && isCountdownMode) {
+          setIsRunning(false);
+          workerPause();
+        }
+      }
+
       // If we have a custom break time (from flowmodoro), use it and clear it
       if (customBreakTime !== null && (mode === 'shortBreak' || mode === 'longBreak')) {
-        setTimeRemaining(customBreakTime);
+        const customTime = customBreakTime;
         setCustomBreakTime(null);
+        // Reset worker timer with custom time
+        if (isCountdownMode) {
+          workerReset(customTime);
+        }
         return;
+      }
+      
+      // Reset session tracking when mode changes (if not pomodoro)
+      if (mode !== 'pomodoro') {
+        sessionSecondsRef.current = 0;
+        sessionStartTimeRef.current = null;
+        setSessionMinutes(0);
       }
       
       switch (mode) {
         case 'pomodoro':
-          setTimeRemaining(pomodoroDuration * 60);
           setTimeElapsed(0);
+          if (isCountdownMode) {
+            workerReset(initialTime);
+          }
           break;
         case 'shortBreak':
-          setTimeRemaining(shortBreakDuration * 60);
           setTimeElapsed(0);
+          if (isCountdownMode) {
+            workerReset(initialTime);
+          }
           break;
         case 'longBreak':
-          setTimeRemaining(longBreakDuration * 60);
           setTimeElapsed(0);
+          if (isCountdownMode) {
+            workerReset(initialTime);
+          }
           break;
         case 'flowmodoro':
           setTimeElapsed(0);
@@ -122,10 +249,16 @@ const TimerMode = () => {
           break;
       }
     }
-  }, [mode, pomodoroDuration, shortBreakDuration, longBreakDuration, customBreakTime]);
+  }, [mode, pomodoroDuration, shortBreakDuration, longBreakDuration, customBreakTime, setSessionMinutes, isRunning, isCountdownMode, workerReset, workerPause, initialTime]);
 
-  // Initialize MediaPipe Face Detector
+  // Initialize MediaPipe Face Detector (Pro users only)
   useEffect(() => {
+    // Only initialize MediaPipe if user is Pro
+    if (!isPro) {
+      setFaceDetectorStatus('Pro Feature');
+      return;
+    }
+
     const initializeMediaPipe = async () => {
       try {
         setFaceDetectorStatus('Loading Google Vision...');
@@ -153,7 +286,7 @@ const TimerMode = () => {
     };
     
     initializeMediaPipe();
-  }, []);
+  }, [isPro]);
 
   // Initialize canvas for face detection visualization
   useEffect(() => {
@@ -230,11 +363,40 @@ const TimerMode = () => {
         
         // Check if user is present (face detected)
         const isPresent = detectedCount > 0;
-        setIsUserPresent(isPresent);
         
-        // Auto-pause timer if no face detected
-        if (!isPresent && isRunning) {
-          setIsRunning(false);
+        // Grace period logic with debouncing
+        if (isPresent) {
+          // Face detected - increment presence counter, reset absence counter
+          facePresenceCount.current += 1;
+          faceAbsenceCount.current = 0;
+          
+          // Only update state if we've had consistent presence (3 frames = ~1.5 seconds)
+          if (facePresenceCount.current >= PRESENCE_THRESHOLD) {
+            setIsUserPresent(true);
+            
+            // Auto-resume if timer was auto-paused
+            if (wasAutoPaused.current && !isRunning) {
+              setIsRunning(true);
+              wasAutoPaused.current = false;
+              console.log('Sentry: User returned, auto-resuming timer');
+            }
+          }
+        } else {
+          // No face detected - increment absence counter, reset presence counter
+          faceAbsenceCount.current += 1;
+          facePresenceCount.current = 0;
+          
+          // Only update state if we've had consistent absence (2 frames = ~1 second)
+          if (faceAbsenceCount.current >= ABSENCE_THRESHOLD) {
+            setIsUserPresent(false);
+            
+            // Auto-pause timer if it's currently running
+            if (isRunning) {
+              setIsRunning(false);
+              wasAutoPaused.current = true;
+              console.log('Sentry: User absent, auto-pausing timer');
+            }
+          }
         }
         
         // Draw detection boxes on canvas
@@ -291,6 +453,10 @@ const TimerMode = () => {
       if (!isSentryActive) {
         setIsUserPresent(true);
         setFaceCount(0);
+        // Reset auto-pause state when sentry is disabled
+        wasAutoPaused.current = false;
+        faceAbsenceCount.current = 0;
+        facePresenceCount.current = 0;
         // Clear canvas
         if (canvasContextRef.current && canvasRef.current) {
           canvasContextRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -318,43 +484,226 @@ const TimerMode = () => {
     setSessionHistory((prev) => [newSession, ...prev].slice(0, 50)); // Keep last 50 sessions
   }, [focusIntent]);
 
-  // Timer interval logic
+  // Track session seconds for live updates (only for pomodoro mode)
+  const sessionSecondsRef = useRef(0); // Total seconds elapsed in current session
+  const sessionStartTimeRef = useRef(null); // Track when current session started
+
+  // Incrementally save to database every 60 seconds
   useEffect(() => {
-    // Only run timer if user is present (when sentry is active) or sentry is off
-    if (isRunning && (!isSentryActive || isUserPresent)) {
-      intervalRef.current = setInterval(() => {
-        if (mode === 'flowmodoro') {
-          setTimeElapsed((prev) => prev + 1);
-        } else {
-          setTimeRemaining((prev) => {
-            if (prev <= 1) {
-              setIsRunning(false);
-              playNotificationSound();
-              
-              // Save session when Pomodoro completes
-              if (mode === 'pomodoro') {
-                const totalDuration = pomodoroDuration * 60;
-                saveSession('pomodoro', totalDuration);
+    if (!user?.id || mode !== 'pomodoro' || !isRunning) {
+      return;
+    }
+
+    const saveInterval = setInterval(async () => {
+      // Only save if we've accumulated at least 60 seconds
+      const minutesToSave = Math.floor(sessionSecondsRef.current / 60);
+      
+      if (minutesToSave > 0) {
+        try {
+          // Get current total_focus_minutes
+          const { data: currentProfile, error: fetchError } = await supabase
+            .from('profiles')
+            .select('total_focus_minutes')
+            .eq('id', user.id)
+            .single();
+
+          if (fetchError) {
+            console.error('Error fetching profile for update:', fetchError);
+            return;
+          }
+
+          const currentTotal = currentProfile?.total_focus_minutes || 0;
+          
+          // Increment by the minutes we've accumulated
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ total_focus_minutes: currentTotal + minutesToSave })
+            .eq('id', user.id);
+
+          if (updateError) {
+            console.error('Error updating total_focus_minutes:', updateError);
+          } else {
+            console.log(`✅ Saved ${minutesToSave} minute(s) to database. New total: ${currentTotal + minutesToSave}`);
+            
+            // Upsert into daily_activity table for heatmap
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+            try {
+              // Check if row exists for today
+              const { data: existingRow, error: fetchError } = await supabase
+                .from('daily_activity')
+                .select('minutes_focused')
+                .eq('user_id', user.id)
+                .eq('date', today)
+                .maybeSingle();
+
+              if (fetchError && fetchError.code !== 'PGRST116') {
+                // PGRST116 is "not found" which is fine
+                console.error('Error checking daily_activity:', fetchError);
+              } else if (existingRow) {
+                // Row exists, increment
+                const { error: updateError } = await supabase
+                  .from('daily_activity')
+                  .update({ minutes_focused: (existingRow.minutes_focused || 0) + minutesToSave })
+                  .eq('user_id', user.id)
+                  .eq('date', today);
+                
+                if (updateError) {
+                  console.error('Error updating daily_activity:', updateError);
+                }
+              } else {
+                // Row doesn't exist, insert new
+                const { error: insertError } = await supabase
+                  .from('daily_activity')
+                  .insert({
+                    user_id: user.id,
+                    date: today,
+                    minutes_focused: minutesToSave,
+                  });
+                
+                if (insertError) {
+                  console.error('Error inserting daily_activity:', insertError);
+                  // If the table doesn't exist yet, that's okay - user needs to run migration
+                }
               }
-              
-              return 0;
+            } catch (error) {
+              console.error('Error in daily_activity upsert:', error);
+              // Continue execution even if daily_activity fails
             }
-            return prev - 1;
-          });
+            
+            // Reset the counter (keep any partial minute)
+            sessionSecondsRef.current = sessionSecondsRef.current % 60;
+            setSessionMinutes(0); // Reset displayed minutes after saving
+          }
+        } catch (error) {
+          console.error('Error in incremental save:', error);
         }
+      }
+    }, 60000); // Check every 60 seconds
+
+    return () => clearInterval(saveInterval);
+  }, [user?.id, mode, isRunning, setSessionMinutes]);
+
+  // Control Web Worker timer based on isRunning and sentry mode (for countdown modes)
+  useEffect(() => {
+    if (isCountdownMode) {
+      // Only run timer if user is present (when sentry is active) or sentry is off
+      if (isRunning && (!isSentryActive || isUserPresent)) {
+        // Track session start time for pomodoro mode
+        if (mode === 'pomodoro' && sessionStartTimeRef.current === null) {
+          sessionStartTimeRef.current = Date.now();
+        }
+        
+        // Start worker timer if not already running and time remaining > 0
+        if (!workerIsRunning && timeRemaining > 0) {
+          workerStart();
+        }
+      } else {
+        // Pause worker timer if running (but DON'T reset the timer value)
+        if (workerIsRunning) {
+          workerPause();
+        }
+        
+        // Only save partial minutes when timer is fully stopped (not just paused)
+        // We check if this is a manual stop by checking if timeRemaining is at full duration
+        // If timeRemaining < initialTime, we're paused mid-session, don't save yet
+        const isStopped = !isRunning && (timeRemaining === initialTime || timeRemaining <= 0);
+        
+        if (isStopped && mode === 'pomodoro' && sessionSecondsRef.current > 0 && user?.id) {
+          const partialMinutes = Math.floor(sessionSecondsRef.current / 60);
+          if (partialMinutes > 0) {
+            supabase
+              .from('profiles')
+              .select('total_focus_minutes')
+              .eq('id', user.id)
+              .single()
+              .then(async ({ data: currentProfile }) => {
+                if (currentProfile) {
+                  await supabase
+                    .from('profiles')
+                    .update({ total_focus_minutes: (currentProfile.total_focus_minutes || 0) + partialMinutes })
+                    .eq('id', user.id);
+                  
+                  // Upsert into daily_activity
+                  const today = new Date().toISOString().split('T')[0];
+                  const { data: existingRow } = await supabase
+                    .from('daily_activity')
+                    .select('minutes_focused')
+                    .eq('user_id', user.id)
+                    .eq('date', today)
+                    .single();
+
+                  if (existingRow) {
+                    await supabase
+                      .from('daily_activity')
+                      .update({ minutes_focused: (existingRow.minutes_focused || 0) + partialMinutes })
+                      .eq('user_id', user.id)
+                      .eq('date', today);
+                  } else {
+                    await supabase
+                      .from('daily_activity')
+                      .insert({
+                        user_id: user.id,
+                        date: today,
+                        minutes_focused: partialMinutes,
+                      });
+                  }
+                  
+                  // Reset counter after saving
+                  sessionSecondsRef.current = sessionSecondsRef.current % 60;
+                  setSessionMinutes(0);
+                }
+              });
+          } else {
+            // If less than a minute, just reset the counter
+            sessionSecondsRef.current = 0;
+            setSessionMinutes(0);
+          }
+        }
+        
+        // Only reset session start time when actually stopped (not just paused)
+        // Don't reset when paused - we want to preserve the session state for resume
+        if (isStopped) {
+          sessionStartTimeRef.current = null;
+        }
+      }
+    }
+  }, [isRunning, isCountdownMode, isSentryActive, isUserPresent, mode, workerIsRunning, workerStart, workerPause, user?.id, setSessionMinutes, timeRemaining, initialTime]);
+
+  // Track session seconds for pomodoro mode (for live UI updates and saving)
+  useEffect(() => {
+    if (mode === 'pomodoro' && isRunning && isCountdownMode && (!isSentryActive || isUserPresent)) {
+      // Track elapsed seconds for session minutes
+      const sessionInterval = setInterval(() => {
+        sessionSecondsRef.current += 1;
+        const newMinutes = Math.floor(sessionSecondsRef.current / 60);
+        setSessionMinutes(newMinutes);
+      }, 1000);
+
+      return () => clearInterval(sessionInterval);
+    }
+  }, [mode, isRunning, isCountdownMode, isSentryActive, isUserPresent, setSessionMinutes]);
+
+  // Flowmodoro timer logic (counts up, uses setInterval)
+  useEffect(() => {
+    if (mode === 'flowmodoro' && isRunning && (!isSentryActive || isUserPresent)) {
+      intervalRef.current = setInterval(() => {
+        setTimeElapsed((prev) => prev + 1);
       }, 1000);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     }
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [isRunning, mode, pomodoroDuration, saveSession, isSentryActive, isUserPresent]);
+  }, [mode, isRunning, isSentryActive, isUserPresent]);
+
 
   const playNotificationSound = () => {
     // Create a simple beep sound using Web Audio API
@@ -378,6 +727,196 @@ const TimerMode = () => {
       console.error('Failed to play notification sound:', error);
     }
   };
+
+  const playWarningSound = () => {
+    // Create a more urgent warning sound using Web Audio API
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Play two quick beeps for warning
+      for (let i = 0; i < 2; i++) {
+        setTimeout(() => {
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+
+          oscillator.frequency.value = 600; // Lower, more urgent frequency
+          oscillator.type = 'square'; // Square wave for harsher sound
+
+          gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + 0.3);
+        }, i * 200);
+      }
+    } catch (error) {
+      console.error('Failed to play warning sound:', error);
+    }
+  };
+
+  const showBrowserNotification = (title, message) => {
+    // Request permission if not already granted
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    // Show notification if permission is granted
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body: message,
+          icon: '/favicon.ico', // You can add a custom icon
+          badge: '/favicon.ico',
+          tag: 'sentry-alert', // Replace previous notifications with same tag
+          requireInteraction: false,
+        });
+      } catch (error) {
+        console.error('Failed to show browser notification:', error);
+      }
+    }
+  };
+
+  // Completion callback for Web Worker timer
+  const handleTimerComplete = useCallback(() => {
+    setIsRunning(false);
+    playNotificationSound();
+    
+    // Save session when Pomodoro completes
+    if (mode === 'pomodoro') {
+      const totalDuration = pomodoroDuration * 60;
+      saveSession('pomodoro', totalDuration);
+      
+      // Save any remaining partial minutes
+      const remainingSeconds = sessionSecondsRef.current;
+      if (remainingSeconds > 0 && user?.id) {
+        const partialMinutes = Math.floor(remainingSeconds / 60);
+        if (partialMinutes > 0) {
+          supabase
+            .from('profiles')
+            .select('total_focus_minutes')
+            .eq('id', user.id)
+            .single()
+            .then(async ({ data: currentProfile }) => {
+              if (currentProfile) {
+                await supabase
+                  .from('profiles')
+                  .update({ total_focus_minutes: (currentProfile.total_focus_minutes || 0) + partialMinutes })
+                  .eq('id', user.id);
+                
+                // Upsert into daily_activity
+                const today = new Date().toISOString().split('T')[0];
+                const { data: existingRow } = await supabase
+                  .from('daily_activity')
+                  .select('minutes_focused')
+                  .eq('user_id', user.id)
+                  .eq('date', today)
+                  .single();
+
+                if (existingRow) {
+                  await supabase
+                    .from('daily_activity')
+                    .update({ minutes_focused: (existingRow.minutes_focused || 0) + partialMinutes })
+                    .eq('user_id', user.id)
+                    .eq('date', today);
+                } else {
+                  await supabase
+                    .from('daily_activity')
+                    .insert({
+                      user_id: user.id,
+                      date: today,
+                      minutes_focused: partialMinutes,
+                    });
+                }
+              }
+            });
+        }
+      }
+      
+      // Reset session tracking
+      sessionSecondsRef.current = 0;
+      sessionStartTimeRef.current = null;
+      setSessionMinutes(0);
+    }
+  }, [mode, pomodoroDuration, saveSession, user?.id, setSessionMinutes]);
+
+  // Update completion callback ref
+  useEffect(() => {
+    handleTimerCompleteRef.current = handleTimerComplete;
+  }, [handleTimerComplete]);
+
+  // Tab visibility change listener for Sentry Mode
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // Check if tab became hidden
+      if (document.hidden) {
+        // Tab is now hidden
+        if (isSentryActive && isRunning) {
+          // Pause the timer immediately
+          setIsRunning(false);
+          wasTabHiddenPaused.current = true;
+          
+          // Control worker timer for countdown modes
+          if (isCountdownMode) {
+            workerPause();
+          }
+          
+          // Play warning sound
+          playWarningSound();
+          
+          // Show browser notification
+          showBrowserNotification(
+            'SENTRY ALERT: You left the app!',
+            'Timer paused.'
+          );
+          
+          // Show UI alert banner (local component alert)
+          setShowFocusBrokenAlert(true);
+          
+          // Trigger global Sentry Modal
+          setSentryTriggered(true);
+          
+          // Auto-hide local alert after 5 seconds
+          setTimeout(() => {
+            setShowFocusBrokenAlert(false);
+          }, 5000);
+        }
+      } else {
+        // Tab is now visible again
+        // Reset the tab hidden pause flag
+        wasTabHiddenPaused.current = false;
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isSentryActive, isRunning, isCountdownMode, workerPause, setSentryTriggered]);
+
+  // Auto-resume timer when Sentry Modal is dismissed (Resume button clicked)
+  useEffect(() => {
+    // If sentry was triggered but is now false, and timer was paused due to tab visibility
+    if (!sentryTriggered && wasTabHiddenPaused.current && !isRunning) {
+      // Reset the flag
+      wasTabHiddenPaused.current = false;
+      
+      // Resume the timer if we're on the focus page
+      if (window.location.pathname === '/focus') {
+        setIsRunning(true);
+        
+        // Control worker timer for countdown modes
+        if (isCountdownMode) {
+          workerStart();
+        }
+      }
+    }
+  }, [sentryTriggered, isRunning, isCountdownMode, workerStart]);
 
   // Ambient sounds management - using local files from public/sounds/
   const soundUrls = {
@@ -444,7 +983,51 @@ const TimerMode = () => {
     if (isSentryActive && !isUserPresent) {
       return;
     }
-    setIsRunning(!isRunning);
+    
+    const newIsRunning = !isRunning;
+    setIsRunning(newIsRunning);
+    
+    // Control worker timer for countdown modes
+    if (isCountdownMode) {
+      if (newIsRunning) {
+        workerStart();
+      } else {
+        workerPause();
+      }
+    }
+    
+    // Reset auto-pause flag when user manually controls timer
+    wasAutoPaused.current = false;
+    
+    // Reset face detection counters to prevent immediate re-triggering
+    if (isRunning) {
+      // Manual pause - reset counters so returning face doesn't immediately resume
+      facePresenceCount.current = 0;
+    } else {
+      // Manual start - reset counters so leaving doesn't immediately pause
+      faceAbsenceCount.current = 0;
+    }
+  };
+
+  const handleReset = () => {
+    setIsRunning(false);
+    
+    // Reset worker timer for countdown modes
+    if (isCountdownMode) {
+      workerReset();
+    }
+    
+    // Reset component state
+    setTimeRemaining(initialTime);
+    setTimeElapsed(0);
+    sessionSecondsRef.current = 0;
+    sessionStartTimeRef.current = null;
+    setSessionMinutes(0);
+    
+    // Reset auto-pause flags
+    wasAutoPaused.current = false;
+    facePresenceCount.current = 0;
+    faceAbsenceCount.current = 0;
   };
 
   const handleFinishWork = () => {
@@ -522,10 +1105,10 @@ const TimerMode = () => {
     switch (mode) {
       case 'pomodoro':
         return {
-          primary: '#f43f5e', // Rose/Red
-          shadow: 'rgba(244, 63, 94, 0.5)',
-          background: 'rgba(244, 63, 94, 0.2)',
-          border: 'rgba(244, 63, 94, 0.4)',
+          primary: '#3b82f6', // Blue
+          shadow: 'rgba(59, 130, 246, 0.5)',
+          background: 'rgba(59, 130, 246, 0.2)',
+          border: 'rgba(59, 130, 246, 0.4)',
         };
       case 'flowmodoro':
         return {
@@ -598,7 +1181,7 @@ const TimerMode = () => {
     };
   }, [stopAmbientSound]);
 
-  const radius = 120;
+  const radius = 144; // 20% larger: 120 * 1.2 = 144
   const circumference = 2 * Math.PI * radius;
   const progress = getProgress();
   const strokeDashoffset = circumference - (progress / 100) * circumference;
@@ -615,6 +1198,87 @@ const TimerMode = () => {
       alignItems: 'center',
       justifyContent: 'space-between',
     }}>
+      {/* Focus Broken Alert Banner */}
+      {showFocusBrokenAlert && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+            backgroundColor: 'rgba(239, 68, 68, 0.95)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '2px solid rgba(239, 68, 68, 1)',
+            borderRadius: '12px',
+            padding: '16px 24px',
+            boxShadow: '0 8px 32px rgba(239, 68, 68, 0.4), 0 0 0 4px rgba(239, 68, 68, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            animation: 'slideDown 0.3s ease-out',
+            maxWidth: '90%',
+          }}
+        >
+          <svg
+            style={{
+              width: '24px',
+              height: '24px',
+              stroke: '#ffffff',
+              fill: 'none',
+              strokeWidth: '2',
+              flexShrink: 0,
+            }}
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+          }}>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: '700',
+              color: '#ffffff',
+              letterSpacing: '0.02em',
+            }}>
+              Focus Broken
+            </div>
+            <div style={{
+              fontSize: '12px',
+              color: 'rgba(255, 255, 255, 0.9)',
+            }}>
+              You left the app. Timer paused.
+            </div>
+          </div>
+          <button
+            onClick={() => setShowFocusBrokenAlert(false)}
+            style={{
+              marginLeft: 'auto',
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '6px',
+              padding: '4px 8px',
+              color: '#ffffff',
+              cursor: 'pointer',
+              fontSize: '12px',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Gradient blob background */}
       <div style={{
         position: 'absolute',
@@ -873,6 +1537,8 @@ const TimerMode = () => {
             borderRadius: '50px',
             padding: '8px 16px',
             border: '1px solid rgba(255, 255, 255, 0.1)',
+            opacity: isPro ? 1 : 0.6,
+            filter: isPro ? 'none' : 'grayscale(1)',
           }}>
             <div style={{
               fontSize: '13px',
@@ -882,7 +1548,13 @@ const TimerMode = () => {
               Sentry
             </div>
             <button
-              onClick={() => setIsSentryActive(!isSentryActive)}
+              onClick={() => {
+                if (!isPro) {
+                  navigate('/subscription');
+                  return;
+                }
+                setIsSentryActive(!isSentryActive);
+              }}
               style={{
                 width: '44px',
                 height: '24px',
@@ -890,7 +1562,9 @@ const TimerMode = () => {
                 border: 'none',
                 cursor: 'pointer',
                 position: 'relative',
-                backgroundColor: isSentryActive ? '#fb7185' : 'rgba(255, 255, 255, 0.2)',
+                backgroundColor: isPro 
+                  ? (isSentryActive ? '#fb7185' : 'rgba(255, 255, 255, 0.2)')
+                  : 'rgba(107, 114, 128, 0.5)',
                 transition: 'all 0.3s ease',
               }}
             >
@@ -901,12 +1575,27 @@ const TimerMode = () => {
                 backgroundColor: '#ffffff',
                 position: 'absolute',
                 top: '2px',
-                left: isSentryActive ? '22px' : '2px',
+                left: isPro && isSentryActive ? '22px' : '2px',
                 transition: 'all 0.3s ease',
                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
               }} />
             </button>
-            {isSentryActive && (
+            {!isPro && (
+              <div style={{
+                backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                border: '1px solid rgba(168, 85, 247, 0.4)',
+                borderRadius: '8px',
+                padding: '4px 8px',
+                fontSize: '10px',
+                fontWeight: '600',
+                color: '#a855f7',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                Pro
+              </div>
+            )}
+            {isPro && isSentryActive && (
               <div style={{
                 width: '8px',
                 height: '8px',
@@ -996,12 +1685,12 @@ const TimerMode = () => {
             }}
             style={{
               backgroundColor: mode === 'pomodoro' 
-                ? 'rgba(244, 63, 94, 0.2)' 
+                ? 'rgba(59, 130, 246, 0.2)' 
                 : 'rgba(255, 255, 255, 0.05)',
               border: mode === 'pomodoro'
-                ? '1px solid rgba(244, 63, 94, 0.4)'
+                ? '1px solid rgba(59, 130, 246, 0.4)'
                 : '1px solid rgba(255, 255, 255, 0.1)',
-              color: mode === 'pomodoro' ? '#f43f5e' : 'rgba(255, 255, 255, 0.7)',
+              color: mode === 'pomodoro' ? '#3b82f6' : 'rgba(255, 255, 255, 0.7)',
               padding: '10px 20px',
               borderRadius: '50px',
               fontSize: '13px',
@@ -1165,15 +1854,14 @@ const TimerMode = () => {
           {mode !== 'flowmodoro' && (
             <div style={{
               position: 'relative',
-              width: '280px',
-              height: '280px',
-              marginBottom: '12px',
+              width: '336px',
+              height: '336px',
             }}>
-              <svg width="280" height="280" style={{ transform: 'rotate(-90deg)' }}>
+              <svg width="336" height="336" style={{ transform: 'rotate(-90deg)' }}>
                 {/* Background circle */}
                 <circle
-                  cx="140"
-                  cy="140"
+                  cx="168"
+                  cy="168"
                   r={radius}
                   fill="none"
                   stroke="rgba(255, 255, 255, 0.1)"
@@ -1181,8 +1869,8 @@ const TimerMode = () => {
                 />
                 {/* Progress circle */}
                 <circle
-                  cx="140"
-                  cy="140"
+                  cx="168"
+                  cy="168"
                   r={radius}
                   fill="none"
                   stroke={modeColor.primary}
@@ -1202,7 +1890,7 @@ const TimerMode = () => {
                 textAlign: 'center',
               }}>
                 <div style={{
-                  fontSize: '72px',
+                  fontSize: '86px',
                   fontWeight: '300',
                   color: modeColor.primary,
                   fontFeatureSettings: '"tnum"',
@@ -1229,10 +1917,9 @@ const TimerMode = () => {
           {mode === 'flowmodoro' && (
             <div style={{
               textAlign: 'center',
-              marginBottom: '12px',
             }}>
               <div style={{
-                fontSize: '96px',
+                fontSize: '115px',
                 fontWeight: '300',
                 color: modeColor.primary,
                 fontFeatureSettings: '"tnum"',
@@ -1257,77 +1944,95 @@ const TimerMode = () => {
           {/* Controls */}
           <div style={{
             display: 'flex',
+            marginTop: '20px',
             gap: '16px',
             alignItems: 'center',
           }}>
-            {/* Start/Pause Button */}
+            {/* Main Action Button (Toggle Start/Pause) */}
             <button
               onClick={handleStartPause}
               disabled={isSentryActive && !isUserPresent}
               style={{
                 backgroundColor: (isSentryActive && !isUserPresent)
                   ? 'rgba(255, 255, 255, 0.02)'
-                  : 'rgba(255, 255, 255, 0.05)',
+                  : isRunning
+                  ? 'rgba(239, 68, 68, 0.1)'
+                  : 'rgba(59, 130, 246, 0.2)',
                 backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                border: isRunning
+                  ? '2px solid rgba(239, 68, 68, 0.5)'
+                  : '2px solid rgba(59, 130, 246, 0.5)',
                 borderRadius: '50px',
                 padding: '16px 32px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
-                color: '#ffffff',
+                color: isRunning ? '#ef4444' : '#ffffff',
                 fontSize: '16px',
-                fontWeight: '600',
+                fontWeight: '700',
                 cursor: (isSentryActive && !isUserPresent) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.3s ease',
                 opacity: (isSentryActive && !isUserPresent) ? 0.5 : 1,
               }}
               onMouseEnter={(e) => {
                 if (!(isSentryActive && !isUserPresent)) {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                  e.currentTarget.style.backgroundColor = isRunning
+                    ? 'rgba(239, 68, 68, 0.2)'
+                    : 'rgba(59, 130, 246, 0.3)';
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = (isSentryActive && !isUserPresent)
                   ? 'rgba(255, 255, 255, 0.02)'
-                  : 'rgba(255, 255, 255, 0.05)';
+                  : isRunning
+                  ? 'rgba(239, 68, 68, 0.1)'
+                  : 'rgba(59, 130, 246, 0.2)';
               }}
             >
               {isRunning ? (
                 <>
-                  <svg
-                    style={{
-                      width: '24px',
-                      height: '24px',
-                      stroke: 'currentColor',
-                      fill: 'none',
-                      strokeWidth: '2',
-                    }}
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <Pause size={20} />
                   <span>Pause</span>
                 </>
               ) : (
                 <>
-                  <svg
-                    style={{
-                      width: '24px',
-                      height: '24px',
-                      stroke: 'currentColor',
-                      fill: 'none',
-                      strokeWidth: '2',
-                    }}
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Start</span>
+                  <Play size={20} />
+                  <span>{isCountdownMode && workerTimeLeft < workerDuration ? 'Resume' : 'Start'}</span>
                 </>
               )}
             </button>
+
+            {/* Reset Button (Only shows if timer is dirty) */}
+            {isCountdownMode && workerTimeLeft !== workerDuration && (
+              <button
+                onClick={handleReset}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '50%',
+                  width: '56px',
+                  height: '56px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                }}
+                title="Reset Timer"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              >
+                <RotateCcw size={20} />
+              </button>
+            )}
 
             {/* Finish & Rest Button (only for flowmodoro) */}
             {mode === 'flowmodoro' && timeElapsed > 0 && (
@@ -1479,7 +2184,7 @@ const TimerMode = () => {
               {sessionHistory.map((session) => {
                 const durationMinutes = Math.floor(session.duration / 60);
                 const modeLabel = session.mode === 'pomodoro' ? 'Pomodoro' : 'Flowmodoro';
-                const modeColor = session.mode === 'pomodoro' ? '#f43f5e' : '#22d3ee';
+                const modeColor = session.mode === 'pomodoro' ? '#3b82f6' : '#22d3ee';
                 const date = new Date(session.timestamp);
                 const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 
@@ -1679,7 +2384,7 @@ const TimerMode = () => {
                     transition: 'all 0.2s ease',
                   }}
                   onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(244, 63, 94, 0.5)';
+                    e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
                     e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
                   }}
                   onBlur={(e) => {
@@ -1828,4 +2533,3 @@ const TimerMode = () => {
 };
 
 export default TimerMode;
-

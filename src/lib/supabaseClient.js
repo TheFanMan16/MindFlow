@@ -11,9 +11,11 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Safety check: Log the URL (will show undefined if missing)
-console.log('Supabase URL:', supabaseUrl);
-console.log('Supabase Anon Key:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'undefined');
+// Safety check: Log the URL only in development (never log keys)
+if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+  console.log('Supabase URL:', supabaseUrl);
+  console.log('Supabase Anon Key:', supabaseAnonKey ? '✅ SET' : '❌ NOT SET');
+}
 
 // Build redirect URL for Electron (uses hash routing)
 const getRedirectUrl = () => {
@@ -73,8 +75,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
     },
   });
 
-  console.log('✅ Supabase client initialized successfully');
-  console.log('Supabase: Redirect URL set to:', getRedirectUrl());
+  if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+    console.log('✅ Supabase client initialized successfully');
+    console.log('Supabase: Redirect URL set to:', getRedirectUrl());
+  }
 }
 
 export { supabase };

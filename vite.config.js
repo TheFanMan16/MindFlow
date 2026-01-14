@@ -6,13 +6,34 @@ export default defineConfig({
   base: './',
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
+  // This is the critical fix for "Cannot find module './en'"
+  resolve: {
+    alias: {
+      // If a library looks for a locale folder that doesn't exist, 
+      // we point it to a safe empty path or ignore it.
+      './en': 'dayjs/locale/en.js' 
+    }
   },
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
   },
-  // Expose environment variables to the client
-  // Only variables prefixed with VITE_ are exposed
   envPrefix: 'VITE_',
+  optimizeDeps: {
+    // We include @supabase/supabase-js so it's pre-bundled correctly
+    include: ['@supabase/supabase-js'],
+    // We exclude these to prevent them from trying to load node-specific locales
+    exclude: ['electron', '@stripe/stripe-js'] // Exclude @stripe/stripe-js since it's not used and causes locale errors
+  },
 });
-

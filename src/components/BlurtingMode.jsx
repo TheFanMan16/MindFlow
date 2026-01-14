@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PDFUploader from './PDFUploader';
 import { generateJSONWithGemini } from '../utils/gemini';
 import { useAuth } from '../context/AuthContext';
-import { canUseAI, incrementAIUsage } from '../utils/aiLimits';
+import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
+import { supabase } from '../lib/supabaseClient';
 
 const BlurtingMode = () => {
-  const { isPro } = useAuth();
+  const { isPro, user, profile, refreshProfile } = useAuth();
+  const [aiUsageCount, setAiUsageCount] = useState(0);
   const [phase, setPhase] = useState('SETUP'); // SETUP, WRITING, ANALYSIS
   const [sourceText, setSourceText] = useState('');
   const [userAttempt, setUserAttempt] = useState('');
@@ -20,6 +22,7 @@ const BlurtingMode = () => {
   const [quizResults, setQuizResults] = useState({}); // Object mapping question index to correct/incorrect
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [inputMode, setInputMode] = useState('pdf'); // 'pdf' or 'text'
+  const [expandedSection, setExpandedSection] = useState(null); // For accordion: 'performance', 'improvements', 'quiz'
   const textareaRef = useRef(null);
 
   // Define handleDone at the top so it's available for useEffect dependencies
@@ -53,6 +56,31 @@ const BlurtingMode = () => {
     }
   }, [phase]);
 
+  // Fetch AI usage count from profile
+  useEffect(() => {
+    const fetchAIUsageCount = async () => {
+      if (!user?.id) {
+        setAiUsageCount(0);
+        return;
+      }
+
+      try {
+        // Use profile from AuthContext if available, otherwise fetch
+        if (profile?.ai_usage_count !== undefined) {
+          setAiUsageCount(profile.ai_usage_count || 0);
+        } else {
+          const count = await getAIUsageCount(user.id);
+          setAiUsageCount(count);
+        }
+      } catch (error) {
+        console.error('Error fetching AI usage count:', error);
+        setAiUsageCount(0);
+      }
+    };
+
+    fetchAIUsageCount();
+  }, [user?.id, profile?.ai_usage_count]);
+
   const handleStartBlurting = () => {
     if (sourceText.trim()) {
       setPhase('WRITING');
@@ -75,11 +103,21 @@ const BlurtingMode = () => {
     setQuizAnswers({});
     setQuizResults({});
     setIsAnalyzing(false);
+    setExpandedSection(null);
+  };
+
+  const toggleSection = (sectionId) => {
+    setExpandedSection(expandedSection === sectionId ? null : sectionId);
   };
 
   const handleAIAnalysis = async () => {
-    // Check AI usage limits
-    const usage = canUseAI(isPro);
+    if (!user?.id) {
+      alert('Please log in to use AI features.');
+      return;
+    }
+
+    // Check AI usage limits using current aiUsageCount
+    const usage = canUseAI(isPro, aiUsageCount);
     if (!usage.canUse) {
       alert(`You've reached your daily limit of ${usage.limit} AI analyses. Upgrade to Pro for unlimited AI.`);
       return;
@@ -93,9 +131,6 @@ const BlurtingMode = () => {
     setAiQuiz(null);
     setQuizAnswers({});
     setQuizResults({});
-
-    // Increment AI usage before making the call
-    incrementAIUsage();
 
     try {
       const systemPrompt = `Compare the Source Text to the Student's Attempt. Identify key concepts that are MISSING or MISUNDERSTOOD. Do not nitpick spelling. 
@@ -128,6 +163,10 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       });
 
       // Validate and set the response
+      if (!parsedResponse) {
+        throw new Error('AI returned empty data');
+      }
+
       const score = typeof parsedResponse.score === 'number' ? parsedResponse.score : null;
       const grade = typeof parsedResponse.grade === 'string' ? parsedResponse.grade : null;
       const summary = typeof parsedResponse.summary === 'string' ? parsedResponse.summary : null;
@@ -141,14 +180,31 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       setAiSummary(summary);
       setAiFeedback(missingConcepts);
       setAiQuiz(quiz);
+      // Auto-expand the first section (Performance Summary) when analysis completes
+      setExpandedSection('performance');
+
+      // Increment AI usage in Supabase ONLY after successful response
+      try {
+        const newCount = await incrementAIUsage(user.id);
+        setAiUsageCount(newCount);
+        // Refresh profile to sync with AuthContext
+        if (refreshProfile) {
+          await refreshProfile();
+        }
+      } catch (error) {
+        console.error('Error incrementing AI usage:', error);
+        // Non-fatal: usage was already tracked by Edge Function, but local state might be stale
+      }
     } catch (error) {
       console.error('AI Analysis error:', error);
+      alert(`Failed to generate analysis: ${error.message || 'Check console for details.'}`);
       setAiFeedback([{ concept: 'Error', explanation: `Error analyzing: ${error.message}. Please try again.` }]);
       setAiScore(null);
       setAiGrade(null);
       setAiSummary(null);
       setAiQuiz(null);
     } finally {
+      // CRITICAL: Always turn off loading, even if it crashes
       setIsAnalyzing(false);
     }
   };
@@ -222,31 +278,32 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       <div style={{ position: 'relative', zIndex: 1 }}>
         {phase === 'SETUP' && (
           <div style={{
-            maxWidth: '800px',
+            width: '95%',
+            maxWidth: '1600px',
             margin: '0 auto',
             paddingTop: '60px',
           }}>
-            <h1 style={{
-              fontSize: '42px',
-              fontWeight: '700',
-              background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              letterSpacing: '-0.02em',
-              lineHeight: '1.1',
+            <div style={{
               marginBottom: '32px',
+              textAlign: 'center',
             }}>
-              Blurting Mode
-            </h1>
-            <p style={{
-              fontSize: '18px',
-              color: 'rgba(255, 255, 255, 0.6)',
-              marginBottom: '32px',
-              fontWeight: '400',
-            }}>
-              Upload a PDF or paste your source material below, then write everything you remember without looking at it.
-            </p>
+              <h1 style={{
+                fontSize: '42px',
+                fontWeight: '700',
+                marginBottom: '8px',
+                color: '#a855f7',
+                letterSpacing: '-0.02em',
+                textShadow: '0 0 10px rgba(168, 85, 247, 0.5), 0 0 20px rgba(168, 85, 247, 0.4), 0 0 30px rgba(168, 85, 247, 0.3)',
+              }}>
+                Active Recall
+              </h1>
+              <p style={{
+                fontSize: '16px',
+                color: 'rgba(255, 255, 255, 0.6)',
+              }}>
+                Blurting is a powerful active recall technique. Read, write, then check what you missed.
+              </p>
+            </div>
 
             {/* Input Mode Toggle */}
             <div style={{
@@ -382,7 +439,8 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
 
         {phase === 'WRITING' && (
           <div style={{
-            maxWidth: '900px',
+            width: '95%',
+            maxWidth: '1600px',
             margin: '0 auto',
             paddingTop: '40px',
           }}>
@@ -470,30 +528,33 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
         )}
 
         {phase === 'ANALYSIS' && (
-          <div>
+          <div style={{
+            width: '95%',
+            maxWidth: '1600px',
+            margin: '0 auto',
+          }}>
             <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
               marginBottom: '32px',
+              textAlign: 'center',
             }}>
               <h1 style={{
                 fontSize: '42px',
                 fontWeight: '700',
-                background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
+                marginBottom: '8px',
+                color: '#a855f7',
                 letterSpacing: '-0.02em',
-                lineHeight: '1.1',
+                textShadow: '0 0 10px rgba(168, 85, 247, 0.5), 0 0 20px rgba(168, 85, 247, 0.4), 0 0 30px rgba(168, 85, 247, 0.3)',
               }}>
                 Analysis
               </h1>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-              }}>
+            </div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: '32px',
+              gap: '16px',
+            }}>
                 {/* Recall Score Badge */}
                 {aiScore !== null && (
                   <div style={{
@@ -558,7 +619,6 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                   Start Over
                 </button>
               </div>
-            </div>
 
             {/* Split Screen */}
             <div style={{
@@ -574,9 +634,10 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                 borderRadius: '24px',
                 padding: '24px',
                 border: '1px solid rgba(239, 68, 68, 0.2)',
-                overflowY: 'auto',
                 fontFamily: 'monospace',
-                maxHeight: 'calc(100vh - 400px)',
+                display: 'flex',
+                flexDirection: 'column',
+                height: '500px',
               }}>
                 <div style={{
                   fontSize: '12px',
@@ -585,6 +646,7 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                   marginBottom: '16px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.1em',
+                  flexShrink: 0,
                 }}>
                   Source Material
                 </div>
@@ -593,6 +655,9 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                   lineHeight: '1.8',
                   color: '#ffffff',
                   whiteSpace: 'pre-wrap',
+                  overflowY: 'auto',
+                  flex: 1,
+                  minHeight: 0,
                 }}>
                   {highlightText(sourceText, userAttempt)}
                 </div>
@@ -605,9 +670,10 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                 borderRadius: '24px',
                 padding: '24px',
                 border: '1px solid rgba(16, 185, 129, 0.2)',
-                overflowY: 'auto',
                 fontFamily: 'monospace',
-                maxHeight: 'calc(100vh - 400px)',
+                display: 'flex',
+                flexDirection: 'column',
+                height: '500px',
               }}>
                 <div style={{
                   fontSize: '12px',
@@ -616,6 +682,7 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                   marginBottom: '16px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.1em',
+                  flexShrink: 0,
                 }}>
                   Your Attempt
                 </div>
@@ -624,6 +691,9 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                   lineHeight: '1.8',
                   color: '#ffffff',
                   whiteSpace: 'pre-wrap',
+                  overflowY: 'auto',
+                  flex: 1,
+                  minHeight: 0,
                 }}>
                   {userAttempt || '(Empty)'}
                 </div>
@@ -638,34 +708,66 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
               padding: '32px',
               border: '1px solid rgba(255, 255, 255, 0.1)',
             }}>
-              {!aiFeedback && !isAnalyzing && (
-                <button
-                  onClick={handleAIAnalysis}
-                  style={{
-                    background: 'linear-gradient(90deg, #f59e0b, #ea580c)',
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '16px 32px',
-                    borderRadius: '24px',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    width: '100%',
-                    boxShadow: '0 4px 20px rgba(245, 158, 11, 0.3)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 6px 30px rgba(245, 158, 11, 0.5)';
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(245, 158, 11, 0.3)';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  Analyze Understanding with AI
-                </button>
-              )}
+              {!aiFeedback && !isAnalyzing && (() => {
+                const usage = canUseAI(isPro, aiUsageCount);
+                const isLimitReached = !usage.canUse;
+                
+                return (
+                  <div>
+                    <button
+                      onClick={handleAIAnalysis}
+                      disabled={isLimitReached}
+                      style={{
+                        background: isLimitReached 
+                          ? 'rgba(107, 114, 128, 0.5)' 
+                          : 'linear-gradient(90deg, #f59e0b, #ea580c)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '16px 32px',
+                        borderRadius: '24px',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        cursor: isLimitReached ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.3s ease',
+                        width: '100%',
+                        boxShadow: isLimitReached 
+                          ? 'none' 
+                          : '0 4px 20px rgba(245, 158, 11, 0.3)',
+                        opacity: isLimitReached ? 0.6 : 1,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isLimitReached) {
+                          e.currentTarget.style.boxShadow = '0 6px 30px rgba(245, 158, 11, 0.5)';
+                          e.currentTarget.style.transform = 'scale(1.02)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isLimitReached) {
+                          e.currentTarget.style.boxShadow = '0 4px 20px rgba(245, 158, 11, 0.3)';
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }
+                      }}
+                    >
+                      Analyze Understanding with AI
+                    </button>
+                    {isLimitReached && (
+                      <div style={{
+                        marginTop: '16px',
+                        padding: '16px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        borderRadius: '12px',
+                        textAlign: 'center',
+                        color: '#ef4444',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                      }}>
+                        Daily Limit Reached - Upgrade to Pro
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {isAnalyzing && (
                 <div style={{

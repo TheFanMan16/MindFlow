@@ -1,0 +1,156 @@
+/* Flashcard Container */
+.flashcard-container {
+  width: 90%;
+  max-width: 800px;
+  margin: 0 auto;
+  perspective: 1000px;
+}
+
+/* Main Flashcard */
+.flashcard {
+  position: relative;
+  width: 100%;
+  min-height: 400px;
+  height: auto;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+  cursor: pointer;
+}
+
+.flashcard.flipped {
+  transform: rotateY(180deg);
+}
+
+.flashcard-empty {
+  cursor: default;
+}
+
+/* Card Face (Front and Back) */
+.flashcard-front,
+.flashcard-back {
+  position: absolute;
+  width: 100%;
+  min-height: 400px;
+  height: auto;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 24px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  transition: box-shadow 0.3s ease;
+  box-sizing: border-box;
+}
+
+.flashcard:hover .flashcard-front,
+.flashcard:hover .flashcard-back {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+/* Front of card */
+.flashcard-front {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Back of card (rotated 180deg) */
+.flashcard-back {
+  transform: rotateY(180deg);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Card Label */
+.flashcard-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+/* Text Wrapper for proper centering and overflow handling */
+.flashcard-text-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+}
+
+/* Card Text Content */
+.flashcard-text {
+  font-size: clamp(18px, 2.5vw, 24px);
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.8;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  max-width: 100%;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.flashcard-back .flashcard-text {
+  font-size: clamp(16px, 2vw, 20px);
+  font-weight: 400;
+  line-height: 1.8;
+}
+
+/* Hint Text */
+.flashcard-hint {
+  text-align: center;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 16px;
+  user-select: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .flashcard {
+    min-height: 300px;
+  }
+
+  .flashcard-front,
+  .flashcard-back {
+    padding: 32px;
+  }
+
+  .flashcard-text {
+    font-size: clamp(16px, 4vw, 20px);
+  }
+
+  .flashcard-back .flashcard-text {
+    font-size: clamp(14px, 3.5vw, 18px);
+  }
+}
+
+/* Animation for card entrance */
+@keyframes cardEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.flashcard-container {
+  animation: cardEntrance 0.4s ease-out;
+}
+

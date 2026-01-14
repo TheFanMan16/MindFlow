@@ -8,125 +8,175 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  // Session minutes for live timer updates (only counts pomodoro mode)
+  const [sessionMinutes, setSessionMinutes] = useState(0);
+  // Sentry Mode state - global state for tab visibility detection
+  const [sentryTriggered, setSentryTriggered] = useState(false);
 
+  // Fetch profile from Supabase
+  const fetchProfile = async (userId, userEmail = null) => {
+    if (!userId) {
+      setProfile(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        setProfile(null);
+        return;
+      }
+
+      if (data) {
+        console.log('Profile fetched:', data);
+        // Add mock subscription data
+        const profileWithMockData = {
+          ...data,
+          nextPaymentDate: 'Feb 14, 2026',
+          plan: data.is_pro ? 'Pro' : 'Free',
+        };
+        setProfile(profileWithMockData);
+      } else {
+        // Profile doesn't exist yet, create a default one
+        console.log('Profile not found, creating default profile...');
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            email: userEmail || user?.email || '',
+            is_pro: false,
+            is_admin: false,
+            streak_count: 0,
+            total_focus_minutes: 0,
+          })
+          .select()
+          .maybeSingle();
+
+        if (createError) {
+          console.error('Error creating profile:', createError);
+        } else if (newProfile) {
+          // Add mock subscription data
+          const profileWithMockData = {
+            ...newProfile,
+            nextPaymentDate: 'Feb 14, 2026',
+            plan: 'Free',
+          };
+          setProfile(profileWithMockData);
+        }
+      }
+    } catch (error) {
+      console.error('Error in fetchProfile:', error);
+      setProfile(null);
+    }
+  };
+
+  // Manual refresh function that can be called from components
+  const refreshProfile = async () => {
+    if (user?.id) {
+      console.log('Manual profile refresh triggered');
+      await fetchProfile(user.id, user.email);
+    }
+  };
+
+  // Fetch profile whenever user changes
+  useEffect(() => {
+    if (user?.id) {
+      console.log('User ID changed, fetching profile:', user.id);
+      fetchProfile(user.id, user.email);
+    } else {
+      setProfile(null);
+    }
+  }, [user?.id]); // Re-run whenever user.id changes
+
+  // Initial session and profile load
   useEffect(() => {
     let mounted = true;
 
-    // 1. Get Profile Helper
-    const fetchProfile = async (userId, userEmail = null) => {
+    const initAuth = async () => {
       try {
-        console.log('AuthContext: Fetching profile for user ID:', userId);
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+        // Get initial session
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
         
-        if (error) {
-          console.error('Error fetching profile:', error);
-          console.error('Error code:', error.code);
-          console.error('Error message:', error.message);
-          
-          // If profile doesn't exist (PGRST116), try to create it
-          if (error.code === 'PGRST116') {
-            console.log('Profile does not exist, creating new profile...');
-            // Profile creation will be handled elsewhere or on first login
-          }
-          return;
+        if (sessionError) {
+          console.error('Session error:', sessionError);
         }
-        
-        if (mounted && data) {
-          console.log('AuthContext: Profile loaded successfully:', data);
-          console.log('AuthContext: is_admin =', data.is_admin, '(type:', typeof data.is_admin, ')');
-          console.log('AuthContext: email =', data.email);
-          console.log('AuthContext: role =', data.role);
-          
-          // --- GOD MODE OVERRIDE ---
-          // If the email is mine, force PRO and ADMIN status regardless of database value.
-          const currentUserEmail = user?.email || session?.user?.email || userEmail || data?.email;
-          if (currentUserEmail === 'hannajohn37@gmail.com') {
-            data = {
-              ...data,
-              is_pro: true, // Bypasses all usage limits
-              is_admin: true, // Unlocks Admin Dashboard
-              role: 'admin' // Double-check for admin role
-            };
-            console.log("⚡ GOD MODE ACTIVE: Restrictions Removed ⚡");
-          }
-          // -------------------------
-          
-          setProfile(data);
-        } else if (mounted && !data) {
-          console.warn('AuthContext: Profile query returned no data');
+
+        if (mounted) {
+          setSession(initialSession);
+          setUser(initialSession?.user ?? null);
+          setLoading(false);
         }
       } catch (error) {
-        console.error('Error fetching profile (catch block):', error);
+        console.error('Auth init error:', error);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    // 2. Initial Session Check
-    const getInitialSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (mounted && session) {
-          setSession(session);
-          setUser(session.user);
-          await fetchProfile(session.user.id, session.user.email);
-        }
-      } catch (error) {
-        console.error('Auth Init Error:', error);
-      } finally {
-        if (mounted) setLoading(false); // <--- FORCE STOP LOADING
-      }
-    };
-    getInitialSession();
+    initAuth();
 
-    // 3. Listen for Auth Changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log('Auth state changed:', event);
+      
       if (mounted) {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) await fetchProfile(session.user.id, session.user.email);
-        else setProfile(null);
-        setLoading(false); // <--- SAFETY VALVE
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        // Profile will be fetched by the user?.id useEffect
+        if (!newSession?.user) {
+          setProfile(null);
+        }
       }
     });
 
     return () => {
       mounted = false;
-      subscription?.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
-  // Refresh profile function (can be called manually)
-  const refreshProfile = async () => {
-    if (user?.id) {
-      console.log('AuthContext: Manually refreshing profile for user:', user.id);
-      await fetchProfile(user.id, user.email);
-    }
-  };
-
-  // Calculate if user is Pro
-  const calculateIsPro = () => {
-    if (!profile) return false;
-    // Check if God Mode override is active (is_pro will be true from override)
-    if (profile.is_pro === true) return true;
-    if (profile.subscription_status === 'active') return true;
-    if (profile.pro_expires_at) {
-      const expiresAt = new Date(profile.pro_expires_at);
-      const now = new Date();
-      if (expiresAt > now) return true;
-    }
-    return profile.plan_type === 'pro' || profile.is_pro === true;
-  };
+  // Calculate isPro based on profile
+  const isPro = profile?.is_pro === true;
 
   const value = {
     session,
     user,
-    loading,
     profile,
-    refreshProfile,
-    isPro: calculateIsPro(),
-    isFree: !calculateIsPro(),
-    signOut: () => supabase.auth.signOut(),
+    loading,
+    refreshProfile, // Expose refresh function
+    isPro,
+    isFree: !isPro,
+    sessionMinutes, // Live session minutes for timer
+    setSessionMinutes, // Function to update session minutes
+    sentryTriggered, // Sentry Mode triggered state (tab visibility)
+    setSentryTriggered, // Function to set sentry triggered state
+    signOut: async () => {
+      try {
+        console.log('Sign out initiated');
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.error('Sign out error:', error);
+      } finally {
+        // Always clear state and storage, even if signOut fails
+        localStorage.clear();
+        sessionStorage.clear();
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setSessionMinutes(0); // Reset session minutes on sign out
+        // Force page reset by redirecting to login
+        window.location.href = '/login';
+      }
+    },
   };
 
   return (

@@ -1,19 +1,22 @@
 /**
- * Stripe Integration
+ * Stripe Integration Utility
  * 
- * Handles Stripe payment and subscription operations.
+ * This file provides a utility function to load Stripe with locale hardcoded to 'en'
+ * to prevent locale import errors.
  * 
- * To install: npm install @stripe/stripe-js
+ * NOTE: Currently, the app uses direct window.location redirects for checkout,
+ * so this utility is not actively used. However, if you need to use Stripe Elements
+ * or other client-side Stripe features in the future, use this function.
  */
 
 import config from '../config/api';
-import { supabase } from '../lib/supabaseClient';
 
 // Lazy load Stripe (only when needed)
 let stripePromise = null;
 
 /**
- * Get Stripe instance
+ * Get Stripe instance with locale hardcoded to 'en'
+ * This prevents Stripe from trying to dynamically load locale files
  */
 export async function getStripe() {
   if (!config.stripe.publishableKey) {
@@ -22,61 +25,12 @@ export async function getStripe() {
 
   if (!stripePromise) {
     const { loadStripe } = await import('@stripe/stripe-js');
-    stripePromise = loadStripe(config.stripe.publishableKey);
+    // CRITICAL: Hard-code locale to 'en' to prevent locale import errors
+    stripePromise = loadStripe(config.stripe.publishableKey, {
+      locale: 'en' // This stops Stripe from trying to dynamically "find" a locale
+    });
   }
 
   return stripePromise;
-}
-
-/**
- * Create a checkout session via Supabase Edge Function
- * @param {string} priceId - The Stripe price ID (defaults to config price ID)
- * @param {string} userId - The user ID for the subscription
- * @returns {Promise<void>} Redirects to Stripe Checkout
- */
-export async function createCheckoutSession(priceId = null, userId = null) {
-  // This MUST call your backend API (Supabase Edge Function or your server)
-  // Stripe secret keys should NEVER be in client code
-  
-  const finalPriceId = priceId || config.stripe.priceId;
-  
-  if (!finalPriceId) {
-    throw new Error('Stripe price ID is not configured');
-  }
-
-  try {
-    // Use Supabase Edge Function to create checkout session
-    // This keeps the Stripe secret key on the server
-    const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-      body: { 
-        priceId: finalPriceId,
-        userId: userId,
-      },
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    if (data?.sessionId) {
-      // Redirect to Stripe Checkout
-      const stripe = await getStripe();
-      const { error: redirectError } = await stripe.redirectToCheckout({ 
-        sessionId: data.sessionId 
-      });
-      
-      if (redirectError) {
-        throw redirectError;
-      }
-    } else if (data?.url) {
-      // If the function returns a URL directly, redirect to it
-      window.location.href = data.url;
-    } else {
-      throw new Error('Invalid response from checkout session creation');
-    }
-  } catch (error) {
-    console.error('Stripe checkout error:', error);
-    throw error;
-  }
 }
 
