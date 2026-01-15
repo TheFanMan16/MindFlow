@@ -31,7 +31,7 @@ const Dashboard = () => {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
@@ -42,7 +42,7 @@ const Dashboard = () => {
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const success = searchParams.get('success');
-    
+
     if (success === 'true') {
       console.log('✅ Payment successful, refreshing profile...');
       // Refresh profile to get updated subscription status
@@ -55,18 +55,17 @@ const Dashboard = () => {
   // Fetch real data from Supabase
   useEffect(() => {
     const fetchDashboardStats = async () => {
+      // Use user from context if available, otherwise fetch
+      const currentUser = user;
+
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        
-        // Get current user
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-          console.error('Error getting user:', userError);
-          setLoading(false);
-          return;
-        }
-
-        const userId = user.id;
+        const userId = currentUser.id;
 
         // Fetch profile stats (streak_count, total_focus_minutes)
         let { data: profile, error: profileError } = await supabase
@@ -82,7 +81,7 @@ const Dashboard = () => {
             .from('profiles')
             .insert({
               id: userId,
-              email: user.email,
+              email: currentUser.email,
               streak_count: 0,
               total_focus_minutes: 0,
               is_pro: false,
@@ -136,7 +135,7 @@ const Dashboard = () => {
         const totalSeconds = sessions.reduce((sum, session) => sum + (session.duration || 0), 0);
         const totalHours = Math.floor(totalSeconds / 3600);
         const totalMinutes = Math.floor((totalSeconds % 3600) / 60);
-        
+
         // Calculate today's sessions
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -147,7 +146,7 @@ const Dashboard = () => {
         });
         const todaySeconds = todaySessions.reduce((sum, session) => sum + (session.duration || 0), 0);
         const todayHours = (todaySeconds / 3600).toFixed(1);
-        
+
         // Calculate weekly streak
         const uniqueDays = new Set();
         sessions.forEach(session => {
@@ -155,7 +154,7 @@ const Dashboard = () => {
           sessionDate.setHours(0, 0, 0, 0);
           uniqueDays.add(sessionDate.getTime());
         });
-        
+
         // Count consecutive days (simplified - counts last 7 days with activity)
         const sortedDays = Array.from(uniqueDays).sort((a, b) => b - a);
         let streak = 0;
@@ -168,7 +167,7 @@ const Dashboard = () => {
             break;
           }
         }
-        
+
         setStats(prev => ({
           ...prev,
           totalStudyTime: totalHours * 3600 + totalMinutes * 60,
@@ -181,7 +180,7 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error loading localStorage stats:', error);
     }
-  }, []);
+  }, [user]); // Add user to dependency array
 
   const formatTime = (seconds) => {
     const hours = Math.floor(seconds / 3600);
@@ -194,13 +193,19 @@ const Dashboard = () => {
 
   const hexToRgb = (hex) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result 
+    return result
       ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
       : null;
   };
 
   // Handle Subscribe button click
   const handleSubscribe = async () => {
+    if (!user) {
+      alert('Please sign in to subscribe.');
+      navigate('/login');
+      return;
+    }
+
     if (profile?.is_pro) {
       alert('You are already a Pro member!');
       return;
@@ -212,7 +217,7 @@ const Dashboard = () => {
       // Get user ID from AuthContext (already available, no need to fetch again)
       console.log('🔍 Step 1: Getting user from AuthContext');
       console.log('🔍 User from context:', user ? { id: user.id, email: user.email } : 'null/undefined');
-      
+
       if (!user || !user.id) {
         console.error('❌ Error: User not available in context', { user });
         alert('Error: Please log in to subscribe.');
@@ -221,7 +226,7 @@ const Dashboard = () => {
       }
 
       // Prepare request body (include email for customer creation)
-      const requestBody = { 
+      const requestBody = {
         userId: user.id,
         email: user.email || undefined, // Include email if available
       };
@@ -323,14 +328,14 @@ const Dashboard = () => {
       console.log('Cancel subscription response:', data);
 
       // Show success message with cancellation date
-      const cancelDate = data.cancellationDate || (data.cancel_at 
+      const cancelDate = data.cancellationDate || (data.cancel_at
         ? new Date(data.cancel_at * 1000).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
         : 'the end of your billing period');
-      
+
       alert(`Your subscription has been cancelled. You will retain Pro access until ${cancelDate}.`);
 
       // Refresh profile to update the UI (though is_pro will still be true until period ends)
@@ -453,10 +458,10 @@ const Dashboard = () => {
               <div className="mindflow-orb"></div>
             </div>
           </div>
-          
+
           {/* Text Content - Positioned above orb */}
           <div className="relative" style={{ zIndex: 1 }}>
-            <h1 className="text-7xl md:text-8xl lg:text-9xl font-black mb-6 tracking-tight fade-in-up-delay" style={{ 
+            <h1 className="text-7xl md:text-8xl lg:text-9xl font-black mb-6 tracking-tight fade-in-up-delay" style={{
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
               textShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
               background: 'linear-gradient(90deg, #3b82f6 0%, #1e40af 25%, #6b21a8 50%, #a855f7 75%, #3b82f6 100%)',
@@ -470,8 +475,8 @@ const Dashboard = () => {
             }}>
               Mindflow
             </h1>
-            <p className="text-xs md:text-sm text-white/50 mb-8 fade-in-up-delay tracking-widest uppercase" style={{ 
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif', 
+            <p className="text-xs md:text-sm text-white/50 mb-8 fade-in-up-delay tracking-widest uppercase" style={{
+              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
               letterSpacing: '0.2em',
               fontWeight: '400',
             }}>
@@ -511,7 +516,13 @@ const Dashboard = () => {
                 e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
                 e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.5)';
               }}
-              onClick={() => navigate(`/${card.view}`)}
+              onClick={() => {
+                if (!user) {
+                  navigate('/login');
+                  return;
+                }
+                navigate(`/${card.view}`);
+              }}
             >
               {/* Icon with internal glow */}
               <div style={{
@@ -530,9 +541,9 @@ const Dashboard = () => {
                 <svg
                   className={
                     card.id === 'focus' ? 'icon-spin-slow' :
-                    card.id === 'blurting' ? 'icon-pulse-soft' :
-                    card.id === 'feynman' ? 'icon-float' :
-                    card.id === 'flashcards' ? 'icon-breathe' : ''
+                      card.id === 'blurting' ? 'icon-pulse-soft' :
+                        card.id === 'feynman' ? 'icon-float' :
+                          card.id === 'flashcards' ? 'icon-breathe' : ''
                   }
                   style={{
                     width: '28px',
@@ -569,7 +580,7 @@ const Dashboard = () => {
               }}>
                 {card.description}
               </p>
-              
+
               {/* Last Used Label */}
               <div style={{
                 fontSize: '11px',
@@ -580,10 +591,14 @@ const Dashboard = () => {
               }}>
                 Last session: {getTimeAgo(localStorage.getItem(`lastUsed_${card.id}`))}
               </div>
-              
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!user) {
+                    navigate('/login');
+                    return;
+                  }
                   // Store last used timestamp
                   localStorage.setItem(`lastUsed_${card.id}`, new Date().toISOString());
                   navigate(`/${card.view}`);
@@ -614,7 +629,7 @@ const Dashboard = () => {
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
-                Start
+                {user ? 'Start' : 'Sign in to use'}
               </button>
             </div>
           ))}

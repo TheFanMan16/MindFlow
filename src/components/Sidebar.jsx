@@ -65,7 +65,7 @@ const Sidebar = () => {
     console.log('SIDEBAR CHECK -> is_admin:', profile?.is_admin, '(type:', typeof profile?.is_admin, ')');
     console.log('SIDEBAR CHECK -> is_admin === true?', profile?.is_admin === true);
     console.log('SIDEBAR CHECK -> Full profile:', profile);
-    
+
     // Direct database check for debugging
     if (profile?.email) {
       console.log('SIDEBAR: To verify in Supabase, run:');
@@ -74,37 +74,37 @@ const Sidebar = () => {
   }, [profile]);
 
   const menuItems = [
-    { 
-      path: '/dashboard', 
-      label: 'Dashboard', 
+    {
+      path: '/dashboard',
+      label: 'Dashboard',
       icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
       activeBg: 'rgba(255, 255, 255, 0.1)',
       activeText: '#ffffff',
     },
-    { 
-      path: '/focus', 
-      label: 'Focus', 
+    {
+      path: '/focus',
+      label: 'Focus',
       icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
       activeBg: 'rgba(59, 130, 246, 0.2)',
       activeText: '#60a5fa',
     },
-    { 
-      path: '/blurting', 
-      label: 'Active Recall', 
+    {
+      path: '/blurting',
+      label: 'Active Recall',
       icon: 'M13 10V3L4 14h7v7l9-11h-7z',
       activeBg: 'rgba(139, 92, 246, 0.2)',
       activeText: '#a78bfa',
     },
-    { 
-      path: '/feynman', 
-      label: 'Feynman', 
+    {
+      path: '/feynman',
+      label: 'Feynman',
       icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
       activeBg: 'rgba(245, 158, 11, 0.18)',
       activeText: '#f59e0b',
     },
-    { 
-      path: '/flashcards', 
-      label: 'Flashcards', 
+    {
+      path: '/flashcards',
+      label: 'Flashcards',
       icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
       activeBg: 'rgba(52, 211, 153, 0.18)',
       activeText: '#34d399',
@@ -211,7 +211,7 @@ const Sidebar = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                 </svg>
               </div>
-              <span style={{ 
+              <span style={{
                 fontSize: '10px',
                 textAlign: 'center',
                 lineHeight: '1.2',
@@ -228,67 +228,78 @@ const Sidebar = () => {
       {/* Bottom Section - Vertical Profile Block (centered, near bottom) */}
       <div style={{ width: '100%', paddingTop: 8, paddingBottom: 8, borderTop: '1px solid rgba(31,41,55,0.6)', display: 'flex', justifyContent: 'center', marginTop: 'auto' }}>
         <div className='w-full border-b border-gray-800/60 my-6' />
-        <div
-          className="flex flex-col items-center w-full px-2"
-          style={{
-            gap: 6,
-            padding: '6px 0',
-          }}
-        >
-          {/* Avatar with active-mode ring (uses currentColor) */}
-          <div className={activeColorClass} style={{ borderRadius: 999, padding: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <button
-              onClick={() => navigate('/profile')}
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 999,
-                overflow: 'hidden',
-                background: '#0f172a',
-                border: '2px solid currentColor',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0,
-                cursor: 'pointer'
-              }}
-              title={profile?.full_name || profile?.email || user?.email || 'Profile'}
-            >
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <span style={{ color: 'white', fontWeight: 700, fontSize: 18 }}>{(profile?.full_name || profile?.email || user?.email || 'U').charAt(0).toUpperCase()}</span>
-              )}
-            </button>
-          </div>
 
-          {/* Username (local part, no digits) */}
-          <div style={{ color: 'white', fontWeight: 700, fontSize: 12, lineHeight: 1, textAlign: 'center', width: '100%', paddingLeft: 4, paddingRight: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {(cleanedName && cleanedName.length) ? cleanedName : 'User'}
-          </div>
+        {user ? (
+          <div
+            className="flex flex-col items-center w-full px-2"
+            style={{
+              gap: 6,
+              padding: '6px 0',
+            }}
+          >
+            {/* Avatar with active-mode ring (uses currentColor) */}
+            <div className={activeColorClass} style={{ borderRadius: 999, padding: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button
+                onClick={() => navigate('/profile')}
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 999,
+                  overflow: 'hidden',
+                  background: '#0f172a',
+                  border: '2px solid currentColor',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                  cursor: 'pointer'
+                }}
+                title={profile?.full_name || profile?.email || user?.email || 'Profile'}
+              >
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ color: 'white', fontWeight: 700, fontSize: 18 }}>{(profile?.full_name || profile?.email || user?.email || 'U').charAt(0).toUpperCase()}</span>
+                )}
+              </button>
+            </div>
 
-          {/* Action icons row (centered under name) */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 4, alignItems: 'center' }}>
-            <Settings
-              size={18}
-              className="text-gray-400"
-              style={{ transition: 'transform 0.12s ease', cursor: 'pointer' }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-              onClick={() => navigate('/settings')}
-              title="Settings"
-            />
-            <LogOut
-              size={18}
-              className="text-red-500"
-              style={{ transition: 'transform 0.12s ease', cursor: 'pointer' }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-              onClick={() => signOut && signOut()}
-              title="Logout"
-            />
+            {/* Username (local part, no digits) */}
+            <div style={{ color: 'white', fontWeight: 700, fontSize: 12, lineHeight: 1, textAlign: 'center', width: '100%', paddingLeft: 4, paddingRight: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {(cleanedName && cleanedName.length) ? cleanedName : 'User'}
+            </div>
+
+            {/* Action icons row (centered under name) */}
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, alignItems: 'center' }}>
+              <Settings
+                size={18}
+                className="text-gray-400"
+                style={{ transition: 'transform 0.12s ease', cursor: 'pointer' }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                onClick={() => navigate('/settings')}
+                title="Settings"
+              />
+              <LogOut
+                size={18}
+                className="text-red-500"
+                style={{ transition: 'transform 0.12s ease', cursor: 'pointer' }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                onClick={() => signOut && signOut()}
+                title="Logout"
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <button
+            onClick={() => navigate('/login')}
+            className="flex items-center justify-center w-full py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm transition-colors"
+            style={{ marginTop: '8px' }}
+          >
+            Sign In
+          </button>
+        )}
       </div>
     </div>
   );

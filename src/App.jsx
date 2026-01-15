@@ -22,6 +22,17 @@ import MiniTimer from './components/MiniTimer';
 import { useAuth } from './context/AuthContext';
 import { ProfileProvider } from './context/ProfileContext';
 
+// Guest Layout (No Sidebar)
+const GuestLayout = ({ children }) => {
+  return (
+    <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
+      <main className="flex-1 h-full overflow-y-auto overflow-x-hidden relative">
+        {children}
+      </main>
+    </div>
+  );
+};
+
 // Main Layout Component (with Sidebar)
 const MainLayout = ({ children }) => {
   return (
@@ -42,6 +53,17 @@ function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const { sentryTriggered, setSentryTriggered } = useAuth();
+
+  const handleResumeSession = () => {
+    // Hide the modal
+    setSentryTriggered(false);
+
+    // Navigate to focus/timer page if not already there
+    if (window.location.pathname !== '/focus') {
+      navigate('/focus');
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -51,25 +73,25 @@ function App() {
     const hasOAuthCallbackTokens = () => {
       const hash = window.location.hash;
       // Check for access_token, code, or type=recovery in hash (OAuth callback indicators)
-      return hash.includes('access_token') || 
-             hash.includes('code=') || 
-             hash.includes('type=recovery') ||
-             hash.includes('#access_token') ||
-             hash.includes('#code=');
+      return hash.includes('access_token') ||
+        hash.includes('code=') ||
+        hash.includes('type=recovery') ||
+        hash.includes('#access_token') ||
+        hash.includes('#code=');
     };
 
     // Initial session check
     const checkSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
-        
+
         if (mounted) {
           if (error) {
             console.error('Session check error:', error);
           }
           // Set session immediately if found
           setSession(session);
-          
+
           // Check if we have OAuth callback tokens in URL (need to wait for processing)
           if (!session && hasOAuthCallbackTokens()) {
             console.log('OAuth callback detected in URL - waiting for session establishment...');
@@ -106,7 +128,7 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
-      
+
       if (mounted) {
         // Clear OAuth callback timeout if set
         if (oauthCallbackTimeout) {
@@ -159,7 +181,7 @@ function App() {
         // Handle INITIAL_SESSION without session
         if (event === 'INITIAL_SESSION' && !session) {
           console.log('INITIAL_SESSION event without session');
-          
+
           // Check if we're on update-password route
           const currentPath = location.pathname;
           if (currentPath.includes('/update-password')) {
@@ -225,7 +247,7 @@ function App() {
 
   // Check if we're on the update-password route (allow it even with/without session for recovery)
   const isUpdatePasswordRoute = location.pathname === '/update-password';
-  
+
   // Check if we're on the auth/callback route (allow it without session for OAuth callback)
   const isAuthCallbackRoute = location.pathname === '/auth/callback';
 
@@ -272,13 +294,13 @@ function App() {
         />
         <Routes>
           {/* PUBLIC ROUTE: Update Password - accessible without authentication for password recovery */}
-          <Route 
-            path="/update-password" 
+          <Route
+            path="/update-password"
             element={
               <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden items-center justify-center">
                 <UpdatePassword />
               </div>
-            } 
+            }
           />
           {/* Catch all - redirect to login if not on update-password */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -317,9 +339,9 @@ function App() {
         />
         <Routes>
           {/* PUBLIC ROUTE: Auth Callback - accessible without authentication for OAuth callback */}
-          <Route 
-            path="/auth/callback" 
-            element={<AuthCallback />} 
+          <Route
+            path="/auth/callback"
+            element={<AuthCallback />}
           />
           {/* Catch all - redirect to login if not on auth/callback */}
           <Route path="*" element={<Navigate to="/login" replace />} />
@@ -328,43 +350,16 @@ function App() {
     );
   }
 
-  // If no session, show Login page
-  if (!session) {
-    return <Login />;
-  }
-
-  // If session exists, show the app
-  return <AppWithSentry />;
-};
-
-// Separate component to use useAuth hook (must be inside AuthProvider)
-const AppWithSentry = () => {
-  const navigate = useNavigate();
-  const { sentryTriggered, setSentryTriggered } = useAuth();
-
-  const handleResumeSession = () => {
-    // Hide the modal
-    setSentryTriggered(false);
-    
-    // Navigate to focus/timer page if not already there
-    if (window.location.pathname !== '/focus') {
-      navigate('/focus');
-    }
-    
-    // Note: TimerMode component will handle resuming the timer
-    // when it detects sentryTriggered becomes false and wasTabHiddenPaused is true
-  };
-
   return (
     <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
       {/* Mini Timer - Global timer display */}
       <MiniTimer />
-      
+
       {/* Sentry Modal - Global overlay */}
       {sentryTriggered && (
         <SentryModal onResume={handleResumeSession} />
       )}
-      
+
       {/* Global Toast Notifications */}
       <Toaster
         position="top-right"
@@ -391,116 +386,119 @@ const AppWithSentry = () => {
         }}
       />
       <Routes>
+        {/* PUBLIC ROUTE: Login */}
+        <Route path="/login" element={<Login />} />
+
         {/* PUBLIC ROUTE: Update Password (accessible without session for password recovery) */}
-        <Route 
-          path="/update-password" 
+        <Route
+          path="/update-password"
           element={
             <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden items-center justify-center">
               <UpdatePassword />
             </div>
-          } 
+          }
         />
-        
-        {/* Default route - Dashboard */}
-        <Route 
-          path="/" 
+
+        {/* Default route - Dashboard (Public/Guest Access) */}
+        <Route
+          path="/"
           element={
-            <MainLayout>
+            <GuestLayout>
               <Dashboard />
-            </MainLayout>
-          } 
+            </GuestLayout>
+          }
         />
-        
+
         {/* Main App Routes */}
-        <Route 
-          path="/dashboard" 
+        <Route
+          path="/dashboard"
           element={
             <MainLayout>
               <Dashboard />
             </MainLayout>
-          } 
+          }
         />
-        <Route 
-          path="/blurting" 
+        <Route
+          path="/blurting"
           element={
             <MainLayout>
               <BlurtingMode />
             </MainLayout>
-          } 
+          }
         />
-        <Route 
-          path="/focus" 
+        <Route
+          path="/focus"
           element={
             <MainLayout>
               <TimerMode />
             </MainLayout>
-          } 
+          }
         />
-        <Route 
-          path="/feynman" 
+        <Route
+          path="/feynman"
           element={
             <MainLayout>
               <FeynmanMode />
             </MainLayout>
-          } 
+          }
         />
-        <Route 
-          path="/flashcards" 
+        <Route
+          path="/flashcards"
           element={
             <MainLayout>
               <FlashcardMode />
             </MainLayout>
-          } 
+          }
         />
-        <Route 
-          path="/study" 
+        <Route
+          path="/study"
           element={
             <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden">
               <StudyInterface />
             </div>
-          } 
+          }
         />
-        <Route 
-          path="/flashcard-study" 
+        <Route
+          path="/flashcard-study"
           element={
             <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden">
               <FlashcardStudy />
             </div>
-          } 
+          }
         />
-        <Route 
-          path="/gesture-flashcard" 
+        <Route
+          path="/gesture-flashcard"
           element={
             <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden">
               <GestureFlashcards />
             </div>
-          } 
+          }
         />
-        <Route 
-          path="/settings" 
+        <Route
+          path="/settings"
           element={
             <MainLayout>
               <SettingsMode />
             </MainLayout>
-          } 
+          }
         />
-        <Route 
-          path="/profile" 
+        <Route
+          path="/profile"
           element={
             <MainLayout>
               <ProfileMode />
             </MainLayout>
-          } 
+          }
         />
-        <Route 
-          path="/success" 
+        <Route
+          path="/success"
           element={
             <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden items-center justify-center">
               <Success />
             </div>
-          } 
+          }
         />
-        
+
         {/* Catch All - redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
