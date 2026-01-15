@@ -85,7 +85,7 @@ const config = {
   // ✅ SECURE: API key is stored in Supabase Edge Function secrets (gemini_key)
   // All API calls go through the Edge Function which verifies authentication
   gemini: {
-    model: 'gemini-1.5-flash', // Model name (API key is server-side)
+    model: 'gemini-2.5-flash', // Model name (API key is server-side)
   },
 
   // Stripe
