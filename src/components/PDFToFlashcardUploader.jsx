@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { saveGeneratedDeck } from '../utils/deckUtils';
 import { Sparkles } from 'lucide-react';
+import config from '../config/api';
 
 const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   const { user } = useAuth();
@@ -57,7 +58,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       formData.append('pdf', uploadedFile);
       formData.append('userId', user.id);
 
-      const response = await fetch('http://localhost:3000/api/generate-from-pdf', {
+      const response = await fetch(`${config.api.baseUrl}/api/generate-from-pdf`, {
         method: 'POST',
         body: formData, // Don't set Content-Type header, browser will set it with boundary
       });
@@ -192,7 +193,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
 
     try {
       // API Call: Send text to backend
-      const response = await fetch('http://localhost:3000/api/generate-from-text', {
+      const response = await fetch(`${config.api.baseUrl}/api/generate-from-text`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

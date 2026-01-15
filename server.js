@@ -158,7 +158,7 @@ app.use(helmet({
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://mindflow-app.vercel.app', // Production frontend (Vercel)
+  'https://mind-flow-two-dusky.vercel.app', // Production frontend (Vercel)
 ];
 
 app.use(cors({

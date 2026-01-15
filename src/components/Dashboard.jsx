@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import config from '../config/api';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -230,7 +231,7 @@ const Dashboard = () => {
       console.log('Request body stringified:', JSON.stringify(requestBody));
 
       // Call the Express server to create checkout session
-      const response = await fetch('http://localhost:3000/create-checkout-session', {
+      const response = await fetch(`${config.api.baseUrl}/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -291,7 +292,7 @@ const Dashboard = () => {
 
       // Call the Express server to cancel subscription
       console.log('📤 Calling cancel-subscription with userId:', user.id);
-      const response = await fetch('http://localhost:3000/cancel-subscription', {
+      const response = await fetch(`${config.api.baseUrl}/cancel-subscription`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -352,7 +353,7 @@ const Dashboard = () => {
     try {
       // Call the Express server to create billing portal session
       console.log('📤 Creating billing portal session for userId:', user.id);
-      const response = await fetch('http://localhost:3000/create-portal-session', {
+      const response = await fetch(`${config.api.baseUrl}/create-portal-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
+import config from '../config/api';
 
 const SettingsMode = () => {
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ const SettingsMode = () => {
       if (!user?.id) return;
 
       try {
-        const response = await fetch('http://localhost:3000/get-subscription-details', {
+        const response = await fetch(`${config.api.baseUrl}/get-subscription-details`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id }),
@@ -93,7 +94,7 @@ const SettingsMode = () => {
       
       setSubscriptionLoading(true);
       try {
-        const response = await fetch('http://localhost:3000/get-subscription-details', {
+        const response = await fetch(`${config.api.baseUrl}/get-subscription-details`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id }),
@@ -246,7 +247,7 @@ const SettingsMode = () => {
       }
 
       const requestBody = { userId: String(userId) };
-      const response = await fetch('http://localhost:3000/create-checkout-session', {
+      const response = await fetch(`${config.api.baseUrl}/create-checkout-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
@@ -315,7 +316,7 @@ const SettingsMode = () => {
 
     try {
       if (isSubscribed) {
-        const response = await fetch('http://localhost:3000/create-portal-session', {
+        const response = await fetch(`${config.api.baseUrl}/create-portal-session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id }),
@@ -335,7 +336,7 @@ const SettingsMode = () => {
             if (checkoutWindow) {
               checkoutWindow.document.write('<html><head><title>Loading...</title></head><body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; background: #0f172a; color: white;"><div style="text-align: center;"><div style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fbbf24; border-radius: 50%; margin: 0 auto 16px; animation: spin 0.8s linear infinite;"></div><p>Loading checkout...</p></div><style>@keyframes spin { to { transform: rotate(360deg); } }</style></body></html>');
             }
-            const checkoutResponse = await fetch('http://localhost:3000/create-checkout-session', {
+            const checkoutResponse = await fetch(`${config.api.baseUrl}/create-checkout-session`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(requestBody),
@@ -376,7 +377,7 @@ const SettingsMode = () => {
         if (checkoutWindow) {
           checkoutWindow.document.write('<html><head><title>Loading...</title></head><body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; background: #0f172a; color: white;"><div style="text-align: center;"><div style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fbbf24; border-radius: 50%; margin: 0 auto 16px; animation: spin 0.8s linear infinite;"></div><p>Loading checkout...</p></div><style>@keyframes spin { to { transform: rotate(360deg); } }</style></body></html>');
         }
-        const response = await fetch('http://localhost:3000/create-checkout-session', {
+        const response = await fetch(`${config.api.baseUrl}/create-checkout-session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
@@ -408,7 +409,7 @@ const SettingsMode = () => {
   const handleOpenBillingPortal = async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch('http://localhost:3000/create-portal-session', {
+      const response = await fetch(`${config.api.baseUrl}/create-portal-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
@@ -460,7 +461,7 @@ const SettingsMode = () => {
 
     setIsSyncing(true);
     try {
-      const response = await fetch('http://localhost:3000/api/user/sync-subscription', {
+      const response = await fetch(`${config.api.baseUrl}/api/user/sync-subscription`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
@@ -480,7 +481,7 @@ const SettingsMode = () => {
       
       // Also refetch subscription details if user has Pro
       if (data.is_pro) {
-        const detailsResponse = await fetch('http://localhost:3000/get-subscription-details', {
+        const detailsResponse = await fetch(`${config.api.baseUrl}/get-subscription-details`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id }),

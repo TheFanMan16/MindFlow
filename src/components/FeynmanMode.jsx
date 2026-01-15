@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
+import config from '../config/api';
 
 const FeynmanMode = () => {
   const { user, profile, isPro } = useAuth();
@@ -54,7 +55,7 @@ const FeynmanMode = () => {
     setFeedback(null);
     
     try {
-      const response = await fetch('http://localhost:3000/api/analyze-feynman', {
+      const response = await fetch(`${config.api.baseUrl}/api/analyze-feynman`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
