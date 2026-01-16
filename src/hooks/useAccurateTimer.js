@@ -1,103 +1,84 @@
-import { useReducer, useEffect, useRef, useCallback } from 'react';
-
-const TIMER_ACTIONS = {
-  START: 'START',
-  PAUSE: 'PAUSE',
-  RESET: 'RESET',
-  TICK: 'TICK',
-};
-
-const timerReducer = (state, action) => {
-  switch (action.type) {
-    case TIMER_ACTIONS.START:
-      return {
-        ...state,
-        isRunning: true,
-        endTime: action.payload
-      };
-    case TIMER_ACTIONS.PAUSE:
-      return {
-        ...state,
-        isRunning: false,
-        endTime: null
-      };
-    case TIMER_ACTIONS.RESET:
-      return {
-        timeLeft: action.initialDuration,
-        isRunning: false,
-        endTime: null
-      };
-    case TIMER_ACTIONS.TICK:
-      return {
-        ...state,
-        timeLeft: action.payload
-      };
-    default:
-      return state;
-  }
-};
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export const useAccurateTimer = (initialDuration, onComplete) => {
-  const [state, dispatch] = useReducer(timerReducer, {
-    timeLeft: initialDuration,
-    isRunning: false,
-    endTime: null,
-  });
+  const [timeLeft, setTimeLeft] = useState(initialDuration);
+  const [isRunning, setIsRunning] = useState(false);
+  const workerRef = useRef(null);
 
-  const timerInterval = useRef(null);
-
-  // 1. Force Reset on Duration Change
+  // Keep onComplete fresh in ref to avoid effect dependency loops
+  const onCompleteRef = useRef(onComplete);
   useEffect(() => {
-    dispatch({ type: TIMER_ACTIONS.RESET, initialDuration });
-  }, [initialDuration]);
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
-  // 2. The Tick Loop
+  // Initialize Worker
   useEffect(() => {
-    if (state.isRunning && state.endTime) {
-      timerInterval.current = setInterval(() => {
-        const now = Date.now();
-        const remaining = Math.ceil((state.endTime - now) / 1000);
+    // Create worker only once
+    const worker = new Worker('/timerWorker.js');
+    workerRef.current = worker;
 
-        if (remaining <= 0) {
-          clearInterval(timerInterval.current);
-          dispatch({ type: TIMER_ACTIONS.RESET, initialDuration });
-          if (onComplete) onComplete();
-        } else {
-          dispatch({ type: TIMER_ACTIONS.TICK, payload: remaining });
-        }
-      }, 100);
-    } else {
-      clearInterval(timerInterval.current);
-    }
-    return () => clearInterval(timerInterval.current);
-  }, [state.isRunning, state.endTime, initialDuration, onComplete]);
+    worker.onmessage = (e) => {
+      const { type, timeLeft: newTime } = e.data;
 
-  // 3. Actions
-  const start = useCallback(() => {
-    if (state.isRunning) return;
-    
-    // If resuming, use timeLeft. If fresh, use initialDuration.
-    const durationToUse = (state.timeLeft < initialDuration && state.timeLeft > 0)
-      ? state.timeLeft
-      : initialDuration;
+      switch (type) {
+        case 'TICK':
+          setTimeLeft(newTime);
+          setIsRunning(true); // Ensure state stays consistent
+          break;
+        case 'COMPLETE':
+          setIsRunning(false);
+          setTimeLeft(0);
+          if (onCompleteRef.current) {
+            onCompleteRef.current();
+          }
+          break;
+        default:
+          break;
+      }
+    };
 
-    dispatch({ 
-      type: TIMER_ACTIONS.START, 
-      payload: Date.now() + durationToUse * 1000 
-    });
-  }, [state.timeLeft, initialDuration, state.isRunning]);
-
-  const pause = useCallback(() => {
-    dispatch({ type: TIMER_ACTIONS.PAUSE });
+    return () => {
+      worker.terminate();
+    };
   }, []);
 
-  const reset = useCallback(() => {
-    dispatch({ type: TIMER_ACTIONS.RESET, initialDuration });
+  // Sync initialDuration changes to the worker (Reset)
+  useEffect(() => {
+    // If duration changes, we reset
+    // This allows the parent component to control duration updates
+    if (workerRef.current) {
+      workerRef.current.postMessage({ action: 'RESET', payload: { newTime: initialDuration } });
+    }
+    setTimeLeft(initialDuration);
+    setIsRunning(false);
+  }, [initialDuration]);
+
+  const start = useCallback(() => {
+    if (workerRef.current) {
+      // Send current timeLeft so worker knows where to start from
+      workerRef.current.postMessage({ action: 'START', payload: { timeLeft: timeLeft > 0 ? timeLeft : initialDuration } });
+      setIsRunning(true);
+    }
+  }, [timeLeft, initialDuration]);
+
+  const pause = useCallback(() => {
+    if (workerRef.current) {
+      workerRef.current.postMessage({ action: 'PAUSE' });
+      setIsRunning(false);
+    }
+  }, []);
+
+  const reset = useCallback((newDuration = initialDuration) => {
+    if (workerRef.current) {
+      workerRef.current.postMessage({ action: 'RESET', payload: { newTime: newDuration } });
+      setTimeLeft(newDuration);
+      setIsRunning(false);
+    }
   }, [initialDuration]);
 
   return {
-    timeLeft: state.timeLeft,
-    isRunning: state.isRunning,
+    timeLeft,
+    isRunning,
     start,
     pause,
     reset,

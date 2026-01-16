@@ -82,9 +82,9 @@ if (!supabaseUrl) {
 
 // Debug: Verify environment variables are loaded (only in development)
 if (process.env.NODE_ENV === 'development') {
-console.log('🔍 Environment Check:');
-console.log('  - VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL ? `${process.env.VITE_SUPABASE_URL.substring(0, 5)}...` : 'NOT SET');
-console.log('  - SUPABASE_URL:', process.env.SUPABASE_URL ? `${process.env.SUPABASE_URL.substring(0, 5)}...` : 'NOT SET');
+  console.log('🔍 Environment Check:');
+  console.log('  - VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL ? `${process.env.VITE_SUPABASE_URL.substring(0, 5)}...` : 'NOT SET');
+  console.log('  - SUPABASE_URL:', process.env.SUPABASE_URL ? `${process.env.SUPABASE_URL.substring(0, 5)}...` : 'NOT SET');
   console.log('  - SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅ SET' : 'NOT SET');
   console.log('  - STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? '✅ SET' : 'NOT SET');
   console.log('  - STRIPE_PRICE_ID:', process.env.STRIPE_PRICE_ID ? '✅ SET' : 'NOT SET');
@@ -129,10 +129,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // CRITICAL: Reuse the same variables from above (already validated)
 // Both supabaseUrl and supabaseServiceKey are guaranteed to exist due to process.exit(1) checks above
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
 });
 
 if (process.env.NODE_ENV === 'development') {
@@ -167,7 +167,7 @@ app.use(cors({
     if (!origin) {
       return callback(null, true);
     }
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -213,6 +213,14 @@ app.use(generalLimiter);
 app.use('/api/generate-from-pdf', aiLimiter);
 app.use('/api/analyze-feynman', aiLimiter);
 
+// Canvas Routes
+const canvasRoutes = require('./routes/canvas');
+app.use('/api/canvas', canvasRoutes);
+
+// Initialize Background Workers
+const scheduleCanvasSync = require('./jobs/canvasCron');
+scheduleCanvasSync();
+
 // Stripe Webhook Handler - MUST be BEFORE express.json() middleware
 // Stripe webhooks require raw body data for signature verification
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -240,10 +248,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object;
-      
+
       // Extract session.client_reference_id (this is the User ID)
       const userId = session.client_reference_id;
-      
+
       // Extract session.customer (this is the Stripe Customer ID)
       const stripeCustomerId = session.customer;
 
@@ -281,7 +289,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         // Set pro_expires_at
         const { error: updateError } = await supabase
           .from('profiles')
-          .update({ 
+          .update({
             is_pro: true,
             stripe_customer_id: stripeCustomerId,
             pro_expires_at: proExpiresAt
@@ -318,7 +326,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         // Refactor Cancellation: Set is_pro = false and pro_expires_at = null
         const { error: updateError } = await supabase
           .from('profiles')
-          .update({ 
+          .update({
             is_pro: false,
             pro_expires_at: null
           })
@@ -352,7 +360,7 @@ app.use((req, res, next) => {
   if (req.path === '/get-subscription-details' || req.url === '/get-subscription-details') {
     // #region agent log
     console.log('🔍 DEBUG: Middleware caught request for /get-subscription-details', req.method, req.path, req.url);
-    logEntry({location:'server.js:137',message:'Request received for get-subscription-details',data:{method:req.method,path:req.path,url:req.url,originalUrl:req.originalUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'});
+    logEntry({ location: 'server.js:137', message: 'Request received for get-subscription-details', data: { method: req.method, path: req.path, url: req.url, originalUrl: req.originalUrl }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'F' });
     // #endregion
   }
   next();
@@ -365,14 +373,14 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
 const stripe = require('stripe')(stripeSecretKey);
 if (process.env.NODE_ENV === 'development') {
-console.log('✅ Stripe initialized with TEST key (sk_test_...)');
+  console.log('✅ Stripe initialized with TEST key (sk_test_...)');
 }
 
 // Log Supabase initialization status (only in development)
 if (supabase) {
   if (process.env.NODE_ENV === 'development') {
-  console.log('✅ Supabase client initialized successfully');
-  console.log('  - URL:', supabaseUrl.substring(0, 20) + '...');
+    console.log('✅ Supabase client initialized successfully');
+    console.log('  - URL:', supabaseUrl.substring(0, 20) + '...');
   }
 } else {
   console.error('❌ ERROR: Supabase client NOT initialized.');
@@ -433,7 +441,7 @@ async function checkAndIncrementPDFLimit(userId) {
     if (!allUsage || allUsage.month !== currentMonth) {
       currentCount = 0;
       needsInsert = !allUsage; // Insert if no record, update if different month
-      
+
       if (needsInsert) {
         // Create new record for current month
         const { error: insertError } = await supabase
@@ -452,9 +460,9 @@ async function checkAndIncrementPDFLimit(userId) {
         // Update existing record to new month
         const { error: updateError } = await supabase
           .from('user_usage')
-          .update({ 
+          .update({
             month: currentMonth,
-            flashcard_generations_count: 0 
+            flashcard_generations_count: 0
           })
           .eq('user_id', userId)
           .eq('month', allUsage.month);
@@ -470,8 +478,8 @@ async function checkAndIncrementPDFLimit(userId) {
 
     // Limit Check: If count >= 3, deny
     if (currentCount >= FREE_PDF_LIMIT) {
-      return { 
-        allowed: false, 
+      return {
+        allowed: false,
         message: 'Free limit reached. Upgrade to Pro.',
         currentUsage: currentCount,
         limit: FREE_PDF_LIMIT
@@ -491,10 +499,10 @@ async function checkAndIncrementPDFLimit(userId) {
       // Note: This means the count won't be tracked, but we don't want to block the user
     }
 
-    return { 
-      allowed: true, 
-      currentUsage: currentCount + 1, 
-      limit: FREE_PDF_LIMIT 
+    return {
+      allowed: true,
+      currentUsage: currentCount + 1,
+      limit: FREE_PDF_LIMIT
     };
   } catch (error) {
     console.error('❌ Unexpected error in checkAndIncrementPDFLimit:', error);
@@ -534,16 +542,16 @@ async function checkAndIncrementAILimit(userId) {
   if (lastUsageDate !== today) {
     currentCount = 0;
     lastUsageDate = today;
-    
+
     // Update last_usage_date to today (reset count will be done in increment step)
     const { error: resetError } = await supabase
       .from('profiles')
-      .update({ 
+      .update({
         ai_usage_count: 0,
         last_usage_date: today
       })
       .eq('id', userId);
-    
+
     if (resetError) {
       console.error('❌ Error resetting AI usage count:', resetError);
       // Continue anyway
@@ -552,9 +560,9 @@ async function checkAndIncrementAILimit(userId) {
 
   // Limit Check: If ai_usage_count >= 5, return { allowed: false, message: 'Daily limit reached' }
   if (currentCount >= 5) {
-    return { 
-      allowed: false, 
-      message: 'Daily AI Limit Reached (5/5). Upgrade to Pro for unlimited.' 
+    return {
+      allowed: false,
+      message: 'Daily AI Limit Reached (5/5). Upgrade to Pro for unlimited.'
     };
   }
 
@@ -562,7 +570,7 @@ async function checkAndIncrementAILimit(userId) {
   const newCount = currentCount + 1;
   const { error: updateError } = await supabase
     .from('profiles')
-    .update({ 
+    .update({
       ai_usage_count: newCount,
       last_usage_date: today
     })
@@ -581,20 +589,20 @@ async function checkAndIncrementAILimit(userId) {
 function chunkText(text, chunkSize = 4000) {
   const chunks = [];
   let currentIndex = 0;
-  
+
   while (currentIndex < text.length) {
     const chunk = text.substring(currentIndex, currentIndex + chunkSize);
     chunks.push(chunk);
     currentIndex += chunkSize;
   }
-  
+
   return chunks;
 }
 
 app.post('/create-checkout-session', async (req, res) => {
   try {
     const { userId, email, priceId: requestPriceId } = req.body;
-    
+
     // Validate userId is provided
     if (!userId) {
       console.error('❌ Error: userId is missing from request body');
@@ -635,13 +643,13 @@ app.post('/create-checkout-session', async (req, res) => {
         metadata: { userId: userId } // Tag them in Stripe too
       });
       customerId = newCustomer.id;
-      
+
       // SAVE IMMEDIATELY - Do not wait for webhooks
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ stripe_customer_id: customerId })
         .eq('id', userId);
-      
+
       if (updateError) {
         console.error('❌ Error saving customer ID to database:', updateError);
         // Continue anyway - we have the customer ID, just log the error
@@ -654,8 +662,9 @@ app.post('/create-checkout-session', async (req, res) => {
 
     // Get price ID (from request or environment variable)
     // CRITICAL: Variable is guaranteed to exist due to fail-hard validation at startup
+    // USER REQUEST: Update this to your new Price ID in .env (price_NEW_ID_HERE) or hardcode it here if preferred.
     const priceId = requestPriceId || process.env.STRIPE_PRICE_ID;
-    
+
     // VALIDATION: Ensure we're using TEST price ID
     if (!priceId.startsWith('price_1')) {
       console.warn('⚠️ WARNING: Price ID does not start with price_1. Ensure this is a test price ID.');
@@ -691,7 +700,7 @@ app.post('/create-checkout-session', async (req, res) => {
     } catch (error) {
       // Catch the Error: Check if it's a missing customer error
       const errorMessage = error.message?.toLowerCase() || '';
-      const isMissingCustomer = 
+      const isMissingCustomer =
         error.code === 'resource_missing' ||
         errorMessage.includes('no such customer') ||
         (errorMessage.includes('customer') && errorMessage.includes('not found'));
@@ -707,7 +716,7 @@ app.post('/create-checkout-session', async (req, res) => {
           email: userEmail,
           metadata: { userId: userId }
         });
-        
+
         console.log('✅ New Stripe customer created:', newCustomer.id);
 
         // Update DB: Update the profiles table with the NEW stripe_customer_id
@@ -715,7 +724,7 @@ app.post('/create-checkout-session', async (req, res) => {
           .from('profiles')
           .update({ stripe_customer_id: newCustomer.id })
           .eq('id', userId);
-        
+
         if (updateError) {
           console.error('❌ Error saving new customer ID to database:', updateError);
           // Continue anyway - we have the customer ID
@@ -768,7 +777,7 @@ app.post('/api/generate-from-pdf', upload.single('pdf'), async (req, res) => {
     }
 
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
@@ -796,16 +805,16 @@ app.post('/api/generate-from-pdf', upload.single('pdf'), async (req, res) => {
       // Debugging: Check PDFParse type
       console.log('PDFParse type:', typeof PDFParse);
       console.log('PDF Parse Library Keys:', Object.keys(pdfParseLib || {}).slice(0, 10));
-      
+
       // PDFParse is a class, need to instantiate it with 'new'
       const parser = new PDFParse({ data: req.file.buffer });
       const pdfData = await parser.getText();
       pdfText = pdfData.text;
-      
+
       if (!pdfText || pdfText.trim().length === 0) {
         return res.status(400).json({ error: 'PDF appears to be empty or contains no extractable text' });
       }
-      
+
       // Log Length: Log the extracted text length
       console.log('Extracted PDF Text Length:', pdfText.length);
       console.log('✅ PDF parsed successfully, text length:', pdfText.length);
@@ -819,7 +828,7 @@ app.post('/api/generate-from-pdf', upload.single('pdf'), async (req, res) => {
 
     // Truncate/Chunk: Take only the first 15,000 characters (roughly 3-4k tokens)
     const cleanText = pdfText.slice(0, 15000);
-    
+
     console.log('📄 Processing truncated text, length:', cleanText.length);
     if (pdfText.length > 15000) {
       console.log(`⚠️ Text truncated from ${pdfText.length} to ${cleanText.length} characters`);
@@ -846,10 +855,10 @@ ${cleanText}`;
     const edgeFunctionUrl = `${supabaseProjectUrl}/functions/v1/gemini-chat`;
 
     if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 Calling Gemini Edge Function for flashcard generation...');
-    console.log('  - Prompt length:', prompt.length, 'characters');
-    console.log('  - Text length:', cleanText.length, 'characters');
-    console.log('Edge Function URL:', edgeFunctionUrl);
+      console.log('🔍 Calling Gemini Edge Function for flashcard generation...');
+      console.log('  - Prompt length:', prompt.length, 'characters');
+      console.log('  - Text length:', cleanText.length, 'characters');
+      console.log('Edge Function URL:', edgeFunctionUrl);
     }
 
     // Make raw fetch request
@@ -911,7 +920,7 @@ ${cleanText}`;
       // Strip markdown
       let cleanJson = responseText.trim();
       cleanJson = cleanJson.replace(/```json/g, '').replace(/```/g, '').trim();
-      
+
       // Ensure we start at the first bracket (ignore intro text)
       const firstBracket = cleanJson.indexOf('[');
       const lastBracket = cleanJson.lastIndexOf(']');
@@ -933,9 +942,9 @@ ${cleanText}`;
       }
 
       // Validate each flashcard has front and back
-      flashcards = flashcards.filter(card => 
-        card && 
-        typeof card.front === 'string' && 
+      flashcards = flashcards.filter(card =>
+        card &&
+        typeof card.front === 'string' &&
         typeof card.back === 'string' &&
         card.front.trim().length > 0 &&
         card.back.trim().length > 0
@@ -965,9 +974,9 @@ app.post('/api/analyze-feynman', async (req, res) => {
   try {
     console.log('📥 Feynman analysis request received');
     console.log('  - Request body:', JSON.stringify(req.body, null, 2));
-    
+
     const { concept, explanation, userId } = req.body;
-    
+
     if (!concept || !explanation) {
       return res.status(400).json({ error: 'Both concept and explanation are required' });
     }
@@ -1017,8 +1026,8 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
 
     // Debug Log: Verify key is loaded (only in development, never log keys)
     if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 Calling Gemini Edge Function for analysis...');
-    console.log('Edge Function URL:', edgeFunctionUrl);
+      console.log('🔍 Calling Gemini Edge Function for analysis...');
+      console.log('Edge Function URL:', edgeFunctionUrl);
     }
 
     // Make raw fetch request
@@ -1069,7 +1078,7 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
     try {
       // Edge Function typically returns { text: "..." } format
       const responseText = data?.text || (typeof data === 'string' ? data : JSON.stringify(data));
-      
+
       // Extract JSON from response (handle markdown code blocks if present)
       let cleanJson = responseText.trim();
       if (cleanJson.includes('```json')) {
@@ -1077,14 +1086,14 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
       } else if (cleanJson.includes('```')) {
         cleanJson = cleanJson.replace(/```/g, '').trim();
       }
-      
+
       // Find the JSON object in the response
       const firstBrace = cleanJson.indexOf('{');
       const lastBrace = cleanJson.lastIndexOf('}');
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
         cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
       }
-      
+
       analysisResult = JSON.parse(cleanJson);
     } catch (parseError) {
       console.error('❌ JSON parse error:', parseError);
@@ -1093,10 +1102,10 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
     }
 
     // Validate the structure
-    if (typeof analysisResult.score !== 'number' || 
-        typeof analysisResult.feedback !== 'string' ||
-        typeof analysisResult.simplification !== 'string' ||
-        !Array.isArray(analysisResult.missing_concepts)) {
+    if (typeof analysisResult.score !== 'number' ||
+      typeof analysisResult.feedback !== 'string' ||
+      typeof analysisResult.simplification !== 'string' ||
+      !Array.isArray(analysisResult.missing_concepts)) {
       console.error('❌ Invalid response structure:', analysisResult);
       return res.status(500).json({ error: 'AI returned invalid response structure' });
     }
@@ -1121,7 +1130,7 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
 
 app.post('/cancel-subscription', async (req, res) => {
   const { userId } = req.body;
-  
+
   if (!userId) {
     return res.status(400).json({ error: 'User ID is required' });
   }
@@ -1162,20 +1171,20 @@ app.post('/cancel-subscription', async (req, res) => {
     // Note: is_pro remains true until subscription is actually deleted
     // The customer.subscription.deleted webhook will set is_pro = false when the period ends
 
-    res.json({ 
-      status: 'success', 
+    res.json({
+      status: 'success',
       cancel_at: updatedSub.cancel_at,
-      cancellationDate: updatedSub.cancel_at 
+      cancellationDate: updatedSub.cancel_at
         ? new Date(updatedSub.cancel_at * 1000).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
         : new Date(updatedSub.current_period_end * 1000).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          }),
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
     });
   } catch (error) {
     console.error('Error canceling subscription:', error);
@@ -1188,12 +1197,12 @@ app.post('/cancel-subscription', async (req, res) => {
 app.get('/get-subscription-details', async (req, res) => {
   // #region agent log
   console.log('🔍 DEBUG: get-subscription-details GET endpoint called');
-  logEntry({location:'server.js:434',message:'get-subscription-details GET endpoint called',data:{method:req.method,query:req.query,userId:req.query.userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'L'});
+  logEntry({ location: 'server.js:434', message: 'get-subscription-details GET endpoint called', data: { method: req.method, query: req.query, userId: req.query.userId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'L' });
   // #endregion
-  
+
   try {
     const { userId } = req.query;
-    
+
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required in query parameters' });
     }
@@ -1204,7 +1213,7 @@ app.get('/get-subscription-details', async (req, res) => {
 
     // Step A: Query Supabase to find the stripe_customer_id
     // #region agent log
-    logEntry({location:'server.js:448',message:'Querying database for stripe_customer_id (GET)',data:{userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'I'});
+    logEntry({ location: 'server.js:448', message: 'Querying database for stripe_customer_id (GET)', data: { userId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'I' });
     // #endregion
     const { data: user, error: dbError } = await supabase
       .from('profiles')
@@ -1213,20 +1222,20 @@ app.get('/get-subscription-details', async (req, res) => {
       .single();
 
     // #region agent log
-    logEntry({location:'server.js:454',message:'Database query result (GET)',data:{hasUser:!!user,hasStripeCustomerId:!!user?.stripe_customer_id,isPro:user?.is_pro,dbError:dbError?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'J'});
+    logEntry({ location: 'server.js:454', message: 'Database query result (GET)', data: { hasUser: !!user, hasStripeCustomerId: !!user?.stripe_customer_id, isPro: user?.is_pro, dbError: dbError?.message }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'J' });
     // #endregion
 
     // If stripe_customer_id is missing, return isSubscribed: false
     if (dbError || !user?.stripe_customer_id) {
       // #region agent log
-      logEntry({location:'server.js:459',message:'No stripe_customer_id found, returning isSubscribed: false',data:{dbError:dbError?.message,hasUser:!!user},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'M'});
+      logEntry({ location: 'server.js:459', message: 'No stripe_customer_id found, returning isSubscribed: false', data: { dbError: dbError?.message, hasUser: !!user }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'M' });
       // #endregion
       return res.json({ isSubscribed: false });
     }
 
     // Step B: Use Stripe to find active subscriptions
     // #region agent log
-    logEntry({location:'server.js:464',message:'Querying Stripe for subscriptions (GET)',data:{stripeCustomerId:user.stripe_customer_id},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'N'});
+    logEntry({ location: 'server.js:464', message: 'Querying Stripe for subscriptions (GET)', data: { stripeCustomerId: user.stripe_customer_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'N' });
     // #endregion
     const subscriptions = await stripe.subscriptions.list({
       customer: user.stripe_customer_id,
@@ -1236,15 +1245,15 @@ app.get('/get-subscription-details', async (req, res) => {
     // If no subscription found, return isSubscribed: false
     if (subscriptions.data.length === 0) {
       // #region agent log
-      logEntry({location:'server.js:472',message:'No subscriptions found in Stripe, returning isSubscribed: false',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'O'});
+      logEntry({ location: 'server.js:472', message: 'No subscriptions found in Stripe, returning isSubscribed: false', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'O' });
       // #endregion
       return res.json({ isSubscribed: false });
     }
 
     const subscription = subscriptions.data[0];
-    
+
     // #region agent log
-    logEntry({location:'server.js:478',message:'Subscription found, returning details (GET)',data:{status:subscription.status,currentPeriodEnd:subscription.current_period_end},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'P'});
+    logEntry({ location: 'server.js:478', message: 'Subscription found, returning details (GET)', data: { status: subscription.status, currentPeriodEnd: subscription.current_period_end }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'P' });
     // #endregion
 
     // Return subscription details
@@ -1256,7 +1265,7 @@ app.get('/get-subscription-details', async (req, res) => {
     });
   } catch (error) {
     // #region agent log
-    logEntry({location:'server.js:488',message:'Error in get-subscription-details GET',data:{errorName:error.name,errorMessage:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'H'});
+    logEntry({ location: 'server.js:488', message: 'Error in get-subscription-details GET', data: { errorName: error.name, errorMessage: error.message }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H' });
     // #endregion
     console.error('Error fetching subscription details (GET):', error);
     res.status(500).json({ error: error.message });
@@ -1267,20 +1276,20 @@ app.get('/get-subscription-details', async (req, res) => {
 app.post('/get-subscription-details', async (req, res) => {
   // #region agent log
   console.log('🔍 DEBUG: get-subscription-details POST endpoint called');
-  logEntry({location:'server.js:490',message:'get-subscription-details POST endpoint called',data:{method:req.method,path:req.path,url:req.url,hasBody:!!req.body,bodyKeys:req.body ? Object.keys(req.body) : [],userId:req.body?.userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'});
+  logEntry({ location: 'server.js:490', message: 'get-subscription-details POST endpoint called', data: { method: req.method, path: req.path, url: req.url, hasBody: !!req.body, bodyKeys: req.body ? Object.keys(req.body) : [], userId: req.body?.userId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'A' });
   // #endregion
-  
+
   try {
     // Extract userId from req.body
     const { userId } = req.body;
-    
+
     // Debug logging
     console.log('🔍 Checking subscription for User ID:', userId);
-    
+
     // Validation: If userId is undefined, return status 400 immediately
     if (!userId || userId === undefined) {
       // #region agent log
-      logEntry({location:'server.js:502',message:'Validation failed - userId is undefined',data:{hasBody:!!req.body,bodyKeys:req.body ? Object.keys(req.body) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'Q'});
+      logEntry({ location: 'server.js:502', message: 'Validation failed - userId is undefined', data: { hasBody: !!req.body, bodyKeys: req.body ? Object.keys(req.body) : [] }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'Q' });
       // #endregion
       return res.status(400).json({ error: 'User ID is required in request body' });
     }
@@ -1291,7 +1300,7 @@ app.post('/get-subscription-details', async (req, res) => {
 
     // Query Supabase for the stripe_customer_id
     // #region agent log
-    logEntry({location:'server.js:511',message:'Querying database for stripe_customer_id',data:{userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'I'});
+    logEntry({ location: 'server.js:511', message: 'Querying database for stripe_customer_id', data: { userId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'I' });
     // #endregion
     const { data: user, error: dbError } = await supabase
       .from('profiles')
@@ -1300,24 +1309,24 @@ app.post('/get-subscription-details', async (req, res) => {
       .single();
 
     // #region agent log
-    logEntry({location:'server.js:518',message:'Database query result',data:{hasUser:!!user,hasStripeCustomerId:!!user?.stripe_customer_id,isPro:user?.is_pro,dbError:dbError?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'J'});
+    logEntry({ location: 'server.js:518', message: 'Database query result', data: { hasUser: !!user, hasStripeCustomerId: !!user?.stripe_customer_id, isPro: user?.is_pro, dbError: dbError?.message }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'J' });
     // #endregion
 
     // If the ID is null or missing, return { isSubscribed: false, message: 'No Customer ID found' }
     if (dbError || !user?.stripe_customer_id) {
       console.error('User not found or no Stripe ID:', dbError);
       // #region agent log
-      logEntry({location:'server.js:525',message:'No stripe_customer_id found, returning isSubscribed: false',data:{dbError:dbError?.message,hasUser:!!user,hasStripeCustomerId:!!user?.stripe_customer_id},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'R'});
+      logEntry({ location: 'server.js:525', message: 'No stripe_customer_id found, returning isSubscribed: false', data: { dbError: dbError?.message, hasUser: !!user, hasStripeCustomerId: !!user?.stripe_customer_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'R' });
       // #endregion
-      return res.json({ 
-        isSubscribed: false, 
-        message: 'No Customer ID found' 
+      return res.json({
+        isSubscribed: false,
+        message: 'No Customer ID found'
       });
     }
 
     // If the ID exists, call stripe.subscriptions.list and return the plan details
     // #region agent log
-    logEntry({location:'server.js:532',message:'Querying Stripe for subscriptions',data:{stripeCustomerId:user.stripe_customer_id},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'N'});
+    logEntry({ location: 'server.js:532', message: 'Querying Stripe for subscriptions', data: { stripeCustomerId: user.stripe_customer_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'N' });
     // #endregion
     const subscriptions = await stripe.subscriptions.list({
       customer: user.stripe_customer_id,
@@ -1327,9 +1336,9 @@ app.post('/get-subscription-details', async (req, res) => {
     // If no subscription found, return isSubscribed: false
     if (subscriptions.data.length === 0) {
       // #region agent log
-      logEntry({location:'server.js:540',message:'No subscriptions found in Stripe, returning isSubscribed: false',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'O'});
+      logEntry({ location: 'server.js:540', message: 'No subscriptions found in Stripe, returning isSubscribed: false', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'O' });
       // #endregion
-      return res.json({ 
+      return res.json({
         isSubscribed: false,
         message: 'No active subscription found'
       });
@@ -1339,7 +1348,7 @@ app.post('/get-subscription-details', async (req, res) => {
     const price = subscription.items.data[0]?.price;
 
     // #region agent log
-    logEntry({location:'server.js:550',message:'Subscription found, returning plan details',data:{status:subscription.status,currentPeriodEnd:subscription.current_period_end,hasPrice:!!price,amount:price?.unit_amount},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'P'});
+    logEntry({ location: 'server.js:550', message: 'Subscription found, returning plan details', data: { status: subscription.status, currentPeriodEnd: subscription.current_period_end, hasPrice: !!price, amount: price?.unit_amount }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'P' });
     // #endregion
 
     // Return subscription details
@@ -1357,7 +1366,7 @@ app.post('/get-subscription-details', async (req, res) => {
     });
   } catch (error) {
     // #region agent log
-    logEntry({location:'server.js:568',message:'Error in get-subscription-details POST',data:{errorName:error.name,errorMessage:error.message,errorStack:error.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'H'});
+    logEntry({ location: 'server.js:568', message: 'Error in get-subscription-details POST', data: { errorName: error.name, errorMessage: error.message, errorStack: error.stack?.substring(0, 200) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H' });
     // #endregion
     console.error('Error fetching subscription details:', error);
     res.status(500).json({ error: error.message });
@@ -1403,10 +1412,10 @@ app.post('/api/user/sync-subscription', async (req, res) => {
         return res.status(500).json({ error: 'Failed to update profile' });
       }
 
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         message: 'Subscription synced: Free plan',
-        is_pro: false 
+        is_pro: false
       });
     }
 
@@ -1427,9 +1436,9 @@ app.post('/api/user/sync-subscription', async (req, res) => {
       // User has active subscription in Stripe
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ 
+        .update({
           is_pro: true,
-          pro_expires_at: activeSubscription.current_period_end 
+          pro_expires_at: activeSubscription.current_period_end
             ? new Date(activeSubscription.current_period_end * 1000).toISOString()
             : null
         })
@@ -1440,8 +1449,8 @@ app.post('/api/user/sync-subscription', async (req, res) => {
         return res.status(500).json({ error: 'Failed to update profile' });
       }
 
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         message: 'Subscription synced: Pro plan active',
         is_pro: true,
         status: activeSubscription.status
@@ -1450,7 +1459,7 @@ app.post('/api/user/sync-subscription', async (req, res) => {
       // No active subscription in Stripe - set to free
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ 
+        .update({
           is_pro: false,
           pro_expires_at: null
         })
@@ -1461,10 +1470,10 @@ app.post('/api/user/sync-subscription', async (req, res) => {
         return res.status(500).json({ error: 'Failed to update profile' });
       }
 
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         message: 'Subscription synced: Free plan (no active subscription in Stripe)',
-        is_pro: false 
+        is_pro: false
       });
     }
   } catch (error) {
@@ -1473,16 +1482,24 @@ app.post('/api/user/sync-subscription', async (req, res) => {
   }
 });
 
-// Stripe Customer Portal Route
-app.post('/create-portal-session', async (req, res) => {
+// Helper to handle portal session creation with error recovery
+async function handleCreatePortalSession(req, res) {
   try {
     const { userId } = req.body;
     console.log('Received portal request for user:', userId);
 
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
     // 1. Get the user's stripe_customer_id from Supabase
     const { data: user, error: dbError } = await supabase
-      .from('profiles') // Using 'profiles' table to match the rest of the codebase
-      .select('stripe_customer_id')
+      .from('profiles')
+      .select('stripe_customer_id, email') // fetch email too for recovery
       .eq('id', userId)
       .single();
 
@@ -1491,49 +1508,91 @@ app.post('/create-portal-session', async (req, res) => {
       return res.status(404).json({ error: 'Stripe customer not found' });
     }
 
-    // 2. Create the portal session
-    const session = await stripe.billingPortal.sessions.create({
-      customer: user.stripe_customer_id,
-      return_url: 'http://localhost:5173/subscription', // Where to send them back
-    });
+    let customerId = user.stripe_customer_id;
 
-    res.json({ url: session.url });
+    // 2. Try to create the portal session
+    try {
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: 'http://localhost:5173/subscription',
+      });
+      return res.json({ url: session.url });
+
+    } catch (stripeError) {
+      // 3. Handle 'No such customer' error
+      const errorMessage = stripeError.message?.toLowerCase() || '';
+      if (
+        stripeError.code === 'resource_missing' ||
+        errorMessage.includes('no such customer') ||
+        (errorMessage.includes('customer') && errorMessage.includes('not found'))
+      ) {
+        console.warn(`⚠️ Stripe customer ${customerId} missing. Attempting recovery...`);
+
+        // RECOVERY: Check if user exists in Stripe by email
+        const userEmail = user.email;
+        if (!userEmail) {
+          console.error('❌ Cannot recover: User has no email in database.');
+          throw stripeError;
+        }
+
+        console.log(`🔍 Searching Stripe for email: ${userEmail}`);
+        const customers = await stripe.customers.list({
+          email: userEmail,
+          limit: 1
+        });
+
+        let newCustomerId;
+
+        if (customers.data.length > 0) {
+          // Found existing customer in Live mode
+          newCustomerId = customers.data[0].id;
+          console.log(`✅ Found existing Stripe customer: ${newCustomerId}`);
+        } else {
+          // Create new customer
+          console.log('📧 Creating new Stripe customer...');
+          const newCustomer = await stripe.customers.create({
+            email: userEmail,
+            metadata: { userId: userId }
+          });
+          newCustomerId = newCustomer.id;
+        }
+
+        // Update Database with correct ID
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ stripe_customer_id: newCustomerId })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('❌ Failed to update profile with new customer ID:', updateError);
+          throw updateError;
+        }
+
+        // Retry Portal Creation with new ID
+        console.log(`🔄 Retrying portal session with ID: ${newCustomerId}`);
+        const session = await stripe.billingPortal.sessions.create({
+          customer: newCustomerId,
+          return_url: 'http://localhost:5173/subscription',
+        });
+
+        return res.json({ url: session.url });
+      }
+
+      // If other error, rethrow
+      throw stripeError;
+    }
+
   } catch (error) {
     console.error('Stripe Portal Error:', error);
     res.status(500).json({ error: error.message });
   }
-});
+}
+
+// Stripe Customer Portal Route
+app.post('/create-portal-session', handleCreatePortalSession);
 
 // Also register at /api path for proxy compatibility
-app.post('/api/create-portal-session', async (req, res) => {
-  try {
-    const { userId } = req.body;
-    console.log('Received portal request for user:', userId);
-
-    // 1. Get the user's stripe_customer_id from Supabase
-    const { data: user, error: dbError } = await supabase
-      .from('profiles') // Using 'profiles' table to match the rest of the codebase
-      .select('stripe_customer_id')
-      .eq('id', userId)
-      .single();
-
-    if (dbError || !user?.stripe_customer_id) {
-      console.error('User not found or no Stripe ID:', dbError);
-      return res.status(404).json({ error: 'Stripe customer not found' });
-    }
-
-    // 2. Create the portal session
-    const session = await stripe.billingPortal.sessions.create({
-      customer: user.stripe_customer_id,
-      return_url: 'http://localhost:5173/subscription', // Where to send them back
-    });
-
-    res.json({ url: session.url });
-  } catch (error) {
-    console.error('Stripe Portal Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+app.post('/api/create-portal-session', handleCreatePortalSession);
 
 // Admin User Deletion Endpoint
 // CRITICAL: This endpoint requires authentication and proper authorization
@@ -1541,7 +1600,7 @@ app.post('/api/create-portal-session', async (req, res) => {
 app.post('/admin/delete-user', async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
@@ -1564,11 +1623,11 @@ app.post('/admin/delete-user', async (req, res) => {
     // - decks (references profiles(id))
     // - flashcards (references profiles(id) and decks(id))
     // - user_usage (references profiles(id))
-    
+
     // Try using the admin method directly (Supabase JS v2+)
     let deleteError = null;
     let deleteData = null;
-    
+
     try {
       // Check if admin.auth.admin exists (Supabase JS v2.39+)
       if (supabaseAdmin.auth && supabaseAdmin.auth.admin && typeof supabaseAdmin.auth.admin.deleteUser === 'function') {
@@ -1605,7 +1664,7 @@ app.post('/admin/delete-user', async (req, res) => {
 
     if (deleteError) {
       console.error('❌ ERROR deleting user:', deleteError);
-      
+
       // Provide helpful error messages
       let errorMessage = deleteError.message || 'Unknown error occurred';
       if (errorMessage.includes('foreign key') || errorMessage.includes('constraint') || errorMessage.includes('violates foreign key')) {
@@ -1615,15 +1674,15 @@ app.post('/admin/delete-user', async (req, res) => {
       } else if (errorMessage.includes('permission') || errorMessage.includes('unauthorized')) {
         errorMessage = 'Permission denied. Ensure SUPABASE_SERVICE_ROLE_KEY is correct and has admin privileges.';
       }
-      
+
       return res.status(500).json({ error: errorMessage, details: deleteError.message || deleteError });
     }
 
     console.log('✅ Successfully deleted user:', userId);
     console.log('  - All related data should have been cascaded (profiles, stats, decks, flashcards, etc.)');
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'User deleted successfully',
       userId: userId,
       deletedAt: new Date().toISOString(),
@@ -1650,37 +1709,37 @@ app.use((err, req, res, next) => {
 
   // Don't leak stack traces to clients in production
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
+
   // Handle specific error types
   if (err instanceof multer.MulterError) {
     // Multer errors (file upload issues)
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ 
-        error: 'File too large. Maximum size is 5MB.' 
+      return res.status(400).json({
+        error: 'File too large. Maximum size is 5MB.'
       });
     }
-    return res.status(400).json({ 
-      error: 'File upload error: ' + err.message 
+    return res.status(400).json({
+      error: 'File upload error: ' + err.message
     });
   }
 
   if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ 
-      error: 'CORS: Origin not allowed' 
+    return res.status(403).json({
+      error: 'CORS: Origin not allowed'
     });
   }
 
   if (err.message && err.message.includes('rate limit')) {
     // Rate limit errors are handled by express-rate-limit
     // But we catch them here as a fallback
-    return res.status(429).json({ 
-      error: 'Too many requests, please try again later.' 
+    return res.status(429).json({
+      error: 'Too many requests, please try again later.'
     });
   }
 
   // Default error response
   const statusCode = err.statusCode || err.status || 500;
-  
+
   // Build error response - never leak stack traces in production
   let errorResponse = {
     error: isDevelopment ? err.message : 'Internal server error',
@@ -1704,9 +1763,9 @@ app.use((err, req, res, next) => {
 
 // 404 Handler: Catch all routes that don't match
 app.use((req, res) => {
-  res.status(404).json({ 
+  res.status(404).json({
     error: 'Route not found',
-    path: req.path 
+    path: req.path
   });
 });
 
@@ -1715,7 +1774,7 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
-  
+
   if (process.env.NODE_ENV === 'development') {
     console.log('🔍 DEBUG: Registered routes include /get-subscription-details');
   }

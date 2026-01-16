@@ -142,8 +142,8 @@ const Login = () => {
           vertical-align: middle;
         }
       `}</style>
-      
-      <div 
+
+      <div
         className="login-animated-bg"
         style={{
           width: '100%',
@@ -176,8 +176,8 @@ const Login = () => {
           background: 'radial-gradient(ellipse at bottom right, rgba(147, 51, 234, 0.15) 0%, transparent 50%)',
           pointerEvents: 'none',
         }} />
-        
-        <div 
+
+        <div
           className="login-glass-card"
           style={{
             borderRadius: '24px',
@@ -188,7 +188,7 @@ const Login = () => {
             zIndex: 10,
           }}
         >
-          <h1 
+          <h1
             className="login-gradient-text"
             style={{
               fontSize: '32px',
