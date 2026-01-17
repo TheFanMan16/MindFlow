@@ -63,7 +63,7 @@ const TimerMode = () => {
         const savedFocus = localStorage.getItem('timer_focusDuration');
         const savedShortBreak = localStorage.getItem('timer_shortBreakDuration');
         const savedLongBreak = localStorage.getItem('timer_longBreakDuration');
-        
+
         if (savedFocus) setPomodoroDuration(parseInt(savedFocus, 10));
         if (savedShortBreak) setShortBreakDuration(parseInt(savedShortBreak, 10));
         if (savedLongBreak) setLongBreakDuration(parseInt(savedLongBreak, 10));
@@ -74,7 +74,7 @@ const TimerMode = () => {
 
     // Listen for storage events (when settings are changed in another tab/window)
     window.addEventListener('storage', handleStorageChange);
-    
+
     // Also check on mount and periodically
     handleStorageChange();
     const interval = setInterval(handleStorageChange, 1000);
@@ -113,7 +113,7 @@ const TimerMode = () => {
     if (customBreakTime !== null && (mode === 'shortBreak' || mode === 'longBreak')) {
       return customBreakTime;
     }
-    
+
     switch (mode) {
       case 'pomodoro':
         return pomodoroDuration * 60;
@@ -214,14 +214,14 @@ const TimerMode = () => {
         }
         return;
       }
-      
+
       // Reset session tracking when mode changes (if not pomodoro)
       if (mode !== 'pomodoro') {
         sessionSecondsRef.current = 0;
         sessionStartTimeRef.current = null;
         setSessionMinutes(0);
       }
-      
+
       switch (mode) {
         case 'pomodoro':
           setTimeElapsed(0);
@@ -263,11 +263,11 @@ const TimerMode = () => {
       try {
         setFaceDetectorStatus('Loading Google Vision...');
         console.log('Sentry Mode: Initializing MediaPipe...');
-        
+
         const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
-        
+
         const detector = await FaceDetector.createFromOptions(vision, {
           baseOptions: {
             modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
@@ -275,7 +275,7 @@ const TimerMode = () => {
           },
           runningMode: "VIDEO"
         });
-        
+
         detectorRef.current = detector;
         setFaceDetectorStatus('Guarding');
         console.log('Sentry Mode: MediaPipe Face Detector loaded successfully');
@@ -284,7 +284,7 @@ const TimerMode = () => {
         setFaceDetectorStatus(`Error: ${err.message}`);
       }
     };
-    
+
     initializeMediaPipe();
   }, [isPro]);
 
@@ -296,7 +296,7 @@ const TimerMode = () => {
         if (webcamRef.current?.video) {
           const video = webcamRef.current.video;
           const webcamContainer = video.parentElement;
-          
+
           if (webcamContainer && !canvasRef.current) {
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth || 640;
@@ -318,7 +318,7 @@ const TimerMode = () => {
           }
         }
       }, 100);
-      
+
       return () => clearTimeout(timer);
     } else if ((!isSentryActive || isVideoMinimized) && canvasRef.current && canvasRef.current.parentNode) {
       // Cleanup canvas when sentry is disabled or video is minimized
@@ -340,7 +340,7 @@ const TimerMode = () => {
 
     try {
       const video = webcamRef.current.video;
-      
+
       // Check if video is ready
       if (!video || video.readyState !== 4 || video.videoWidth === 0 || video.videoHeight === 0) {
         return;
@@ -348,32 +348,32 @@ const TimerMode = () => {
 
       // Get current video time
       const startTimeMs = performance.now();
-      
+
       // Only process if we haven't seen this frame before
       if (lastVideoTimeRef.current !== video.currentTime) {
         lastVideoTimeRef.current = video.currentTime;
-        
+
         // Run face detection
         const result = detectorRef.current.detectForVideo(video, startTimeMs);
-        
+
         // Update face count (MediaPipe returns detections array directly)
         const detectedFaces = result.detections || [];
         const detectedCount = detectedFaces.length;
         setFaceCount(detectedCount);
-        
+
         // Check if user is present (face detected)
         const isPresent = detectedCount > 0;
-        
+
         // Grace period logic with debouncing
         if (isPresent) {
           // Face detected - increment presence counter, reset absence counter
           facePresenceCount.current += 1;
           faceAbsenceCount.current = 0;
-          
+
           // Only update state if we've had consistent presence (3 frames = ~1.5 seconds)
           if (facePresenceCount.current >= PRESENCE_THRESHOLD) {
             setIsUserPresent(true);
-            
+
             // Auto-resume if timer was auto-paused
             if (wasAutoPaused.current && !isRunning) {
               setIsRunning(true);
@@ -385,11 +385,11 @@ const TimerMode = () => {
           // No face detected - increment absence counter, reset presence counter
           faceAbsenceCount.current += 1;
           facePresenceCount.current = 0;
-          
+
           // Only update state if we've had consistent absence (2 frames = ~1 second)
           if (faceAbsenceCount.current >= ABSENCE_THRESHOLD) {
             setIsUserPresent(false);
-            
+
             // Auto-pause timer if it's currently running
             if (isRunning) {
               setIsRunning(false);
@@ -398,26 +398,26 @@ const TimerMode = () => {
             }
           }
         }
-        
+
         // Draw detection boxes on canvas
         if (canvasContextRef.current && canvasRef.current) {
           const ctx = canvasContextRef.current;
           const canvas = canvasRef.current;
-          
+
           // Clear canvas
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
+
           // Update canvas dimensions if video dimensions changed
           if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
           }
-          
+
           // Draw red boxes around detected faces
           if (detectedFaces.length > 0) {
             ctx.strokeStyle = '#f43f5e';
             ctx.lineWidth = 3;
-            
+
             detectedFaces.forEach((detection) => {
               if (detection.boundingBox) {
                 const bbox = detection.boundingBox;
@@ -425,7 +425,7 @@ const TimerMode = () => {
                 const y = bbox.originY || 0;
                 const width = bbox.width || 0;
                 const height = bbox.height || 0;
-                
+
                 // Draw rectangle
                 ctx.beginPath();
                 ctx.rect(x, y, width, height);
@@ -497,7 +497,7 @@ const TimerMode = () => {
     const saveInterval = setInterval(async () => {
       // Only save if we've accumulated at least 60 seconds
       const minutesToSave = Math.floor(sessionSecondsRef.current / 60);
-      
+
       if (minutesToSave > 0) {
         try {
           // Get current total_focus_minutes
@@ -513,7 +513,7 @@ const TimerMode = () => {
           }
 
           const currentTotal = currentProfile?.total_focus_minutes || 0;
-          
+
           // Increment by the minutes we've accumulated
           const { error: updateError } = await supabase
             .from('profiles')
@@ -524,7 +524,7 @@ const TimerMode = () => {
             console.error('Error updating total_focus_minutes:', updateError);
           } else {
             console.log(`✅ Saved ${minutesToSave} minute(s) to database. New total: ${currentTotal + minutesToSave}`);
-            
+
             // Upsert into daily_activity table for heatmap
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
             try {
@@ -546,7 +546,7 @@ const TimerMode = () => {
                   .update({ minutes_focused: (existingRow.minutes_focused || 0) + minutesToSave })
                   .eq('user_id', user.id)
                   .eq('date', today);
-                
+
                 if (updateError) {
                   console.error('Error updating daily_activity:', updateError);
                 }
@@ -559,7 +559,7 @@ const TimerMode = () => {
                     date: today,
                     minutes_focused: minutesToSave,
                   });
-                
+
                 if (insertError) {
                   console.error('Error inserting daily_activity:', insertError);
                   // If the table doesn't exist yet, that's okay - user needs to run migration
@@ -569,7 +569,7 @@ const TimerMode = () => {
               console.error('Error in daily_activity upsert:', error);
               // Continue execution even if daily_activity fails
             }
-            
+
             // Reset the counter (keep any partial minute)
             sessionSecondsRef.current = sessionSecondsRef.current % 60;
             setSessionMinutes(0); // Reset displayed minutes after saving
@@ -592,7 +592,7 @@ const TimerMode = () => {
         if (mode === 'pomodoro' && sessionStartTimeRef.current === null) {
           sessionStartTimeRef.current = Date.now();
         }
-        
+
         // Start worker timer if not already running and time remaining > 0
         if (!workerIsRunning && timeRemaining > 0) {
           workerStart();
@@ -602,12 +602,12 @@ const TimerMode = () => {
         if (workerIsRunning) {
           workerPause();
         }
-        
+
         // Only save partial minutes when timer is fully stopped (not just paused)
         // We check if this is a manual stop by checking if timeRemaining is at full duration
         // If timeRemaining < initialTime, we're paused mid-session, don't save yet
         const isStopped = !isRunning && (timeRemaining === initialTime || timeRemaining <= 0);
-        
+
         if (isStopped && mode === 'pomodoro' && sessionSecondsRef.current > 0 && user?.id) {
           const partialMinutes = Math.floor(sessionSecondsRef.current / 60);
           if (partialMinutes > 0) {
@@ -622,7 +622,7 @@ const TimerMode = () => {
                     .from('profiles')
                     .update({ total_focus_minutes: (currentProfile.total_focus_minutes || 0) + partialMinutes })
                     .eq('id', user.id);
-                  
+
                   // Upsert into daily_activity
                   const today = new Date().toISOString().split('T')[0];
                   const { data: existingRow } = await supabase
@@ -647,7 +647,7 @@ const TimerMode = () => {
                         minutes_focused: partialMinutes,
                       });
                   }
-                  
+
                   // Reset counter after saving
                   sessionSecondsRef.current = sessionSecondsRef.current % 60;
                   setSessionMinutes(0);
@@ -659,7 +659,7 @@ const TimerMode = () => {
             setSessionMinutes(0);
           }
         }
-        
+
         // Only reset session start time when actually stopped (not just paused)
         // Don't reset when paused - we want to preserve the session state for resume
         if (isStopped) {
@@ -706,6 +706,22 @@ const TimerMode = () => {
 
 
   const playNotificationSound = () => {
+    // First try to play the audio file
+    const audio = new Audio('/sounds/ding.mp3');
+
+    // Attempt playback
+    const playPromise = audio.play();
+
+    if (playPromise !== undefined) {
+      playPromise.catch((error) => {
+        // file playback failed, fallback to synth
+        console.warn('Audio file playback failed, falling back to synth:', error);
+        playSynthSound();
+      });
+    }
+  };
+
+  const playSynthSound = () => {
     // Create a simple beep sound using Web Audio API
     try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -715,7 +731,7 @@ const TimerMode = () => {
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
-      oscillator.frequency.value = 800;
+      oscillator.frequency.value = 800; // A pleasant high pitch
       oscillator.type = 'sine';
 
       gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
@@ -724,7 +740,7 @@ const TimerMode = () => {
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.5);
     } catch (error) {
-      console.error('Failed to play notification sound:', error);
+      console.error('Failed to play synth sound:', error);
     }
   };
 
@@ -732,7 +748,7 @@ const TimerMode = () => {
     // Create a more urgent warning sound using Web Audio API
     try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      
+
       // Play two quick beeps for warning
       for (let i = 0; i < 2; i++) {
         setTimeout(() => {
@@ -783,12 +799,15 @@ const TimerMode = () => {
   const handleTimerComplete = useCallback(() => {
     setIsRunning(false);
     playNotificationSound();
-    
+
+    // Trigger Browser Notification
+    showBrowserNotification('Session Complete!', 'Time for a break!');
+
     // Save session when Pomodoro completes
     if (mode === 'pomodoro') {
       const totalDuration = pomodoroDuration * 60;
       saveSession('pomodoro', totalDuration);
-      
+
       // Save any remaining partial minutes
       const remainingSeconds = sessionSecondsRef.current;
       if (remainingSeconds > 0 && user?.id) {
@@ -805,7 +824,7 @@ const TimerMode = () => {
                   .from('profiles')
                   .update({ total_focus_minutes: (currentProfile.total_focus_minutes || 0) + partialMinutes })
                   .eq('id', user.id);
-                
+
                 // Upsert into daily_activity
                 const today = new Date().toISOString().split('T')[0];
                 const { data: existingRow } = await supabase
@@ -834,7 +853,7 @@ const TimerMode = () => {
             });
         }
       }
-      
+
       // Reset session tracking
       sessionSecondsRef.current = 0;
       sessionStartTimeRef.current = null;
@@ -857,27 +876,27 @@ const TimerMode = () => {
           // Pause the timer immediately
           setIsRunning(false);
           wasTabHiddenPaused.current = true;
-          
+
           // Control worker timer for countdown modes
           if (isCountdownMode) {
             workerPause();
           }
-          
+
           // Play warning sound
           playWarningSound();
-          
+
           // Show browser notification
           showBrowserNotification(
             'SENTRY ALERT: You left the app!',
             'Timer paused.'
           );
-          
+
           // Show UI alert banner (local component alert)
           setShowFocusBrokenAlert(true);
-          
+
           // Trigger global Sentry Modal
           setSentryTriggered(true);
-          
+
           // Auto-hide local alert after 5 seconds
           setTimeout(() => {
             setShowFocusBrokenAlert(false);
@@ -905,11 +924,11 @@ const TimerMode = () => {
     if (!sentryTriggered && wasTabHiddenPaused.current && !isRunning) {
       // Reset the flag
       wasTabHiddenPaused.current = false;
-      
+
       // Resume the timer if we're on the focus page
       if (window.location.pathname === '/focus') {
         setIsRunning(true);
-        
+
         // Control worker timer for countdown modes
         if (isCountdownMode) {
           workerStart();
@@ -946,17 +965,17 @@ const TimerMode = () => {
     if (activeSound && soundUrls[activeSound]) {
       try {
         const audio = new Audio(soundUrls[activeSound]);
-        
+
         // Configure audio properties
         audio.loop = true;
         audio.volume = 0.5; // Set volume to 50%
-        
+
         // Error handling
         audio.onerror = (e) => {
           console.error('Audio failed:', e);
           setActiveSound(null);
         };
-        
+
         // Play the audio
         audio.play()
           .then(() => {
@@ -983,10 +1002,15 @@ const TimerMode = () => {
     if (isSentryActive && !isUserPresent) {
       return;
     }
-    
+
+    // Request notification permission on first interaction
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
     const newIsRunning = !isRunning;
     setIsRunning(newIsRunning);
-    
+
     // Control worker timer for countdown modes
     if (isCountdownMode) {
       if (newIsRunning) {
@@ -995,10 +1019,10 @@ const TimerMode = () => {
         workerPause();
       }
     }
-    
+
     // Reset auto-pause flag when user manually controls timer
     wasAutoPaused.current = false;
-    
+
     // Reset face detection counters to prevent immediate re-triggering
     if (isRunning) {
       // Manual pause - reset counters so returning face doesn't immediately resume
@@ -1011,19 +1035,19 @@ const TimerMode = () => {
 
   const handleReset = () => {
     setIsRunning(false);
-    
+
     // Reset worker timer for countdown modes
     if (isCountdownMode) {
       workerReset();
     }
-    
+
     // Reset component state
     setTimeRemaining(initialTime);
     setTimeElapsed(0);
     sessionSecondsRef.current = 0;
     sessionStartTimeRef.current = null;
     setSessionMinutes(0);
-    
+
     // Reset auto-pause flags
     wasAutoPaused.current = false;
     facePresenceCount.current = 0;
@@ -1036,7 +1060,7 @@ const TimerMode = () => {
       if (breakTime > 0) {
         // Save the session before switching
         saveSession('flowmodoro', timeElapsed);
-        
+
         // Stop the timer immediately
         setIsRunning(false);
         // Stop any ambient sounds
@@ -1196,7 +1220,8 @@ const TimerMode = () => {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'flex-start',
+      gap: '24px',
     }}>
       {/* Focus Broken Alert Banner */}
       {showFocusBrokenAlert && (
@@ -1298,11 +1323,11 @@ const TimerMode = () => {
         <>
           {isVideoMinimized ? (
             // Minimized badge
-            <div 
+            <div
               onClick={() => setIsVideoMinimized(false)}
-              style={{ 
-                position: 'fixed', 
-                bottom: '16px', 
+              style={{
+                position: 'fixed',
+                bottom: '16px',
                 right: '16px',
                 backgroundColor: 'rgba(16, 185, 129, 0.9)',
                 backdropFilter: 'blur(10px)',
@@ -1334,10 +1359,10 @@ const TimerMode = () => {
             </div>
           ) : (
             // Expanded video feed
-            <div style={{ 
-              position: 'fixed', 
-              bottom: '16px', 
-              right: '16px', 
+            <div style={{
+              position: 'fixed',
+              bottom: '16px',
+              right: '16px',
               width: '192px',
               height: 'auto',
               borderRadius: '12px',
@@ -1417,7 +1442,7 @@ const TimerMode = () => {
                     objectFit: 'cover',
                   }}
                 />
-                
+
                 {/* Visual debug overlay */}
                 <div style={{
                   position: 'absolute',
@@ -1438,7 +1463,7 @@ const TimerMode = () => {
                   <div style={{ textAlign: 'center' }}>
                     Faces: {faceCount}
                   </div>
-                  <div style={{ 
+                  <div style={{
                     textAlign: 'center',
                     fontSize: '9px',
                     color: isUserPresent ? '#10b981' : faceDetectorStatus.includes('Error') ? '#f43f5e' : '#f59e0b',
@@ -1508,10 +1533,10 @@ const TimerMode = () => {
       )}
 
       {/* Content */}
-      <div style={{ 
-        position: 'relative', 
-        zIndex: 1, 
-        width: '100%', 
+      <div style={{
+        position: 'relative',
+        zIndex: 1,
+        width: '100%',
         maxWidth: '600px',
         display: 'flex',
         flexDirection: 'column',
@@ -1562,7 +1587,7 @@ const TimerMode = () => {
                 border: 'none',
                 cursor: 'pointer',
                 position: 'relative',
-                backgroundColor: isPro 
+                backgroundColor: isPro
                   ? (isSentryActive ? '#fb7185' : 'rgba(255, 255, 255, 0.2)')
                   : 'rgba(107, 114, 128, 0.5)',
                 transition: 'all 0.3s ease',
@@ -1601,7 +1626,7 @@ const TimerMode = () => {
                 height: '8px',
                 borderRadius: '50%',
                 backgroundColor: isUserPresent ? '#10b981' : '#f43f5e',
-                boxShadow: isUserPresent 
+                boxShadow: isUserPresent
                   ? '0 0 8px rgba(16, 185, 129, 0.6)'
                   : '0 0 8px rgba(244, 63, 94, 0.6)',
               }} />
@@ -1684,8 +1709,8 @@ const TimerMode = () => {
               setMode('pomodoro');
             }}
             style={{
-              backgroundColor: mode === 'pomodoro' 
-                ? 'rgba(59, 130, 246, 0.2)' 
+              backgroundColor: mode === 'pomodoro'
+                ? 'rgba(59, 130, 246, 0.2)'
                 : 'rgba(255, 255, 255, 0.05)',
               border: mode === 'pomodoro'
                 ? '1px solid rgba(59, 130, 246, 0.4)'
@@ -1709,8 +1734,8 @@ const TimerMode = () => {
               setMode('shortBreak');
             }}
             style={{
-              backgroundColor: mode === 'shortBreak' 
-                ? 'rgba(16, 185, 129, 0.2)' 
+              backgroundColor: mode === 'shortBreak'
+                ? 'rgba(16, 185, 129, 0.2)'
                 : 'rgba(255, 255, 255, 0.05)',
               border: mode === 'shortBreak'
                 ? '1px solid rgba(16, 185, 129, 0.4)'
@@ -1734,8 +1759,8 @@ const TimerMode = () => {
               setMode('longBreak');
             }}
             style={{
-              backgroundColor: mode === 'longBreak' 
-                ? 'rgba(16, 185, 129, 0.2)' 
+              backgroundColor: mode === 'longBreak'
+                ? 'rgba(16, 185, 129, 0.2)'
                 : 'rgba(255, 255, 255, 0.05)',
               border: mode === 'longBreak'
                 ? '1px solid rgba(16, 185, 129, 0.4)'
@@ -1759,8 +1784,8 @@ const TimerMode = () => {
               setMode('flowmodoro');
             }}
             style={{
-              backgroundColor: mode === 'flowmodoro' 
-                ? 'rgba(34, 211, 238, 0.2)' 
+              backgroundColor: mode === 'flowmodoro'
+                ? 'rgba(34, 211, 238, 0.2)'
                 : 'rgba(255, 255, 255, 0.05)',
               border: mode === 'flowmodoro'
                 ? '1px solid rgba(34, 211, 238, 0.4)'
@@ -1956,8 +1981,8 @@ const TimerMode = () => {
                 backgroundColor: (isSentryActive && !isUserPresent)
                   ? 'rgba(255, 255, 255, 0.02)'
                   : isRunning
-                  ? 'rgba(239, 68, 68, 0.1)'
-                  : 'rgba(59, 130, 246, 0.2)',
+                    ? 'rgba(239, 68, 68, 0.1)'
+                    : 'rgba(59, 130, 246, 0.2)',
                 backdropFilter: 'blur(10px)',
                 border: isRunning
                   ? '2px solid rgba(239, 68, 68, 0.5)'
@@ -1985,8 +2010,8 @@ const TimerMode = () => {
                 e.currentTarget.style.backgroundColor = (isSentryActive && !isUserPresent)
                   ? 'rgba(255, 255, 255, 0.02)'
                   : isRunning
-                  ? 'rgba(239, 68, 68, 0.1)'
-                  : 'rgba(59, 130, 246, 0.2)';
+                    ? 'rgba(239, 68, 68, 0.1)'
+                    : 'rgba(59, 130, 246, 0.2)';
               }}
             >
               {isRunning ? (
@@ -2158,19 +2183,26 @@ const TimerMode = () => {
             borderRadius: '24px',
             padding: '20px',
             border: '1px solid rgba(255, 255, 255, 0.1)',
-            marginTop: '16px',
             width: '100%',
-            maxHeight: '200px',
-            overflowY: 'auto',
+            maxWidth: '400px',
+            maxHeight: '400px', // Fixed max height
+            overflowY: 'auto', // Scrollable
+            marginTop: 'auto', // Push to bottom
+            flexShrink: 0,
           }}>
             <div style={{
               fontSize: '14px',
               fontWeight: '600',
               color: 'rgba(255, 255, 255, 0.7)',
-              marginBottom: '20px',
+              marginBottom: '12px',
               textAlign: 'center',
               textTransform: 'uppercase',
               letterSpacing: '0.1em',
+              position: 'sticky',
+              top: 0,
+              backgroundColor: 'rgba(15, 16, 18, 0.95)', // Match bg color for sticky header
+              zIndex: 10,
+              paddingBottom: '10px',
             }}>
               Session Log
             </div>
@@ -2178,16 +2210,14 @@ const TimerMode = () => {
               display: 'flex',
               flexDirection: 'column',
               gap: '12px',
-              maxHeight: '300px',
-              overflowY: 'auto',
             }}>
-              {sessionHistory.map((session) => {
+              {sessionHistory.map((session, index) => {
                 const durationMinutes = Math.floor(session.duration / 60);
                 const modeLabel = session.mode === 'pomodoro' ? 'Pomodoro' : 'Flowmodoro';
                 const modeColor = session.mode === 'pomodoro' ? '#3b82f6' : '#22d3ee';
                 const date = new Date(session.timestamp);
                 const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
+
                 return (
                   <div
                     key={session.id}
@@ -2201,6 +2231,7 @@ const TimerMode = () => {
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       transition: 'all 0.2s ease',
+                      animation: index === 0 ? 'slideInDown 0.4s ease-out' : 'none',
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';

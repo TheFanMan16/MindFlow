@@ -25,6 +25,10 @@ export const useAccurateTimer = (initialDuration, onComplete) => {
           setTimeLeft(newTime);
           setIsRunning(true); // Ensure state stays consistent
           break;
+        case 'TIMER_UPDATE':
+          setTimeLeft(newTime);
+          // Do NOT set isRunning - this is for static updates (reset/pause)
+          break;
         case 'COMPLETE':
           setIsRunning(false);
           setTimeLeft(0);

@@ -62,7 +62,7 @@ function handlePause() {
         const now = Date.now();
         const timeLeftSeconds = Math.max(0, Math.ceil((endTime - now) / 1000));
         // Send one last update with paused state
-        self.postMessage({ type: 'TICK', timeLeft: timeLeftSeconds });
+        self.postMessage({ type: 'TIMER_UPDATE', timeLeft: timeLeftSeconds });
     }
 
     endTime = null;
@@ -71,7 +71,7 @@ function handlePause() {
 function handleReset({ newTime }) {
     handlePause(); // Stop everything
     // Just emit the new time
-    self.postMessage({ type: 'TICK', timeLeft: newTime });
+    self.postMessage({ type: 'TIMER_UPDATE', timeLeft: newTime });
 }
 
 function postTimeLeft() {
