@@ -1532,1035 +1532,1036 @@ const TimerMode = () => {
         </div>
       )}
 
-      {/* Content */}
-      <div style={{
-        position: 'relative',
-        zIndex: 1,
-        width: '100%',
-        maxWidth: '600px',
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        justifyContent: 'center',
-        minHeight: 0,
-      }}>
-        {/* Header with Sentry Toggle and Settings */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '12px',
-          flexShrink: 0,
-        }}>
-          {/* Sentry Mode Toggle */}
+      {/* Content Main Container - Responsive Grid/Flex */}
+      <div
+        className="flex flex-col lg:flex-row gap-8 w-full max-w-7xl mx-auto items-start h-full"
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        {/* LEFT COLUMN: Controls, Timer, Task, Sounds */}
+        <div className="flex flex-col w-full lg:w-2/3 gap-6 flex-shrink-0">
+
+          {/* Header with Sentry Toggle and Settings */}
           <div style={{
             display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            gap: '12px',
-            backgroundColor: 'rgba(255, 255, 255, 0.03)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '50px',
-            padding: '8px 16px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            opacity: isPro ? 1 : 0.6,
-            filter: isPro ? 'none' : 'grayscale(1)',
+            marginBottom: '12px',
+            flexShrink: 0,
           }}>
+            {/* Sentry Mode Toggle */}
             <div style={{
-              fontSize: '13px',
-              fontWeight: '600',
-              color: 'rgba(255, 255, 255, 0.7)',
-            }}>
-              Sentry
-            </div>
-            <button
-              onClick={() => {
-                if (!isPro) {
-                  navigate('/subscription');
-                  return;
-                }
-                setIsSentryActive(!isSentryActive);
-              }}
-              style={{
-                width: '44px',
-                height: '24px',
-                borderRadius: '12px',
-                border: 'none',
-                cursor: 'pointer',
-                position: 'relative',
-                backgroundColor: isPro
-                  ? (isSentryActive ? '#fb7185' : 'rgba(255, 255, 255, 0.2)')
-                  : 'rgba(107, 114, 128, 0.5)',
-                transition: 'all 0.3s ease',
-              }}
-            >
-              <div style={{
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                backgroundColor: '#ffffff',
-                position: 'absolute',
-                top: '2px',
-                left: isPro && isSentryActive ? '22px' : '2px',
-                transition: 'all 0.3s ease',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-              }} />
-            </button>
-            {!isPro && (
-              <div style={{
-                backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                border: '1px solid rgba(168, 85, 247, 0.4)',
-                borderRadius: '8px',
-                padding: '4px 8px',
-                fontSize: '10px',
-                fontWeight: '600',
-                color: '#a855f7',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
-                Pro
-              </div>
-            )}
-            {isPro && isSentryActive && (
-              <div style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: isUserPresent ? '#10b981' : '#f43f5e',
-                boxShadow: isUserPresent
-                  ? '0 0 8px rgba(16, 185, 129, 0.6)'
-                  : '0 0 8px rgba(244, 63, 94, 0.6)',
-              }} />
-            )}
-          </div>
-
-          {/* Settings Gear Icon */}
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '50%',
-              width: '40px',
-              height: '40px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-              e.currentTarget.style.transform = 'rotate(15deg)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-              e.currentTarget.style.transform = 'rotate(0deg)';
-            }}
-          >
-            <svg
-              style={{
-                width: '20px',
-                height: '20px',
-                stroke: 'rgba(255, 255, 255, 0.7)',
-                fill: 'none',
-                strokeWidth: '2',
-              }}
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Camera Error Message */}
-        {cameraError && (
-          <div style={{
-            backgroundColor: 'rgba(244, 63, 94, 0.1)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
-            borderRadius: '12px',
-            padding: '12px 16px',
-            marginBottom: '24px',
-            textAlign: 'center',
-          }}>
-            <div style={{
-              fontSize: '12px',
-              color: '#f43f5e',
-            }}>
-              ⚠️ Camera Error: {cameraError}. Please check permissions.
-            </div>
-          </div>
-        )}
-
-        {/* Mode Switcher - 4 Distinct Tabs */}
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          marginBottom: '12px',
-          justifyContent: 'center',
-          flexWrap: 'wrap',
-          flexShrink: 0,
-        }}>
-          {/* Pomodoro Tab */}
-          <button
-            onClick={() => {
-              setIsRunning(false);
-              setMode('pomodoro');
-            }}
-            style={{
-              backgroundColor: mode === 'pomodoro'
-                ? 'rgba(59, 130, 246, 0.2)'
-                : 'rgba(255, 255, 255, 0.05)',
-              border: mode === 'pomodoro'
-                ? '1px solid rgba(59, 130, 246, 0.4)'
-                : '1px solid rgba(255, 255, 255, 0.1)',
-              color: mode === 'pomodoro' ? '#3b82f6' : 'rgba(255, 255, 255, 0.7)',
-              padding: '10px 20px',
-              borderRadius: '50px',
-              fontSize: '13px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              backdropFilter: 'blur(10px)',
-            }}
-          >
-            Pomodoro
-          </button>
-          {/* Short Break Tab */}
-          <button
-            onClick={() => {
-              setIsRunning(false);
-              setMode('shortBreak');
-            }}
-            style={{
-              backgroundColor: mode === 'shortBreak'
-                ? 'rgba(16, 185, 129, 0.2)'
-                : 'rgba(255, 255, 255, 0.05)',
-              border: mode === 'shortBreak'
-                ? '1px solid rgba(16, 185, 129, 0.4)'
-                : '1px solid rgba(255, 255, 255, 0.1)',
-              color: mode === 'shortBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
-              padding: '10px 20px',
-              borderRadius: '50px',
-              fontSize: '13px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              backdropFilter: 'blur(10px)',
-            }}
-          >
-            Short Break
-          </button>
-          {/* Long Break Tab */}
-          <button
-            onClick={() => {
-              setIsRunning(false);
-              setMode('longBreak');
-            }}
-            style={{
-              backgroundColor: mode === 'longBreak'
-                ? 'rgba(16, 185, 129, 0.2)'
-                : 'rgba(255, 255, 255, 0.05)',
-              border: mode === 'longBreak'
-                ? '1px solid rgba(16, 185, 129, 0.4)'
-                : '1px solid rgba(255, 255, 255, 0.1)',
-              color: mode === 'longBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
-              padding: '10px 20px',
-              borderRadius: '50px',
-              fontSize: '13px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              backdropFilter: 'blur(10px)',
-            }}
-          >
-            Long Break
-          </button>
-          {/* Flowmodoro Tab */}
-          <button
-            onClick={() => {
-              setIsRunning(false);
-              setMode('flowmodoro');
-            }}
-            style={{
-              backgroundColor: mode === 'flowmodoro'
-                ? 'rgba(34, 211, 238, 0.2)'
-                : 'rgba(255, 255, 255, 0.05)',
-              border: mode === 'flowmodoro'
-                ? '1px solid rgba(34, 211, 238, 0.4)'
-                : '1px solid rgba(255, 255, 255, 0.1)',
-              color: mode === 'flowmodoro' ? '#22d3ee' : 'rgba(255, 255, 255, 0.7)',
-              padding: '10px 20px',
-              borderRadius: '50px',
-              fontSize: '13px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              backdropFilter: 'blur(10px)',
-            }}
-          >
-            Flowmodoro
-          </button>
-        </div>
-
-        {/* Focus Intent Input */}
-        <div style={{
-          marginBottom: '12px',
-          width: '100%',
-          flexShrink: 0,
-        }}>
-          {isRunning ? (
-            // Display mode - show as label
-            <div style={{
+              gap: '12px',
               backgroundColor: 'rgba(255, 255, 255, 0.03)',
               backdropFilter: 'blur(10px)',
-              borderRadius: '16px',
-              padding: '20px 24px',
+              borderRadius: '50px',
+              padding: '8px 16px',
               border: '1px solid rgba(255, 255, 255, 0.1)',
+              opacity: isPro ? 1 : 0.6,
+              filter: isPro ? 'none' : 'grayscale(1)',
+            }}>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: '600',
+                color: 'rgba(255, 255, 255, 0.7)',
+              }}>
+                Sentry
+              </div>
+              <button
+                onClick={() => {
+                  if (!isPro) {
+                    navigate('/subscription');
+                    return;
+                  }
+                  setIsSentryActive(!isSentryActive);
+                }}
+                style={{
+                  width: '44px',
+                  height: '24px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  backgroundColor: isPro
+                    ? (isSentryActive ? '#fb7185' : 'rgba(255, 255, 255, 0.2)')
+                    : 'rgba(107, 114, 128, 0.5)',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <div style={{
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ffffff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: isPro && isSentryActive ? '22px' : '2px',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                }} />
+              </button>
+              {!isPro && (
+                <div style={{
+                  backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                  border: '1px solid rgba(168, 85, 247, 0.4)',
+                  borderRadius: '8px',
+                  padding: '4px 8px',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  color: '#a855f7',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}>
+                  Pro
+                </div>
+              )}
+              {isPro && isSentryActive && (
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: isUserPresent ? '#10b981' : '#f43f5e',
+                  boxShadow: isUserPresent
+                    ? '0 0 8px rgba(16, 185, 129, 0.6)'
+                    : '0 0 8px rgba(244, 63, 94, 0.6)',
+                }} />
+              )}
+            </div>
+
+            {/* Settings Gear Icon */}
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.transform = 'rotate(15deg)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.transform = 'rotate(0deg)';
+              }}
+            >
+              <svg
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  stroke: 'rgba(255, 255, 255, 0.7)',
+                  fill: 'none',
+                  strokeWidth: '2',
+                }}
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Camera Error Message */}
+          {cameraError && (
+            <div style={{
+              backgroundColor: 'rgba(244, 63, 94, 0.1)',
+              border: '1px solid rgba(244, 63, 94, 0.3)',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              marginBottom: '24px',
+              textAlign: 'center',
             }}>
               <div style={{
                 fontSize: '12px',
-                color: 'rgba(255, 255, 255, 0.5)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-                marginBottom: '8px',
+                color: '#f43f5e',
               }}>
-                Current Task
-              </div>
-              <div style={{
-                fontSize: '20px',
-                fontWeight: '700',
-                color: '#ffffff',
-              }}>
-                {focusIntent || 'No task specified'}
+                ⚠️ Camera Error: {cameraError}. Please check permissions.
               </div>
             </div>
-          ) : (
-            // Edit mode - show as input
-            <input
-              type="text"
-              value={focusIntent}
-              onChange={(e) => setFocusIntent(e.target.value)}
-              placeholder="What is your main task?"
+          )}
+
+          {/* Mode Switcher - 4 Distinct Tabs */}
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '12px',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            flexShrink: 0,
+          }}>
+            {/* Pomodoro Tab */}
+            <button
+              onClick={() => {
+                setIsRunning(false);
+                setMode('pomodoro');
+              }}
               style={{
-                width: '100%',
+                backgroundColor: mode === 'pomodoro'
+                  ? 'rgba(59, 130, 246, 0.2)'
+                  : 'rgba(255, 255, 255, 0.05)',
+                border: mode === 'pomodoro'
+                  ? '1px solid rgba(59, 130, 246, 0.4)'
+                  : '1px solid rgba(255, 255, 255, 0.1)',
+                color: mode === 'pomodoro' ? '#3b82f6' : 'rgba(255, 255, 255, 0.7)',
+                padding: '10px 20px',
+                borderRadius: '50px',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              Pomodoro
+            </button>
+            {/* Short Break Tab */}
+            <button
+              onClick={() => {
+                setIsRunning(false);
+                setMode('shortBreak');
+              }}
+              style={{
+                backgroundColor: mode === 'shortBreak'
+                  ? 'rgba(16, 185, 129, 0.2)'
+                  : 'rgba(255, 255, 255, 0.05)',
+                border: mode === 'shortBreak'
+                  ? '1px solid rgba(16, 185, 129, 0.4)'
+                  : '1px solid rgba(255, 255, 255, 0.1)',
+                color: mode === 'shortBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
+                padding: '10px 20px',
+                borderRadius: '50px',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              Short Break
+            </button>
+            {/* Long Break Tab */}
+            <button
+              onClick={() => {
+                setIsRunning(false);
+                setMode('longBreak');
+              }}
+              style={{
+                backgroundColor: mode === 'longBreak'
+                  ? 'rgba(16, 185, 129, 0.2)'
+                  : 'rgba(255, 255, 255, 0.05)',
+                border: mode === 'longBreak'
+                  ? '1px solid rgba(16, 185, 129, 0.4)'
+                  : '1px solid rgba(255, 255, 255, 0.1)',
+                color: mode === 'longBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
+                padding: '10px 20px',
+                borderRadius: '50px',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              Long Break
+            </button>
+            {/* Flowmodoro Tab */}
+            <button
+              onClick={() => {
+                setIsRunning(false);
+                setMode('flowmodoro');
+              }}
+              style={{
+                backgroundColor: mode === 'flowmodoro'
+                  ? 'rgba(34, 211, 238, 0.2)'
+                  : 'rgba(255, 255, 255, 0.05)',
+                border: mode === 'flowmodoro'
+                  ? '1px solid rgba(34, 211, 238, 0.4)'
+                  : '1px solid rgba(255, 255, 255, 0.1)',
+                color: mode === 'flowmodoro' ? '#22d3ee' : 'rgba(255, 255, 255, 0.7)',
+                padding: '10px 20px',
+                borderRadius: '50px',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              Flowmodoro
+            </button>
+          </div>
+
+          {/* Focus Intent Input */}
+          <div style={{
+            marginBottom: '12px',
+            width: '100%',
+            flexShrink: 0,
+          }}>
+            {isRunning ? (
+              // Display mode - show as label
+              <div style={{
                 backgroundColor: 'rgba(255, 255, 255, 0.03)',
                 backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
                 borderRadius: '16px',
                 padding: '20px 24px',
-                fontSize: '18px',
-                color: '#ffffff',
-                outline: 'none',
-                fontFamily: 'inherit',
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-              }}
-            />
-          )}
-        </div>
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              }}>
+                <div style={{
+                  fontSize: '12px',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginBottom: '8px',
+                }}>
+                  Current Task
+                </div>
+                <div style={{
+                  fontSize: '20px',
+                  fontWeight: '700',
+                  color: '#ffffff',
+                }}>
+                  {focusIntent || 'No task specified'}
+                </div>
+              </div>
+            ) : (
+              // Edit mode - show as input
+              <input
+                type="text"
+                value={focusIntent}
+                onChange={(e) => setFocusIntent(e.target.value)}
+                placeholder="What is your main task?"
+                style={{
+                  width: '100%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '16px',
+                  padding: '20px 24px',
+                  fontSize: '18px',
+                  color: '#ffffff',
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                }}
+              />
+            )}
+          </div>
 
-        {/* Timer Display */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flex: 1,
-          minHeight: 0,
-          marginBottom: '12px',
-        }}>
-          {/* Circular Progress Ring */}
-          {mode !== 'flowmodoro' && (
-            <div style={{
-              position: 'relative',
-              width: '336px',
-              height: '336px',
-            }}>
-              <svg width="336" height="336" style={{ transform: 'rotate(-90deg)' }}>
-                {/* Background circle */}
-                <circle
-                  cx="168"
-                  cy="168"
-                  r={radius}
-                  fill="none"
-                  stroke="rgba(255, 255, 255, 0.1)"
-                  strokeWidth="8"
-                />
-                {/* Progress circle */}
-                <circle
-                  cx="168"
-                  cy="168"
-                  r={radius}
-                  fill="none"
-                  stroke={modeColor.primary}
-                  strokeWidth="8"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="round"
-                  style={{ transition: 'stroke-dashoffset 0.3s ease' }}
-                />
-              </svg>
-              {/* Timer text in center */}
+          {/* Timer Display */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            minHeight: 0,
+            marginBottom: '12px',
+          }}>
+            {/* Circular Progress Ring */}
+            {mode !== 'flowmodoro' && (
               <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
+                position: 'relative',
+                width: '336px',
+                height: '336px',
+              }}>
+                <svg width="336" height="336" style={{ transform: 'rotate(-90deg)' }}>
+                  {/* Background circle */}
+                  <circle
+                    cx="168"
+                    cy="168"
+                    r={radius}
+                    fill="none"
+                    stroke="rgba(255, 255, 255, 0.1)"
+                    strokeWidth="8"
+                  />
+                  {/* Progress circle */}
+                  <circle
+                    cx="168"
+                    cy="168"
+                    r={radius}
+                    fill="none"
+                    stroke={modeColor.primary}
+                    strokeWidth="8"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+                  />
+                </svg>
+                {/* Timer text in center */}
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  textAlign: 'center',
+                }}>
+                  <div style={{
+                    fontSize: '86px',
+                    fontWeight: '300',
+                    color: modeColor.primary,
+                    fontFeatureSettings: '"tnum"',
+                    letterSpacing: '-0.02em',
+                    lineHeight: '1',
+                    textShadow: `0 0 30px ${modeColor.shadow}`,
+                  }}>
+                    {getDisplayTime()}
+                  </div>
+                  <div style={{
+                    fontSize: '14px',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    marginTop: '8px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                  }}>
+                    {getModeLabel()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Flowmodoro Display (no progress ring) */}
+            {mode === 'flowmodoro' && (
+              <div style={{
                 textAlign: 'center',
               }}>
                 <div style={{
-                  fontSize: '86px',
+                  fontSize: '115px',
                   fontWeight: '300',
                   color: modeColor.primary,
                   fontFeatureSettings: '"tnum"',
                   letterSpacing: '-0.02em',
                   lineHeight: '1',
-                  textShadow: `0 0 30px ${modeColor.shadow}`,
+                  textShadow: `0 0 40px ${modeColor.shadow}`,
+                  marginBottom: '16px',
                 }}>
                   {getDisplayTime()}
                 </div>
                 <div style={{
-                  fontSize: '14px',
+                  fontSize: '16px',
                   color: 'rgba(255, 255, 255, 0.5)',
-                  marginTop: '8px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.1em',
                 }}>
                   {getModeLabel()}
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Flowmodoro Display (no progress ring) */}
-          {mode === 'flowmodoro' && (
-            <div style={{
-              textAlign: 'center',
-            }}>
-              <div style={{
-                fontSize: '115px',
-                fontWeight: '300',
-                color: modeColor.primary,
-                fontFeatureSettings: '"tnum"',
-                letterSpacing: '-0.02em',
-                lineHeight: '1',
-                textShadow: `0 0 40px ${modeColor.shadow}`,
-                marginBottom: '16px',
-              }}>
-                {getDisplayTime()}
-              </div>
-              <div style={{
-                fontSize: '16px',
-                color: 'rgba(255, 255, 255, 0.5)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-              }}>
-                {getModeLabel()}
-              </div>
-            </div>
-          )}
-
-          {/* Controls */}
-          <div style={{
-            display: 'flex',
-            marginTop: '20px',
-            gap: '16px',
-            alignItems: 'center',
-          }}>
-            {/* Main Action Button (Toggle Start/Pause) */}
-            <button
-              onClick={handleStartPause}
-              disabled={isSentryActive && !isUserPresent}
-              style={{
-                backgroundColor: (isSentryActive && !isUserPresent)
-                  ? 'rgba(255, 255, 255, 0.02)'
-                  : isRunning
-                    ? 'rgba(239, 68, 68, 0.1)'
-                    : 'rgba(59, 130, 246, 0.2)',
-                backdropFilter: 'blur(10px)',
-                border: isRunning
-                  ? '2px solid rgba(239, 68, 68, 0.5)'
-                  : '2px solid rgba(59, 130, 246, 0.5)',
-                borderRadius: '50px',
-                padding: '16px 32px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                color: isRunning ? '#ef4444' : '#ffffff',
-                fontSize: '16px',
-                fontWeight: '700',
-                cursor: (isSentryActive && !isUserPresent) ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                opacity: (isSentryActive && !isUserPresent) ? 0.5 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (!(isSentryActive && !isUserPresent)) {
-                  e.currentTarget.style.backgroundColor = isRunning
-                    ? 'rgba(239, 68, 68, 0.2)'
-                    : 'rgba(59, 130, 246, 0.3)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = (isSentryActive && !isUserPresent)
-                  ? 'rgba(255, 255, 255, 0.02)'
-                  : isRunning
-                    ? 'rgba(239, 68, 68, 0.1)'
-                    : 'rgba(59, 130, 246, 0.2)';
-              }}
-            >
-              {isRunning ? (
-                <>
-                  <Pause size={20} />
-                  <span>Pause</span>
-                </>
-              ) : (
-                <>
-                  <Play size={20} />
-                  <span>{isCountdownMode && workerTimeLeft < workerDuration ? 'Resume' : 'Start'}</span>
-                </>
-              )}
-            </button>
-
-            {/* Reset Button (Only shows if timer is dirty) */}
-            {isCountdownMode && workerTimeLeft !== workerDuration && (
-              <button
-                onClick={handleReset}
-                style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  backdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '50%',
-                  width: '56px',
-                  height: '56px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                }}
-                title="Reset Timer"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-              >
-                <RotateCcw size={20} />
-              </button>
             )}
 
-            {/* Finish & Rest Button (only for flowmodoro) */}
-            {mode === 'flowmodoro' && timeElapsed > 0 && (
+            {/* Controls */}
+            <div style={{
+              display: 'flex',
+              marginTop: '20px',
+              gap: '16px',
+              alignItems: 'center',
+            }}>
+              {/* Main Action Button (Toggle Start/Pause) */}
               <button
-                onClick={handleFinishWork}
+                onClick={handleStartPause}
+                disabled={isSentryActive && !isUserPresent}
                 style={{
-                  background: 'linear-gradient(90deg, #22d3ee, #3b82f6)',
-                  border: 'none',
+                  backgroundColor: (isSentryActive && !isUserPresent)
+                    ? 'rgba(255, 255, 255, 0.02)'
+                    : isRunning
+                      ? 'rgba(239, 68, 68, 0.1)'
+                      : 'rgba(59, 130, 246, 0.2)',
+                  backdropFilter: 'blur(10px)',
+                  border: isRunning
+                    ? '2px solid rgba(239, 68, 68, 0.5)'
+                    : '2px solid rgba(59, 130, 246, 0.5)',
                   borderRadius: '50px',
                   padding: '16px 32px',
-                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  color: isRunning ? '#ef4444' : '#ffffff',
                   fontSize: '16px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
+                  fontWeight: '700',
+                  cursor: (isSentryActive && !isUserPresent) ? 'not-allowed' : 'pointer',
                   transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 20px rgba(34, 211, 238, 0.3)',
+                  opacity: (isSentryActive && !isUserPresent) ? 0.5 : 1,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 6px 30px rgba(34, 211, 238, 0.5)';
-                  e.currentTarget.style.transform = 'scale(1.02)';
+                  if (!(isSentryActive && !isUserPresent)) {
+                    e.currentTarget.style.backgroundColor = isRunning
+                      ? 'rgba(239, 68, 68, 0.2)'
+                      : 'rgba(59, 130, 246, 0.3)';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.3)';
-                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.backgroundColor = (isSentryActive && !isUserPresent)
+                    ? 'rgba(255, 255, 255, 0.02)'
+                    : isRunning
+                      ? 'rgba(239, 68, 68, 0.1)'
+                      : 'rgba(59, 130, 246, 0.2)';
                 }}
               >
-                Finish & Rest
+                {isRunning ? (
+                  <>
+                    <Pause size={20} />
+                    <span>Pause</span>
+                  </>
+                ) : (
+                  <>
+                    <Play size={20} />
+                    <span>{isCountdownMode && workerTimeLeft < workerDuration ? 'Resume' : 'Start'}</span>
+                  </>
+                )}
               </button>
-            )}
-          </div>
-        </div>
 
-        {/* Mode Info (for breaks) */}
-        {(mode === 'shortBreak' || mode === 'longBreak') && (
+              {/* Reset Button (Only shows if timer is dirty) */}
+              {isCountdownMode && workerTimeLeft !== workerDuration && (
+                <button
+                  onClick={handleReset}
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '50%',
+                    width: '56px',
+                    height: '56px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                  }}
+                  title="Reset Timer"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  <RotateCcw size={20} />
+                </button>
+              )}
+
+              {/* Finish & Rest Button (only for flowmodoro) */}
+              {mode === 'flowmodoro' && timeElapsed > 0 && (
+                <button
+                  onClick={handleFinishWork}
+                  style={{
+                    background: 'linear-gradient(90deg, #22d3ee, #3b82f6)',
+                    border: 'none',
+                    borderRadius: '50px',
+                    padding: '16px 32px',
+                    color: '#ffffff',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 4px 20px rgba(34, 211, 238, 0.3)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 6px 30px rgba(34, 211, 238, 0.5)';
+                    e.currentTarget.style.transform = 'scale(1.02)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.3)';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  Finish & Rest
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Mode Info (for breaks) */}
+          {(mode === 'shortBreak' || mode === 'longBreak') && (
+            <div style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '24px',
+              padding: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              textAlign: 'center',
+              marginBottom: '12px',
+              flexShrink: 0,
+            }}>
+              <div style={{
+                fontSize: '14px',
+                color: 'rgba(255, 255, 255, 0.7)',
+              }}>
+                Take a well-deserved break. Rest your mind.
+              </div>
+            </div>
+          )}
+
+          {/* Ambient Soundscapes */}
           <div style={{
             backgroundColor: 'rgba(255, 255, 255, 0.03)',
             backdropFilter: 'blur(10px)',
             borderRadius: '24px',
             padding: '16px',
             border: '1px solid rgba(255, 255, 255, 0.1)',
-            textAlign: 'center',
-            marginBottom: '12px',
-            flexShrink: 0,
-          }}>
-            <div style={{
-              fontSize: '14px',
-              color: 'rgba(255, 255, 255, 0.7)',
-            }}>
-              Take a well-deserved break. Rest your mind.
-            </div>
-          </div>
-        )}
-
-        {/* Ambient Soundscapes */}
-        <div style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.03)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '24px',
-          padding: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          flexShrink: 0,
-        }}>
-          <div style={{
-            fontSize: '14px',
-            fontWeight: '600',
-            color: 'rgba(255, 255, 255, 0.7)',
-            marginBottom: '16px',
-            textAlign: 'center',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-          }}>
-            Ambient Sounds
-          </div>
-          <div style={{
-            display: 'flex',
-            gap: '12px',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-          }}>
-            {['rain', 'forest', 'whitenoise'].map((soundType) => (
-              <button
-                key={soundType}
-                onClick={() => handleSoundToggle(soundType)}
-                style={{
-                  backgroundColor: activeSound === soundType
-                    ? 'rgba(168, 85, 247, 0.2)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                  border: activeSound === soundType
-                    ? '1px solid rgba(168, 85, 247, 0.4)'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: activeSound === soundType ? '#a855f7' : 'rgba(255, 255, 255, 0.7)',
-                  padding: '12px 24px',
-                  borderRadius: '50px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  backdropFilter: 'blur(10px)',
-                  textTransform: 'capitalize',
-                }}
-                onMouseEnter={(e) => {
-                  if (activeSound !== soundType) {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (activeSound !== soundType) {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  }
-                }}
-              >
-                {soundType === 'whitenoise' ? 'White Noise' : soundType.charAt(0).toUpperCase() + soundType.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Session Log */}
-        {sessionHistory.length > 0 && (
-          <div style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.03)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '24px',
-            padding: '20px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            width: '100%',
-            maxWidth: '400px',
-            maxHeight: '400px', // Fixed max height
-            overflowY: 'auto', // Scrollable
-            marginTop: 'auto', // Push to bottom
             flexShrink: 0,
           }}>
             <div style={{
               fontSize: '14px',
               fontWeight: '600',
               color: 'rgba(255, 255, 255, 0.7)',
-              marginBottom: '12px',
+              marginBottom: '16px',
               textAlign: 'center',
               textTransform: 'uppercase',
               letterSpacing: '0.1em',
-              position: 'sticky',
-              top: 0,
-              backgroundColor: 'rgba(15, 16, 18, 0.95)', // Match bg color for sticky header
-              zIndex: 10,
-              paddingBottom: '10px',
             }}>
-              Session Log
+              Ambient Sounds
             </div>
             <div style={{
               display: 'flex',
-              flexDirection: 'column',
               gap: '12px',
+              justifyContent: 'center',
+              flexWrap: 'wrap',
             }}>
-              {sessionHistory.map((session, index) => {
-                const durationMinutes = Math.floor(session.duration / 60);
-                const modeLabel = session.mode === 'pomodoro' ? 'Pomodoro' : 'Flowmodoro';
-                const modeColor = session.mode === 'pomodoro' ? '#3b82f6' : '#22d3ee';
-                const date = new Date(session.timestamp);
-                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              {['rain', 'forest', 'whitenoise'].map((soundType) => (
+                <button
+                  key={soundType}
+                  onClick={() => handleSoundToggle(soundType)}
+                  style={{
+                    backgroundColor: activeSound === soundType
+                      ? 'rgba(168, 85, 247, 0.2)'
+                      : 'rgba(255, 255, 255, 0.05)',
+                    border: activeSound === soundType
+                      ? '1px solid rgba(168, 85, 247, 0.4)'
+                      : '1px solid rgba(255, 255, 255, 0.1)',
+                    color: activeSound === soundType ? '#a855f7' : 'rgba(255, 255, 255, 0.7)',
+                    padding: '12px 24px',
+                    borderRadius: '50px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    backdropFilter: 'blur(10px)',
+                    textTransform: 'capitalize',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeSound !== soundType) {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeSound !== soundType) {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                    }
+                  }}
+                >
+                  {soundType === 'whitenoise' ? 'White Noise' : soundType.charAt(0).toUpperCase() + soundType.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                return (
-                  <div
-                    key={session.id}
+          {/* Session Log */}
+          {sessionHistory.length > 0 && (
+            <div style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '24px',
+              padding: '20px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              width: '100%',
+              maxWidth: '400px',
+              maxHeight: '400px', // Fixed max height
+              overflowY: 'auto', // Scrollable
+              marginTop: 'auto', // Push to bottom
+              flexShrink: 0,
+            }}>
+              <div style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: 'rgba(255, 255, 255, 0.7)',
+                marginBottom: '12px',
+                textAlign: 'center',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                position: 'sticky',
+                top: 0,
+                backgroundColor: 'rgba(15, 16, 18, 0.95)', // Match bg color for sticky header
+                zIndex: 10,
+                paddingBottom: '10px',
+              }}>
+                Session Log
+              </div>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}>
+                {sessionHistory.map((session, index) => {
+                  const durationMinutes = Math.floor(session.duration / 60);
+                  const modeLabel = session.mode === 'pomodoro' ? 'Pomodoro' : 'Flowmodoro';
+                  const modeColor = session.mode === 'pomodoro' ? '#3b82f6' : '#22d3ee';
+                  const date = new Date(session.timestamp);
+                  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                  return (
+                    <div
+                      key={session.id}
+                      style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: '16px',
+                        padding: '16px 20px',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        transition: 'all 0.2s ease',
+                        animation: index === 0 ? 'slideInDown 0.4s ease-out' : 'none',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                      }}
+                    >
+                      {/* Left: Task Name */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          fontSize: '15px',
+                          fontWeight: '700',
+                          color: '#ffffff',
+                          marginBottom: '4px',
+                        }}>
+                          {session.task}
+                        </div>
+                        <div style={{
+                          fontSize: '12px',
+                          color: 'rgba(255, 255, 255, 0.5)',
+                        }}>
+                          {timeStr}
+                        </div>
+                      </div>
+                      {/* Right: Duration and Mode Badge */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                      }}>
+                        <div style={{
+                          fontSize: '15px',
+                          fontWeight: '600',
+                          color: 'rgba(255, 255, 255, 0.8)',
+                        }}>
+                          {durationMinutes}m
+                        </div>
+                        <div style={{
+                          backgroundColor: `${modeColor}20`,
+                          border: `1px solid ${modeColor}40`,
+                          borderRadius: '12px',
+                          padding: '4px 12px',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: modeColor,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                        }}>
+                          {modeLabel}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Settings Modal */}
+        {isSettingsOpen && (
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setIsSettingsOpen(false);
+              }
+            }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'rgba(10, 10, 12, 0.95)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '24px',
+                padding: '32px',
+                width: '90%',
+                maxWidth: '400px',
+                color: '#ffffff',
+              }}
+            >
+              {/* Modal Header */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '24px',
+              }}>
+                <h2 style={{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  margin: 0,
+                  background: 'linear-gradient(90deg, #a855f7, #ec4899)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}>
+                  Timer Settings
+                </h2>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  }}
+                >
+                  <svg
                     style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      backdropFilter: 'blur(10px)',
-                      borderRadius: '16px',
-                      padding: '16px 20px',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      transition: 'all 0.2s ease',
-                      animation: index === 0 ? 'slideInDown 0.4s ease-out' : 'none',
+                      width: '20px',
+                      height: '20px',
+                      stroke: 'currentColor',
+                      fill: 'none',
+                      strokeWidth: '2',
                     }}
-                    onMouseEnter={(e) => {
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Settings Inputs */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Pomodoro Duration */}
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    marginBottom: '8px',
+                  }}>
+                    Pomodoro Duration (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={pomodoroDuration}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 25;
+                      setPomodoroDuration(Math.max(1, Math.min(120, value)));
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '12px',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
                       e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
                     }}
-                    onMouseLeave={(e) => {
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
                       e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
                     }}
-                  >
-                    {/* Left: Task Name */}
-                    <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: '15px',
-                        fontWeight: '700',
-                        color: '#ffffff',
-                        marginBottom: '4px',
-                      }}>
-                        {session.task}
-                      </div>
-                      <div style={{
-                        fontSize: '12px',
-                        color: 'rgba(255, 255, 255, 0.5)',
-                      }}>
-                        {timeStr}
-                      </div>
-                    </div>
-                    {/* Right: Duration and Mode Badge */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                    }}>
-                      <div style={{
-                        fontSize: '15px',
-                        fontWeight: '600',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                      }}>
-                        {durationMinutes}m
-                      </div>
-                      <div style={{
-                        backgroundColor: `${modeColor}20`,
-                        border: `1px solid ${modeColor}40`,
-                        borderRadius: '12px',
-                        padding: '4px 12px',
-                        fontSize: '11px',
-                        fontWeight: '600',
-                        color: modeColor,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}>
-                        {modeLabel}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  />
+                </div>
+
+                {/* Short Break Duration */}
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    marginBottom: '8px',
+                  }}>
+                    Short Break Duration (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={shortBreakDuration}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 5;
+                      setShortBreakDuration(Math.max(1, Math.min(60, value)));
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '12px',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                    }}
+                  />
+                </div>
+
+                {/* Long Break Duration */}
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    marginBottom: '8px',
+                  }}>
+                    Long Break Duration (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={longBreakDuration}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 15;
+                      setLongBreakDuration(Math.max(1, Math.min(120, value)));
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '12px',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <button
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  // Reset timer to reflect new durations if not running
+                  if (!isRunning) {
+                    switch (mode) {
+                      case 'pomodoro':
+                        setTimeRemaining(pomodoroDuration * 60);
+                        break;
+                      case 'shortBreak':
+                        setTimeRemaining(shortBreakDuration * 60);
+                        break;
+                      case 'longBreak':
+                        setTimeRemaining(longBreakDuration * 60);
+                        break;
+                      default:
+                        break;
+                    }
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  marginTop: '24px',
+                  padding: '14px 24px',
+                  background: 'linear-gradient(90deg, #a855f7, #ec4899)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#ffffff',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 20px rgba(168, 85, 247, 0.3)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 6px 30px rgba(168, 85, 247, 0.5)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.3)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                Save Settings
+              </button>
             </div>
           </div>
         )}
       </div>
-
-      {/* Settings Modal */}
-      {isSettingsOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsSettingsOpen(false);
-            }
-          }}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'rgba(10, 10, 12, 0.95)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '24px',
-              padding: '32px',
-              width: '90%',
-              maxWidth: '400px',
-              color: '#ffffff',
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '24px',
-            }}>
-              <h2 style={{
-                fontSize: '24px',
-                fontWeight: '700',
-                margin: 0,
-                background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}>
-                Timer Settings
-              </h2>
-              <button
-                onClick={() => setIsSettingsOpen(false)}
-                style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                }}
-              >
-                <svg
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    stroke: 'currentColor',
-                    fill: 'none',
-                    strokeWidth: '2',
-                  }}
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Settings Inputs */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Pomodoro Duration */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  marginBottom: '8px',
-                }}>
-                  Pomodoro Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="120"
-                  value={pomodoroDuration}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 25;
-                    setPomodoroDuration(Math.max(1, Math.min(120, value)));
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    color: '#ffffff',
-                    fontSize: '16px',
-                    outline: 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                />
-              </div>
-
-              {/* Short Break Duration */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  marginBottom: '8px',
-                }}>
-                  Short Break Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="60"
-                  value={shortBreakDuration}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 5;
-                    setShortBreakDuration(Math.max(1, Math.min(60, value)));
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    color: '#ffffff',
-                    fontSize: '16px',
-                    outline: 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                />
-              </div>
-
-              {/* Long Break Duration */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  marginBottom: '8px',
-                }}>
-                  Long Break Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="120"
-                  value={longBreakDuration}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 15;
-                    setLongBreakDuration(Math.max(1, Math.min(120, value)));
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    color: '#ffffff',
-                    fontSize: '16px',
-                    outline: 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Save Button */}
-            <button
-              onClick={() => {
-                setIsSettingsOpen(false);
-                // Reset timer to reflect new durations if not running
-                if (!isRunning) {
-                  switch (mode) {
-                    case 'pomodoro':
-                      setTimeRemaining(pomodoroDuration * 60);
-                      break;
-                    case 'shortBreak':
-                      setTimeRemaining(shortBreakDuration * 60);
-                      break;
-                    case 'longBreak':
-                      setTimeRemaining(longBreakDuration * 60);
-                      break;
-                    default:
-                      break;
-                  }
-                }
-              }}
-              style={{
-                width: '100%',
-                marginTop: '24px',
-                padding: '14px 24px',
-                background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-                border: 'none',
-                borderRadius: '12px',
-                color: '#ffffff',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: '0 4px 20px rgba(168, 85, 247, 0.3)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 6px 30px rgba(168, 85, 247, 0.5)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.3)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              Save Settings
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+      );
 };
 
-export default TimerMode;
+      export default TimerMode;
