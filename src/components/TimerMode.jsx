@@ -1213,7 +1213,7 @@ const TimerMode = () => {
 
   return (
     <div style={{
-      padding: '32px',
+      padding: '22px 32px 32px 32px',
       height: '100%',
       overflow: 'hidden',
       position: 'relative',
