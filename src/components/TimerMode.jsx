@@ -2176,7 +2176,10 @@ const TimerMode = () => {
             </div>
           </div>
 
-          {/* Session Log */}
+        </div>
+
+        {/* RIGHT COLUMN: Session Log */}
+        <div className="flex flex-col w-full lg:w-1/3 flex-shrink-0 lg:h-[calc(100vh-64px)] lg:sticky lg:top-8">
           {sessionHistory.length > 0 && (
             <div style={{
               backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -2185,11 +2188,10 @@ const TimerMode = () => {
               padding: '20px',
               border: '1px solid rgba(255, 255, 255, 0.1)',
               width: '100%',
-              maxWidth: '400px',
-              maxHeight: '400px', // Fixed max height
-              overflowY: 'auto', // Scrollable
-              marginTop: 'auto', // Push to bottom
-              flexShrink: 0,
+              height: '100%',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
             }}>
               <div style={{
                 fontSize: '14px',
@@ -2292,276 +2294,277 @@ const TimerMode = () => {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Settings Modal */}
-        {isSettingsOpen && (
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsSettingsOpen(false);
+            }
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
           <div
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setIsSettingsOpen(false);
-              }
-            }}
             style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              backdropFilter: 'blur(8px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
+              backgroundColor: 'rgba(10, 10, 12, 0.95)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '24px',
+              padding: '32px',
+              width: '90%',
+              maxWidth: '400px',
+              color: '#ffffff',
             }}
           >
-            <div
-              style={{
-                backgroundColor: 'rgba(10, 10, 12, 0.95)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '24px',
-                padding: '32px',
-                width: '90%',
-                maxWidth: '400px',
-                color: '#ffffff',
-              }}
-            >
-              {/* Modal Header */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '24px',
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '24px',
+            }}>
+              <h2 style={{
+                fontSize: '24px',
+                fontWeight: '700',
+                margin: 0,
+                background: 'linear-gradient(90deg, #a855f7, #ec4899)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
               }}>
-                <h2 style={{
-                  fontSize: '24px',
-                  fontWeight: '700',
-                  margin: 0,
-                  background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}>
-                  Timer Settings
-                </h2>
-                <button
-                  onClick={() => setIsSettingsOpen(false)}
-                  style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '8px',
-                    width: '32px',
-                    height: '32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                >
-                  <svg
-                    style={{
-                      width: '20px',
-                      height: '20px',
-                      stroke: 'currentColor',
-                      fill: 'none',
-                      strokeWidth: '2',
-                    }}
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Settings Inputs */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {/* Pomodoro Duration */}
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: 'rgba(255, 255, 255, 0.8)',
-                    marginBottom: '8px',
-                  }}>
-                    Pomodoro Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={pomodoroDuration}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || 25;
-                      setPomodoroDuration(Math.max(1, Math.min(120, value)));
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '12px',
-                      color: '#ffffff',
-                      fontSize: '16px',
-                      outline: 'none',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                    }}
-                  />
-                </div>
-
-                {/* Short Break Duration */}
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: 'rgba(255, 255, 255, 0.8)',
-                    marginBottom: '8px',
-                  }}>
-                    Short Break Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="60"
-                    value={shortBreakDuration}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || 5;
-                      setShortBreakDuration(Math.max(1, Math.min(60, value)));
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '12px',
-                      color: '#ffffff',
-                      fontSize: '16px',
-                      outline: 'none',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                    }}
-                  />
-                </div>
-
-                {/* Long Break Duration */}
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: 'rgba(255, 255, 255, 0.8)',
-                    marginBottom: '8px',
-                  }}>
-                    Long Break Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={longBreakDuration}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || 15;
-                      setLongBreakDuration(Math.max(1, Math.min(120, value)));
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '12px',
-                      color: '#ffffff',
-                      fontSize: '16px',
-                      outline: 'none',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Save Button */}
+                Timer Settings
+              </h2>
               <button
-                onClick={() => {
-                  setIsSettingsOpen(false);
-                  // Reset timer to reflect new durations if not running
-                  if (!isRunning) {
-                    switch (mode) {
-                      case 'pomodoro':
-                        setTimeRemaining(pomodoroDuration * 60);
-                        break;
-                      case 'shortBreak':
-                        setTimeRemaining(shortBreakDuration * 60);
-                        break;
-                      case 'longBreak':
-                        setTimeRemaining(longBreakDuration * 60);
-                        break;
-                      default:
-                        break;
-                    }
-                  }
-                }}
+                onClick={() => setIsSettingsOpen(false)}
                 style={{
-                  width: '100%',
-                  marginTop: '24px',
-                  padding: '14px 24px',
-                  background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  color: '#ffffff',
-                  fontSize: '16px',
-                  fontWeight: '600',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 20px rgba(168, 85, 247, 0.3)',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  transition: 'all 0.2s ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 6px 30px rgba(168, 85, 247, 0.5)';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.3)';
-                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
                 }}
               >
-                Save Settings
+                <svg
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    stroke: 'currentColor',
+                    fill: 'none',
+                    strokeWidth: '2',
+                  }}
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
+
+            {/* Settings Inputs */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Pomodoro Duration */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  marginBottom: '8px',
+                }}>
+                  Pomodoro Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  value={pomodoroDuration}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 25;
+                    setPomodoroDuration(Math.max(1, Math.min(120, value)));
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '12px',
+                    color: '#ffffff',
+                    fontSize: '16px',
+                    outline: 'none',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  }}
+                />
+              </div>
+
+              {/* Short Break Duration */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  marginBottom: '8px',
+                }}>
+                  Short Break Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={shortBreakDuration}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 5;
+                    setShortBreakDuration(Math.max(1, Math.min(60, value)));
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '12px',
+                    color: '#ffffff',
+                    fontSize: '16px',
+                    outline: 'none',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  }}
+                />
+              </div>
+
+              {/* Long Break Duration */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  marginBottom: '8px',
+                }}>
+                  Long Break Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  value={longBreakDuration}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 15;
+                    setLongBreakDuration(Math.max(1, Math.min(120, value)));
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '12px',
+                    color: '#ffffff',
+                    fontSize: '16px',
+                    outline: 'none',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={() => {
+                setIsSettingsOpen(false);
+                // Reset timer to reflect new durations if not running
+                if (!isRunning) {
+                  switch (mode) {
+                    case 'pomodoro':
+                      setTimeRemaining(pomodoroDuration * 60);
+                      break;
+                    case 'shortBreak':
+                      setTimeRemaining(shortBreakDuration * 60);
+                      break;
+                    case 'longBreak':
+                      setTimeRemaining(longBreakDuration * 60);
+                      break;
+                    default:
+                      break;
+                  }
+                }
+              }}
+              style={{
+                width: '100%',
+                marginTop: '24px',
+                padding: '14px 24px',
+                background: 'linear-gradient(90deg, #a855f7, #ec4899)',
+                border: 'none',
+                borderRadius: '12px',
+                color: '#ffffff',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 20px rgba(168, 85, 247, 0.3)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 6px 30px rgba(168, 85, 247, 0.5)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.3)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              Save Settings
+            </button>
           </div>
-        )}
-      </div>
-      );
+        </div>
+      )}
+    </div>
+  );
 };
 
-      export default TimerMode;
+export default TimerMode;
