@@ -1543,637 +1543,642 @@ const TimerMode = () => {
         }}
       >
         {/* LEFT COLUMN: Controls, Timer, Task, Sounds */}
-        <div className="flex flex-col w-full lg:w-2/3 gap-6 flex-shrink-0">
+        <div className="flex flex-col w-full lg:w-2/3 h-full justify-between gap-6 flex-shrink-0">
 
-          {/* Header with Sentry Toggle and Settings */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '12px',
-            flexShrink: 0,
-          }}>
-            {/* Sentry Mode Toggle */}
+          {/* TOP SECTION: Header & Modes */}
+          <div className="w-full flex flex-col gap-6">
+
+            {/* Header with Sentry Toggle and Settings */}
             <div style={{
               display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
-              gap: '12px',
-              backgroundColor: 'rgba(255, 255, 255, 0.03)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '50px',
-              padding: '8px 16px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              opacity: isPro ? 1 : 0.6,
-              filter: isPro ? 'none' : 'grayscale(1)',
+              marginBottom: '12px',
+              flexShrink: 0,
             }}>
+              {/* Sentry Mode Toggle */}
               <div style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: 'rgba(255, 255, 255, 0.7)',
-              }}>
-                Sentry
-              </div>
-              <button
-                onClick={() => {
-                  if (!isPro) {
-                    navigate('/subscription');
-                    return;
-                  }
-                  setIsSentryActive(!isSentryActive);
-                }}
-                style={{
-                  width: '44px',
-                  height: '24px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  backgroundColor: isPro
-                    ? (isSentryActive ? '#fb7185' : 'rgba(255, 255, 255, 0.2)')
-                    : 'rgba(107, 114, 128, 0.5)',
-                  transition: 'all 0.3s ease',
-                }}
-              >
-                <div style={{
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  backgroundColor: '#ffffff',
-                  position: 'absolute',
-                  top: '2px',
-                  left: isPro && isSentryActive ? '22px' : '2px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-                }} />
-              </button>
-              {!isPro && (
-                <div style={{
-                  backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                  border: '1px solid rgba(168, 85, 247, 0.4)',
-                  borderRadius: '8px',
-                  padding: '4px 8px',
-                  fontSize: '10px',
-                  fontWeight: '600',
-                  color: '#a855f7',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}>
-                  Pro
-                </div>
-              )}
-              {isPro && isSentryActive && (
-                <div style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: isUserPresent ? '#10b981' : '#f43f5e',
-                  boxShadow: isUserPresent
-                    ? '0 0 8px rgba(16, 185, 129, 0.6)'
-                    : '0 0 8px rgba(244, 63, 94, 0.6)',
-                }} />
-              )}
-            </div>
-
-            {/* Settings Gear Icon */}
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%',
-                width: '40px',
-                height: '40px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                e.currentTarget.style.transform = 'rotate(15deg)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.transform = 'rotate(0deg)';
-              }}
-            >
-              <svg
-                style={{
-                  width: '20px',
-                  height: '20px',
-                  stroke: 'rgba(255, 255, 255, 0.7)',
-                  fill: 'none',
-                  strokeWidth: '2',
-                }}
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Camera Error Message */}
-          {cameraError && (
-            <div style={{
-              backgroundColor: 'rgba(244, 63, 94, 0.1)',
-              border: '1px solid rgba(244, 63, 94, 0.3)',
-              borderRadius: '12px',
-              padding: '12px 16px',
-              marginBottom: '24px',
-              textAlign: 'center',
-            }}>
-              <div style={{
-                fontSize: '12px',
-                color: '#f43f5e',
-              }}>
-                ⚠️ Camera Error: {cameraError}. Please check permissions.
-              </div>
-            </div>
-          )}
-
-          {/* Mode Switcher - 4 Distinct Tabs */}
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            marginBottom: '12px',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            flexShrink: 0,
-          }}>
-            {/* Pomodoro Tab */}
-            <button
-              onClick={() => {
-                setIsRunning(false);
-                setMode('pomodoro');
-              }}
-              style={{
-                backgroundColor: mode === 'pomodoro'
-                  ? 'rgba(59, 130, 246, 0.2)'
-                  : 'rgba(255, 255, 255, 0.05)',
-                border: mode === 'pomodoro'
-                  ? '1px solid rgba(59, 130, 246, 0.4)'
-                  : '1px solid rgba(255, 255, 255, 0.1)',
-                color: mode === 'pomodoro' ? '#3b82f6' : 'rgba(255, 255, 255, 0.7)',
-                padding: '10px 20px',
-                borderRadius: '50px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              Pomodoro
-            </button>
-            {/* Short Break Tab */}
-            <button
-              onClick={() => {
-                setIsRunning(false);
-                setMode('shortBreak');
-              }}
-              style={{
-                backgroundColor: mode === 'shortBreak'
-                  ? 'rgba(16, 185, 129, 0.2)'
-                  : 'rgba(255, 255, 255, 0.05)',
-                border: mode === 'shortBreak'
-                  ? '1px solid rgba(16, 185, 129, 0.4)'
-                  : '1px solid rgba(255, 255, 255, 0.1)',
-                color: mode === 'shortBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
-                padding: '10px 20px',
-                borderRadius: '50px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              Short Break
-            </button>
-            {/* Long Break Tab */}
-            <button
-              onClick={() => {
-                setIsRunning(false);
-                setMode('longBreak');
-              }}
-              style={{
-                backgroundColor: mode === 'longBreak'
-                  ? 'rgba(16, 185, 129, 0.2)'
-                  : 'rgba(255, 255, 255, 0.05)',
-                border: mode === 'longBreak'
-                  ? '1px solid rgba(16, 185, 129, 0.4)'
-                  : '1px solid rgba(255, 255, 255, 0.1)',
-                color: mode === 'longBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
-                padding: '10px 20px',
-                borderRadius: '50px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              Long Break
-            </button>
-            {/* Flowmodoro Tab */}
-            <button
-              onClick={() => {
-                setIsRunning(false);
-                setMode('flowmodoro');
-              }}
-              style={{
-                backgroundColor: mode === 'flowmodoro'
-                  ? 'rgba(34, 211, 238, 0.2)'
-                  : 'rgba(255, 255, 255, 0.05)',
-                border: mode === 'flowmodoro'
-                  ? '1px solid rgba(34, 211, 238, 0.4)'
-                  : '1px solid rgba(255, 255, 255, 0.1)',
-                color: mode === 'flowmodoro' ? '#22d3ee' : 'rgba(255, 255, 255, 0.7)',
-                padding: '10px 20px',
-                borderRadius: '50px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              Flowmodoro
-            </button>
-          </div>
-
-          {/* Focus Intent Input */}
-          <div style={{
-            marginBottom: '12px',
-            width: '100%',
-            flexShrink: 0,
-          }}>
-            {isRunning ? (
-              // Display mode - show as label
-              <div style={{
+                gap: '12px',
                 backgroundColor: 'rgba(255, 255, 255, 0.03)',
                 backdropFilter: 'blur(10px)',
-                borderRadius: '16px',
-                padding: '20px 24px',
+                borderRadius: '50px',
+                padding: '8px 16px',
                 border: '1px solid rgba(255, 255, 255, 0.1)',
+                opacity: isPro ? 1 : 0.6,
+                filter: isPro ? 'none' : 'grayscale(1)',
+              }}>
+                <div style={{
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                }}>
+                  Sentry
+                </div>
+                <button
+                  onClick={() => {
+                    if (!isPro) {
+                      navigate('/subscription');
+                      return;
+                    }
+                    setIsSentryActive(!isSentryActive);
+                  }}
+                  style={{
+                    width: '44px',
+                    height: '24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    backgroundColor: isPro
+                      ? (isSentryActive ? '#fb7185' : 'rgba(255, 255, 255, 0.2)')
+                      : 'rgba(107, 114, 128, 0.5)',
+                    transition: 'all 0.3s ease',
+                  }}
+                >
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ffffff',
+                    position: 'absolute',
+                    top: '2px',
+                    left: isPro && isSentryActive ? '22px' : '2px',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                  }} />
+                </button>
+                {!isPro && (
+                  <div style={{
+                    backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                    border: '1px solid rgba(168, 85, 247, 0.4)',
+                    borderRadius: '8px',
+                    padding: '4px 8px',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    color: '#a855f7',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}>
+                    Pro
+                  </div>
+                )}
+                {isPro && isSentryActive && (
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: isUserPresent ? '#10b981' : '#f43f5e',
+                    boxShadow: isUserPresent
+                      ? '0 0 8px rgba(16, 185, 129, 0.6)'
+                      : '0 0 8px rgba(244, 63, 94, 0.6)',
+                  }} />
+                )}
+              </div>
+
+              {/* Settings Gear Icon */}
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                  e.currentTarget.style.transform = 'rotate(15deg)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.transform = 'rotate(0deg)';
+                }}
+              >
+                <svg
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    stroke: 'rgba(255, 255, 255, 0.7)',
+                    fill: 'none',
+                    strokeWidth: '2',
+                  }}
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Camera Error Message */}
+            {cameraError && (
+              <div style={{
+                backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+                borderRadius: '12px',
+                padding: '12px 16px',
+                marginBottom: '24px',
+                textAlign: 'center',
               }}>
                 <div style={{
                   fontSize: '12px',
-                  color: 'rgba(255, 255, 255, 0.5)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  marginBottom: '8px',
+                  color: '#f43f5e',
                 }}>
-                  Current Task
-                </div>
-                <div style={{
-                  fontSize: '20px',
-                  fontWeight: '700',
-                  color: '#ffffff',
-                }}>
-                  {focusIntent || 'No task specified'}
+                  ⚠️ Camera Error: {cameraError}. Please check permissions.
                 </div>
               </div>
-            ) : (
-              // Edit mode - show as input
-              <input
-                type="text"
-                value={focusIntent}
-                onChange={(e) => setFocusIntent(e.target.value)}
-                placeholder="What is your main task?"
-                style={{
-                  width: '100%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                  backdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '16px',
-                  padding: '20px 24px',
-                  fontSize: '18px',
-                  color: '#ffffff',
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-              />
             )}
+
+            {/* Mode Switcher - 4 Distinct Tabs */}
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '12px',
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              flexShrink: 0,
+            }}>
+              {/* Pomodoro Tab */}
+              <button
+                onClick={() => {
+                  setIsRunning(false);
+                  setMode('pomodoro');
+                }}
+                style={{
+                  backgroundColor: mode === 'pomodoro'
+                    ? 'rgba(59, 130, 246, 0.2)'
+                    : 'rgba(255, 255, 255, 0.05)',
+                  border: mode === 'pomodoro'
+                    ? '1px solid rgba(59, 130, 246, 0.4)'
+                    : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: mode === 'pomodoro' ? '#3b82f6' : 'rgba(255, 255, 255, 0.7)',
+                  padding: '10px 20px',
+                  borderRadius: '50px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  backdropFilter: 'blur(10px)',
+                }}
+              >
+                Pomodoro
+              </button>
+              {/* Short Break Tab */}
+              <button
+                onClick={() => {
+                  setIsRunning(false);
+                  setMode('shortBreak');
+                }}
+                style={{
+                  backgroundColor: mode === 'shortBreak'
+                    ? 'rgba(16, 185, 129, 0.2)'
+                    : 'rgba(255, 255, 255, 0.05)',
+                  border: mode === 'shortBreak'
+                    ? '1px solid rgba(16, 185, 129, 0.4)'
+                    : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: mode === 'shortBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
+                  padding: '10px 20px',
+                  borderRadius: '50px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  backdropFilter: 'blur(10px)',
+                }}
+              >
+                Short Break
+              </button>
+              {/* Long Break Tab */}
+              <button
+                onClick={() => {
+                  setIsRunning(false);
+                  setMode('longBreak');
+                }}
+                style={{
+                  backgroundColor: mode === 'longBreak'
+                    ? 'rgba(16, 185, 129, 0.2)'
+                    : 'rgba(255, 255, 255, 0.05)',
+                  border: mode === 'longBreak'
+                    ? '1px solid rgba(16, 185, 129, 0.4)'
+                    : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: mode === 'longBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
+                  padding: '10px 20px',
+                  borderRadius: '50px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  backdropFilter: 'blur(10px)',
+                }}
+              >
+                Long Break
+              </button>
+              {/* Flowmodoro Tab */}
+              <button
+                onClick={() => {
+                  setIsRunning(false);
+                  setMode('flowmodoro');
+                }}
+                style={{
+                  backgroundColor: mode === 'flowmodoro'
+                    ? 'rgba(34, 211, 238, 0.2)'
+                    : 'rgba(255, 255, 255, 0.05)',
+                  border: mode === 'flowmodoro'
+                    ? '1px solid rgba(34, 211, 238, 0.4)'
+                    : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: mode === 'flowmodoro' ? '#22d3ee' : 'rgba(255, 255, 255, 0.7)',
+                  padding: '10px 20px',
+                  borderRadius: '50px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  backdropFilter: 'blur(10px)',
+                }}
+              >
+                Flowmodoro
+              </button>
+            </div>
           </div>
 
-          {/* Timer Display */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flex: 1,
-            minHeight: 0,
-            marginBottom: '12px',
-          }}>
-            {/* Circular Progress Ring */}
-            {mode !== 'flowmodoro' && (
-              <div style={{
-                position: 'relative',
-                width: '336px',
-                height: '336px',
-              }}>
-                <svg width="336" height="336" style={{ transform: 'rotate(-90deg)' }}>
-                  {/* Background circle */}
-                  <circle
-                    cx="168"
-                    cy="168"
-                    r={radius}
-                    fill="none"
-                    stroke="rgba(255, 255, 255, 0.1)"
-                    strokeWidth="8"
-                  />
-                  {/* Progress circle */}
-                  <circle
-                    cx="168"
-                    cy="168"
-                    r={radius}
-                    fill="none"
-                    stroke={modeColor.primary}
-                    strokeWidth="8"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dashoffset 0.3s ease' }}
-                  />
-                </svg>
-                {/* Timer text in center */}
+          {/* CENTER SECTION: Task, Timer, Controls */}
+          <div className="flex-1 flex flex-col justify-center items-center w-full gap-4 min-h-0">
+
+            {/* Focus Intent Input */}
+            <div style={{
+              marginBottom: '12px',
+              width: '100%',
+              flexShrink: 0,
+            }}>
+              {isRunning ? (
+                // Display mode - show as label
                 <div style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  backdropFilter: 'blur(10px)',
+                  borderRadius: '16px',
+                  padding: '20px 24px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                }}>
+                  <div style={{
+                    fontSize: '12px',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    marginBottom: '8px',
+                  }}>
+                    Current Task
+                  </div>
+                  <div style={{
+                    fontSize: '20px',
+                    fontWeight: '700',
+                    color: '#ffffff',
+                  }}>
+                    {focusIntent || 'No task specified'}
+                  </div>
+                </div>
+              ) : (
+                // Edit mode - show as input
+                <input
+                  type="text"
+                  value={focusIntent}
+                  onChange={(e) => setFocusIntent(e.target.value)}
+                  placeholder="What is your main task?"
+                  style={{
+                    width: '100%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '16px',
+                    padding: '20px 24px',
+                    fontSize: '18px',
+                    color: '#ffffff',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Timer Display */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 1,
+              minHeight: 0,
+              marginBottom: '12px',
+            }}>
+              {/* Circular Progress Ring */}
+              {mode !== 'flowmodoro' && (
+                <div style={{
+                  position: 'relative',
+                  width: '336px',
+                  height: '336px',
+                }}>
+                  <svg width="336" height="336" style={{ transform: 'rotate(-90deg)' }}>
+                    {/* Background circle */}
+                    <circle
+                      cx="168"
+                      cy="168"
+                      r={radius}
+                      fill="none"
+                      stroke="rgba(255, 255, 255, 0.1)"
+                      strokeWidth="8"
+                    />
+                    {/* Progress circle */}
+                    <circle
+                      cx="168"
+                      cy="168"
+                      r={radius}
+                      fill="none"
+                      stroke={modeColor.primary}
+                      strokeWidth="8"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+                    />
+                  </svg>
+                  {/* Timer text in center */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{
+                      fontSize: '86px',
+                      fontWeight: '300',
+                      color: modeColor.primary,
+                      fontFeatureSettings: '"tnum"',
+                      letterSpacing: '-0.02em',
+                      lineHeight: '1',
+                      textShadow: `0 0 30px ${modeColor.shadow}`,
+                    }}>
+                      {getDisplayTime()}
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      color: 'rgba(255, 255, 255, 0.5)',
+                      marginTop: '8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                    }}>
+                      {getModeLabel()}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Flowmodoro Display (no progress ring) */}
+              {mode === 'flowmodoro' && (
+                <div style={{
                   textAlign: 'center',
                 }}>
                   <div style={{
-                    fontSize: '86px',
+                    fontSize: '115px',
                     fontWeight: '300',
                     color: modeColor.primary,
                     fontFeatureSettings: '"tnum"',
                     letterSpacing: '-0.02em',
                     lineHeight: '1',
-                    textShadow: `0 0 30px ${modeColor.shadow}`,
+                    textShadow: `0 0 40px ${modeColor.shadow}`,
+                    marginBottom: '16px',
                   }}>
                     {getDisplayTime()}
                   </div>
                   <div style={{
-                    fontSize: '14px',
+                    fontSize: '16px',
                     color: 'rgba(255, 255, 255, 0.5)',
-                    marginTop: '8px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.1em',
                   }}>
                     {getModeLabel()}
                   </div>
                 </div>
+              )}
+
+              {/* Controls */}
+              <div style={{
+                display: 'flex',
+                marginTop: '20px',
+                gap: '16px',
+                alignItems: 'center',
+              }}>
+                {/* Main Action Button (Toggle Start/Pause) */}
+                <button
+                  onClick={handleStartPause}
+                  disabled={isSentryActive && !isUserPresent}
+                  style={{
+                    backgroundColor: (isSentryActive && !isUserPresent)
+                      ? 'rgba(255, 255, 255, 0.02)'
+                      : isRunning
+                        ? 'rgba(239, 68, 68, 0.1)'
+                        : 'rgba(59, 130, 246, 0.2)',
+                    backdropFilter: 'blur(10px)',
+                    border: isRunning
+                      ? '2px solid rgba(239, 68, 68, 0.5)'
+                      : '2px solid rgba(59, 130, 246, 0.5)',
+                    borderRadius: '50px',
+                    padding: '16px 32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    color: isRunning ? '#ef4444' : '#ffffff',
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    cursor: (isSentryActive && !isUserPresent) ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.3s ease',
+                    opacity: (isSentryActive && !isUserPresent) ? 0.5 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!(isSentryActive && !isUserPresent)) {
+                      e.currentTarget.style.backgroundColor = isRunning
+                        ? 'rgba(239, 68, 68, 0.2)'
+                        : 'rgba(59, 130, 246, 0.3)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = (isSentryActive && !isUserPresent)
+                      ? 'rgba(255, 255, 255, 0.02)'
+                      : isRunning
+                        ? 'rgba(239, 68, 68, 0.1)'
+                        : 'rgba(59, 130, 246, 0.2)';
+                  }}
+                >
+                  {isRunning ? (
+                    <>
+                      <Pause size={20} />
+                      <span>Pause</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play size={20} />
+                      <span>{isCountdownMode && workerTimeLeft < workerDuration ? 'Resume' : 'Start'}</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Reset Button (Only shows if timer is dirty) */}
+                {isCountdownMode && workerTimeLeft !== workerDuration && (
+                  <button
+                    onClick={handleReset}
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      backdropFilter: 'blur(10px)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '50%',
+                      width: '56px',
+                      height: '56px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                    }}
+                    title="Reset Timer"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                  >
+                    <RotateCcw size={20} />
+                  </button>
+                )}
+
+                {/* Finish & Rest Button (only for flowmodoro) */}
+                {mode === 'flowmodoro' && timeElapsed > 0 && (
+                  <button
+                    onClick={handleFinishWork}
+                    style={{
+                      background: 'linear-gradient(90deg, #22d3ee, #3b82f6)',
+                      border: 'none',
+                      borderRadius: '50px',
+                      padding: '16px 32px',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 4px 20px rgba(34, 211, 238, 0.3)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = '0 6px 30px rgba(34, 211, 238, 0.5)';
+                      e.currentTarget.style.transform = 'scale(1.02)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.3)';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                  >
+                    Finish & Rest
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Mode Info (for breaks) */}
+            {(mode === 'shortBreak' || mode === 'longBreak') && (
+              <div style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                backdropFilter: 'blur(10px)',
+                borderRadius: '24px',
+                padding: '16px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                textAlign: 'center',
+                marginBottom: '12px',
+                flexShrink: 0,
+              }}>
+                <div style={{
+                  fontSize: '14px',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                }}>
+                  Take a well-deserved break. Rest your mind.
+                </div>
               </div>
             )}
 
-            {/* Flowmodoro Display (no progress ring) */}
-            {mode === 'flowmodoro' && (
+            {/* Ambient Soundscapes */}
+            {/* BOTTOM SECTION: Ambient Sounds Dock */}
+            <div className="w-full mt-auto">
               <div style={{
-                textAlign: 'center',
+                backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                backdropFilter: 'blur(10px)',
+                borderRadius: '24px',
+                padding: '16px 24px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
               }}>
                 <div style={{
-                  fontSize: '115px',
-                  fontWeight: '300',
-                  color: modeColor.primary,
-                  fontFeatureSettings: '"tnum"',
-                  letterSpacing: '-0.02em',
-                  lineHeight: '1',
-                  textShadow: `0 0 40px ${modeColor.shadow}`,
-                  marginBottom: '16px',
-                }}>
-                  {getDisplayTime()}
-                </div>
-                <div style={{
-                  fontSize: '16px',
+                  fontSize: '13px',
+                  fontWeight: '600',
                   color: 'rgba(255, 255, 255, 0.5)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.1em',
+                  whiteSpace: 'nowrap',
                 }}>
-                  {getModeLabel()}
+                  Soundscapes
+                </div>
+                <div style={{
+                  display: 'flex',
+                  gap: '8px',
+                  alignItems: 'center',
+                  overflowX: 'auto',
+                  paddingBottom: '0px',
+                  scrollbarWidth: 'none', // Hide scrollbar for cleaner look
+                }}>
+                  {['rain', 'forest', 'whitenoise'].map((soundType) => (
+                    <button
+                      key={soundType}
+                      onClick={() => handleSoundToggle(soundType)}
+                      style={{
+                        backgroundColor: activeSound === soundType
+                          ? 'rgba(168, 85, 247, 0.2)'
+                          : 'rgba(255, 255, 255, 0.05)',
+                        border: activeSound === soundType
+                          ? '1px solid rgba(168, 85, 247, 0.4)'
+                          : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: activeSound === soundType ? '#a855f7' : 'rgba(255, 255, 255, 0.7)',
+                        padding: '8px 16px',
+                        borderRadius: '20px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {soundType === 'whitenoise' ? 'White Noise' : soundType.charAt(0).toUpperCase() + soundType.slice(1)}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
-
-            {/* Controls */}
-            <div style={{
-              display: 'flex',
-              marginTop: '20px',
-              gap: '16px',
-              alignItems: 'center',
-            }}>
-              {/* Main Action Button (Toggle Start/Pause) */}
-              <button
-                onClick={handleStartPause}
-                disabled={isSentryActive && !isUserPresent}
-                style={{
-                  backgroundColor: (isSentryActive && !isUserPresent)
-                    ? 'rgba(255, 255, 255, 0.02)'
-                    : isRunning
-                      ? 'rgba(239, 68, 68, 0.1)'
-                      : 'rgba(59, 130, 246, 0.2)',
-                  backdropFilter: 'blur(10px)',
-                  border: isRunning
-                    ? '2px solid rgba(239, 68, 68, 0.5)'
-                    : '2px solid rgba(59, 130, 246, 0.5)',
-                  borderRadius: '50px',
-                  padding: '16px 32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  color: isRunning ? '#ef4444' : '#ffffff',
-                  fontSize: '16px',
-                  fontWeight: '700',
-                  cursor: (isSentryActive && !isUserPresent) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.3s ease',
-                  opacity: (isSentryActive && !isUserPresent) ? 0.5 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (!(isSentryActive && !isUserPresent)) {
-                    e.currentTarget.style.backgroundColor = isRunning
-                      ? 'rgba(239, 68, 68, 0.2)'
-                      : 'rgba(59, 130, 246, 0.3)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = (isSentryActive && !isUserPresent)
-                    ? 'rgba(255, 255, 255, 0.02)'
-                    : isRunning
-                      ? 'rgba(239, 68, 68, 0.1)'
-                      : 'rgba(59, 130, 246, 0.2)';
-                }}
-              >
-                {isRunning ? (
-                  <>
-                    <Pause size={20} />
-                    <span>Pause</span>
-                  </>
-                ) : (
-                  <>
-                    <Play size={20} />
-                    <span>{isCountdownMode && workerTimeLeft < workerDuration ? 'Resume' : 'Start'}</span>
-                  </>
-                )}
-              </button>
-
-              {/* Reset Button (Only shows if timer is dirty) */}
-              {isCountdownMode && workerTimeLeft !== workerDuration && (
-                <button
-                  onClick={handleReset}
-                  style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '50%',
-                    width: '56px',
-                    height: '56px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                  }}
-                  title="Reset Timer"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  <RotateCcw size={20} />
-                </button>
-              )}
-
-              {/* Finish & Rest Button (only for flowmodoro) */}
-              {mode === 'flowmodoro' && timeElapsed > 0 && (
-                <button
-                  onClick={handleFinishWork}
-                  style={{
-                    background: 'linear-gradient(90deg, #22d3ee, #3b82f6)',
-                    border: 'none',
-                    borderRadius: '50px',
-                    padding: '16px 32px',
-                    color: '#ffffff',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 4px 20px rgba(34, 211, 238, 0.3)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 6px 30px rgba(34, 211, 238, 0.5)';
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.3)';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  Finish & Rest
-                </button>
-              )}
             </div>
-          </div>
 
-          {/* Mode Info (for breaks) */}
-          {(mode === 'shortBreak' || mode === 'longBreak') && (
-            <div style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.03)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '24px',
-              padding: '16px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              textAlign: 'center',
-              marginBottom: '12px',
-              flexShrink: 0,
-            }}>
-              <div style={{
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.7)',
-              }}>
-                Take a well-deserved break. Rest your mind.
-              </div>
-            </div>
-          )}
-
-          {/* Ambient Soundscapes */}
-          <div style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.03)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '24px',
-            padding: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            flexShrink: 0,
-          }}>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: '600',
-              color: 'rgba(255, 255, 255, 0.7)',
-              marginBottom: '16px',
-              textAlign: 'center',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-            }}>
-              Ambient Sounds
-            </div>
-            <div style={{
-              display: 'flex',
-              gap: '12px',
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-            }}>
-              {['rain', 'forest', 'whitenoise'].map((soundType) => (
-                <button
-                  key={soundType}
-                  onClick={() => handleSoundToggle(soundType)}
-                  style={{
-                    backgroundColor: activeSound === soundType
-                      ? 'rgba(168, 85, 247, 0.2)'
-                      : 'rgba(255, 255, 255, 0.05)',
-                    border: activeSound === soundType
-                      ? '1px solid rgba(168, 85, 247, 0.4)'
-                      : '1px solid rgba(255, 255, 255, 0.1)',
-                    color: activeSound === soundType ? '#a855f7' : 'rgba(255, 255, 255, 0.7)',
-                    padding: '12px 24px',
-                    borderRadius: '50px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    backdropFilter: 'blur(10px)',
-                    textTransform: 'capitalize',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (activeSound !== soundType) {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (activeSound !== soundType) {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                    }
-                  }}
-                >
-                  {soundType === 'whitenoise' ? 'White Noise' : soundType.charAt(0).toUpperCase() + soundType.slice(1)}
-                </button>
-              ))}
-            </div>
           </div>
 
         </div>
