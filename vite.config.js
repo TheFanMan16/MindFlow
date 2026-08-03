@@ -29,6 +29,14 @@ export default defineConfig({
       transformMixedEsModules: true,
     },
   },
+  test: {
+    // jsdom so component tests can render; node-only tests still work fine.
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    // Vitest otherwise walks node_modules and the Electron build output.
+    include: ['src/**/*.test.{js,jsx}', 'utils/**/*.test.js'],
+  },
   envPrefix: 'VITE_',
   optimizeDeps: {
     // We include @supabase/supabase-js so it's pre-bundled correctly
