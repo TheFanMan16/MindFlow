@@ -66,27 +66,12 @@ const FlashcardDashboard = () => {
     return [];
   });
   const [currentFolderId, setCurrentFolderId] = useState(null); // Track current folder view (null = root)
-  const [isDragOverRoot, setIsDragOverRoot] = useState(false); // Track if dragging over root drop zone
-  const [dragOverFolderId, setDragOverFolderId] = useState(null); // Track which folder is being dragged over
-  const [pulsingFolderId, setPulsingFolderId] = useState(null); // Track folder that just received a drop
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false); // Track create folder modal visibility
   const [newFolderName, setNewFolderName] = useState(''); // Track new folder name input
-  const [activeId, setActiveId] = useState(null); // Track which item is currently being dragged
   const [showMoveToFolderModal, setShowMoveToFolderModal] = useState(false); // Track move to folder modal
   const [deckToMove, setDeckToMove] = useState(null); // Track which deck is being moved
-  const draggedGroupIdsRef = useRef(null); // Track IDs being dragged as a group (null = single item drag)
   const [editingDeckId, setEditingDeckId] = useState(null); // Track which deck is being renamed
   const [newDeckName, setNewDeckName] = useState(''); // Store new deck name during editing
-
-  // Configure drag sensors with activation constraint
-  // Configure drag sensors with activation constraint
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
 
   const menuRef = useRef(null);
 
@@ -227,155 +212,6 @@ const FlashcardDashboard = () => {
       fetchDecks();
     }
   }, [user, view]);
-
-  // Handle drag start - with group drag support
-  const handleDragStart = (event) => {
-    const { active } = event;
-    setActiveId(active.id);
-    
-    // Check if the item being dragged is currently selected
-    if (selectedItemIds.has(active.id) && selectedItemIds.size > 1) {
-      // Scenario B: Dragging a selection - store all selected IDs
-      draggedGroupIdsRef.current = Array.from(selectedItemIds);
-      console.log('Group drag started:', draggedGroupIdsRef.current.length, 'items');
-    } else {
-      // Scenario A: Dragging a generic item - single item drag
-      draggedGroupIdsRef.current = null;
-    }
-  };
-
-  // Handle drag over (with folder drop detection)
-  const handleDragOver = (event) => {
-    const { active, over } = event;
-    
-    if (!over) {
-      setIsDragOverRoot(false);
-      setDragOverFolderId(null);
-      return;
-    }
-
-    // Check if dragging over root drop zone
-    if (over.id === 'root-drop-zone') {
-      setIsDragOverRoot(true);
-      setDragOverFolderId(null);
-      return;
-    }
-
-    setIsDragOverRoot(false);
-
-    // Guard Clause: Prevent grid reordering when dragging deck over folder
-    const activeItem = items.find(item => item.id === active.id);
-    const overItem = items.find(item => item.id === over.id);
-
-    if (activeItem?.type === 'deck' && overItem?.type === 'folder') {
-      // Deck over folder - set visual feedback and return early
-      // This prevents the grid from shifting/reordering
-      setDragOverFolderId(over.id);
-      return; // Early return prevents any reordering logic
-    }
-
-    // Normal sorting behavior for deck-to-deck or folder-to-folder
-    setDragOverFolderId(null);
-  };
-
-  // Handle drag end (with folder drop support and group drag)
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-
-    // Determine which items to move (group or single)
-    const itemsToMove = draggedGroupIdsRef.current || [active.id];
-    const isGroupDrag = draggedGroupIdsRef.current !== null && draggedGroupIdsRef.current.length > 1;
-
-    // Reset drag states
-    setActiveId(null);
-    setIsDragOverRoot(false);
-    setDragOverFolderId(null);
-    draggedGroupIdsRef.current = null; // Clear group drag ref
-
-    // Log for debugging
-    console.log('Drag End - active.id:', active.id, 'over.id:', over?.id, 'itemsToMove:', itemsToMove.length);
-
-    if (!over || active.id === over.id) {
-      console.log('Drag cancelled - no over or same position');
-      return;
-    }
-
-    // Check if dropping on root drop zone (move to root)
-    if (over.id === 'root-drop-zone') {
-      console.log('Moving to root:', isGroupDrag ? `${itemsToMove.length} items` : '1 item');
-      setItems((items) => {
-        return items.map(item => 
-          itemsToMove.includes(item.id)
-            ? { ...item, parentId: null }
-            : item
-        );
-      });
-      
-      // Clear selection after successful move
-      if (isGroupDrag) {
-        setSelectedItemIds(new Set());
-        setIsSelectionMode(false);
-      }
-      
-      toast.success(isGroupDrag ? `${itemsToMove.length} items moved to Library` : 'Item moved to Library');
-      return;
-    }
-
-    // Check if dropping into a folder (Trap Door Logic)
-    const activeItem = items.find(item => item.id === active.id);
-    const overItem = items.find(item => item.id === over.id);
-
-    if (activeItem?.type === 'deck' && overItem?.type === 'folder') {
-      console.log('Moving to folder:', over.id, isGroupDrag ? `${itemsToMove.length} items` : '1 item');
-      
-      // Atomic state update - move all items in group to folder
-      setItems((items) => {
-        return items.map(item => 
-          itemsToMove.includes(item.id)
-            ? { ...item, parentId: over.id }
-            : item
-        );
-      });
-
-      // Trigger pulse animation
-      setPulsingFolderId(over.id);
-      setTimeout(() => setPulsingFolderId(null), 600);
-
-      // Clear selection after successful move
-      if (isGroupDrag) {
-        setSelectedItemIds(new Set());
-        setIsSelectionMode(false);
-      }
-
-      toast.success(isGroupDrag ? `${itemsToMove.length} items moved to folder` : 'Item moved to folder');
-      return;
-    }
-
-    // Reordering within the same view (same parentId) - only for single item drags
-    // Group reordering is complex, so we'll only allow single item reordering
-    if (!isGroupDrag) {
-      const oldIndex = visibleItems.findIndex((item) => item.id === active.id);
-      const newIndex = visibleItems.findIndex((item) => item.id === over.id);
-
-      console.log('Reordering - oldIndex:', oldIndex, 'newIndex:', newIndex);
-
-      if (oldIndex === -1 || newIndex === -1) {
-        console.log('Item not found in visible items - oldIndex:', oldIndex, 'newIndex:', newIndex);
-        return; // Item not found in visible items
-      }
-
-      // Simple reordering using arrayMove
-      setItems((items) => {
-        const reorderedVisible = arrayMove(visibleItems, oldIndex, newIndex);
-        
-        // Get all items that are NOT in the current view (different parentId)
-        const otherItems = items.filter(item => item.parentId !== currentFolderId);
-        
-        // Return reordered visible items + other items
-        return [...reorderedVisible, ...otherItems];
-      });
-    }
-  };
 
   // BackToLibraryButton Component
   const BackToLibraryButton = ({ onClick }) => {
