@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import config from '../config/api';
+import { getAuthHeader } from '../utils/authHeader';
 
 const FeynmanMode = () => {
   const { user, profile, isPro } = useAuth();
@@ -59,11 +60,12 @@ const FeynmanMode = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // The backend spends AI quota against this token, not a body field.
+          ...(await getAuthHeader()),
         },
         body: JSON.stringify({
           concept: concept.trim(),
           explanation: explanation.trim(),
-          userId: user?.id,
         }),
       });
 

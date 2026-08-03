@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { saveGeneratedDeck } from '../utils/deckUtils';
 import { Sparkles } from 'lucide-react';
 import config from '../config/api';
+import { getAuthHeader } from '../utils/authHeader';
 
 const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   const { user } = useAuth();
@@ -56,11 +57,13 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       // API Call: Use FormData to send the file
       const formData = new FormData();
       formData.append('pdf', uploadedFile);
-      formData.append('userId', user.id);
 
       const response = await fetch(`${config.api.baseUrl}/api/generate-from-pdf`, {
         method: 'POST',
-        body: formData, // Don't set Content-Type header, browser will set it with boundary
+        // The backend spends AI quota against this token, not a body field.
+        // Content-Type is left unset so the browser adds the multipart boundary.
+        headers: await getAuthHeader(),
+        body: formData,
       });
 
       if (response.status === 403) {

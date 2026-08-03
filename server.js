@@ -775,18 +775,15 @@ app.post('/create-checkout-session', async (req, res) => {
   }
 });
 
-app.post('/api/generate-from-pdf', upload.single('pdf'), async (req, res) => {
+app.post('/api/generate-from-pdf', requireAuth, upload.single('pdf'), async (req, res) => {
   try {
     // Check if file was uploaded
     if (!req.file) {
       return res.status(400).json({ error: 'No PDF file uploaded' });
     }
 
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
+    // Quota is spent against the verified session, not a body field.
+    const userId = req.user.id;
 
     // Check PDF flashcard generation limit (monthly, 3 free)
     const pdfLimitCheck = await checkAndIncrementPDFLimit(userId);
@@ -976,20 +973,16 @@ ${cleanText}`;
   }
 });
 
-app.post('/api/analyze-feynman', async (req, res) => {
+app.post('/api/analyze-feynman', requireAuth, async (req, res) => {
   try {
     console.log('📥 Feynman analysis request received');
-    console.log('  - Request body:', JSON.stringify(req.body, null, 2));
 
-    const { concept, explanation, userId } = req.body;
+    const { concept, explanation } = req.body;
+    // Quota is spent against the verified session, not a body field.
+    const userId = req.user.id;
 
     if (!concept || !explanation) {
       return res.status(400).json({ error: 'Both concept and explanation are required' });
-    }
-
-    // Check AI usage limit (requires userId)
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
     }
 
     const limitCheck = await checkAndIncrementAILimit(userId);
