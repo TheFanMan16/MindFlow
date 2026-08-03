@@ -44,7 +44,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     // Vitest otherwise walks node_modules and the Electron build output.
-    include: ['src/**/*.test.{js,jsx}', 'utils/**/*.test.js'],
+    include: ['src/**/*.test.{js,jsx}', 'utils/**/*.test.js', 'services/**/*.test.js'],
   },
   envPrefix: 'VITE_',
   optimizeDeps: {

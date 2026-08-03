@@ -21,7 +21,13 @@ function handlerBody(path) {
   return serverSource.slice(start, next === -1 ? serverSource.length : next);
 }
 
-const AI_ROUTES = ['/api/analyze-feynman', '/api/generate-from-pdf'];
+const AI_ROUTES = [
+  '/api/analyze-feynman',
+  '/api/generate-from-pdf',
+  // The client has called this since the paste-notes tab shipped; the route
+  // did not exist and returned 404 in production.
+  '/api/generate-from-text',
+];
 
 describe('AI route authentication', () => {
   it.each(AI_ROUTES)('%s is registered behind requireAuth', (path) => {

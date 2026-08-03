@@ -137,6 +137,11 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 
 // Request authentication middleware - verifies the caller's Supabase JWT.
 // Routes must take the acting user from req.user, never from req.body.
+const {
+  generateFlashcards,
+  InvalidSourceTextError,
+} = require('./services/flashcardGenerator');
+
 const { createRequireAuth, createRequireAdmin } = require('./utils/auth');
 const requireAuth = createRequireAuth(supabaseAdmin);
 const requireAdmin = createRequireAdmin(supabaseAdmin);
@@ -836,146 +841,51 @@ app.post('/api/generate-from-pdf', requireAuth, upload.single('pdf'), async (req
       return res.status(400).json({ error: `Failed to parse PDF: ${parseError.message}` });
     }
 
-    // Truncate/Chunk: Take only the first 15,000 characters (roughly 3-4k tokens)
-    const cleanText = pdfText.slice(0, 15000);
+    const flashcards = await generateFlashcards(pdfText, {
+      supabaseUrl,
+      serviceRoleKey: supabaseServiceKey,
+    });
 
-    console.log('📄 Processing truncated text, length:', cleanText.length);
-    if (pdfText.length > 15000) {
-      console.log(`⚠️ Text truncated from ${pdfText.length} to ${cleanText.length} characters`);
-    }
-
-    // AI Generation: Construct prompt and call Gemini
-    const prompt = `You are a strict exam prep tool. Extract 15 key concepts from the text.
-
-Return ONLY a raw JSON Array. Do not use Markdown blocks. Do not say "Here is the JSON".
-
-The JSON must follow this exact schema: [{ "front": "Question...", "back": "Answer..." }].
-
-Keep definitions concise (under 20 words each). Do not include examples unless necessary.
-
-Text:
-${cleanText}`;
-
-    // Call Gemini Edge Function via raw fetch with Service Role Key
-    // CRITICAL: Use already-validated variables from initialization (guaranteed to exist)
-    const supabaseProjectUrl = supabaseUrl;
-    const serviceRoleKey = supabaseServiceKey;
-
-    // Construct the URL
-    const edgeFunctionUrl = `${supabaseProjectUrl}/functions/v1/gemini-chat`;
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Calling Gemini Edge Function for flashcard generation...');
-      console.log('  - Prompt length:', prompt.length, 'characters');
-      console.log('  - Text length:', cleanText.length, 'characters');
-      console.log('Edge Function URL:', edgeFunctionUrl);
-    }
-
-    // Make raw fetch request
-    let response;
-    try {
-      response = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${serviceRoleKey}`,
-        },
-        body: JSON.stringify({
-          prompt: prompt,
-          model: 'gemini-2.5-flash',
-          temperature: 0.7,
-          maxTokens: 8192,
-        }),
-      });
-
-      // Error Handling: Check response.ok
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        console.error('❌ Edge Function error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText,
-        });
-        throw new Error(`Edge Function returned ${response.status} ${response.statusText}: ${errorText}`);
-      }
-    } catch (fetchError) {
-      console.error('❌ Fetch error:', fetchError);
-      return res.status(500).json({ error: `AI generation failed: ${fetchError.message}` });
-    }
-
-    // Parse the response
-    let data;
-    try {
-      data = await response.json();
-    } catch (parseError) {
-      console.error('❌ JSON parse error:', parseError);
-      const textResponse = await response.text().catch(() => 'Could not read response');
-      console.error('Raw response:', textResponse.substring(0, 500));
-      return res.status(500).json({ error: 'Failed to parse Edge Function response' });
-    }
-
-    // Parse AI response
-    let flashcards;
-    try {
-      // Try to extract JSON from the response (AI might return markdown-wrapped JSON)
-      let responseText = data;
-      if (typeof data === 'string') {
-        responseText = data;
-      } else if (data?.text) {
-        responseText = data.text;
-      } else if (data?.response) {
-        responseText = data.response;
-      }
-
-      // Strip markdown
-      let cleanJson = responseText.trim();
-      cleanJson = cleanJson.replace(/```json/g, '').replace(/```/g, '').trim();
-
-      // Ensure we start at the first bracket (ignore intro text)
-      const firstBracket = cleanJson.indexOf('[');
-      const lastBracket = cleanJson.lastIndexOf(']');
-      if (firstBracket !== -1 && lastBracket !== -1) {
-        cleanJson = cleanJson.substring(firstBracket, lastBracket + 1);
-      }
-
-      // Safety check: Warn if JSON was truncated
-      if (!cleanJson.endsWith(']')) {
-        console.warn('⚠️ JSON was truncated - response may be incomplete');
-        console.warn('Last 100 chars:', cleanJson.slice(-100));
-      }
-
-      flashcards = JSON.parse(cleanJson);
-
-      // Validate the structure
-      if (!Array.isArray(flashcards)) {
-        throw new Error('Response is not an array');
-      }
-
-      // Validate each flashcard has front and back
-      flashcards = flashcards.filter(card =>
-        card &&
-        typeof card.front === 'string' &&
-        typeof card.back === 'string' &&
-        card.front.trim().length > 0 &&
-        card.back.trim().length > 0
-      );
-
-      if (flashcards.length === 0) {
-        throw new Error('No valid flashcards found in AI response');
-      }
-
-      console.log('✅ Successfully generated', flashcards.length, 'flashcards');
-    } catch (parseError) {
-      console.error('❌ JSON parsing error:', parseError);
-      console.error('Raw response:', typeof data === 'string' ? data.substring(0, 500) : JSON.stringify(data).substring(0, 500));
-      return res.status(500).json({ error: `Failed to parse AI response as JSON: ${parseError.message}. The AI may not have returned valid JSON.` });
-    }
-
-    // Return Data: Send flashcards array to frontend
     res.json({ flashcards });
   } catch (error) {
-    console.error('❌ PDF to Flashcards Error:', error.message);
-    console.error('Error details:', error);
+    if (error instanceof InvalidSourceTextError) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('PDF to flashcards failed:', error.message);
+    res.status(500).json({ error: error.message || 'An unexpected error occurred' });
+  }
+});
+
+// Generate flashcards from pasted text.
+// The client has called this since the paste-notes tab was added; the route
+// was never implemented, so that tab returned 404 "Route not found" in
+// production. Same pipeline as the PDF route, minus the parsing step.
+app.post('/api/generate-from-text', requireAuth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    // Quota is spent against the verified session, not a body field.
+    const userId = req.user.id;
+
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: 'No text provided' });
+    }
+
+    const limitCheck = await checkAndIncrementAILimit(userId);
+    if (!limitCheck.allowed) {
+      return res.status(403).json({ error: limitCheck.message });
+    }
+
+    const flashcards = await generateFlashcards(text, {
+      supabaseUrl,
+      serviceRoleKey: supabaseServiceKey,
+    });
+
+    res.json({ flashcards });
+  } catch (error) {
+    if (error instanceof InvalidSourceTextError) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Text to flashcards failed:', error.message);
     res.status(500).json({ error: error.message || 'An unexpected error occurred' });
   }
 });

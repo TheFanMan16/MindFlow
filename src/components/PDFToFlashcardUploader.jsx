@@ -200,10 +200,11 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // The backend spends AI quota against this token, not a body field.
+          ...(await getAuthHeader()),
         },
         body: JSON.stringify({
           text: pastedText.trim(),
-          userId: user.id,
         }),
       });
 
