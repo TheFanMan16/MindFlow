@@ -487,8 +487,6 @@ const FlashcardDashboard = () => {
           duration: 0.2,
           ease: [0.34, 1.56, 0.64, 1],
         } : {}}
-        {...attributes}
-        {...listeners}
         onClick={(e) => {
           // Don't trigger folder click if clicking on menu
           if (e.target.closest('.folder-menu-button') || e.target.closest('.folder-menu-dropdown')) {
@@ -765,8 +763,6 @@ const FlashcardDashboard = () => {
       <div
         ref={setNodeRef}
         style={style}
-        {...attributes}
-        {...listeners}
         onClick={(e) => {
           // Don't trigger deck click if clicking on menu
           if (e.target.closest('.menu-button') || e.target.closest('.menu-dropdown')) {
