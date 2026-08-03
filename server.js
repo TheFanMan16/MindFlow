@@ -135,6 +135,12 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   }
 });
 
+// Request authentication middleware - verifies the caller's Supabase JWT.
+// Routes must take the acting user from req.user, never from req.body.
+const { createRequireAuth, createRequireAdmin } = require('./utils/auth');
+const requireAuth = createRequireAuth(supabaseAdmin);
+const requireAdmin = createRequireAdmin(supabaseAdmin);
+
 if (process.env.NODE_ENV === 'development') {
   console.log('✅ Supabase Admin client initialized for Edge Function calls');
 }
@@ -1595,9 +1601,9 @@ app.post('/create-portal-session', handleCreatePortalSession);
 app.post('/api/create-portal-session', handleCreatePortalSession);
 
 // Admin User Deletion Endpoint
-// CRITICAL: This endpoint requires authentication and proper authorization
-// Should be protected with admin-only access in production
-app.post('/admin/delete-user', async (req, res) => {
+// Requires a verified Supabase session (requireAuth) AND profiles.is_admin
+// (requireAdmin). Both deny by default - see utils/auth.js.
+app.post('/admin/delete-user', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.body;
 
