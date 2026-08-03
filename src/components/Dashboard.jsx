@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
+import { getLastActivityAt, formatTimeAgo } from '../utils/lastActivity';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -22,22 +23,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
-
-  // Calculate time ago string
-  const getTimeAgo = (timestamp) => {
-    if (!timestamp) return 'Never';
-    const now = new Date();
-    const then = new Date(timestamp);
-    const diffMs = now - then;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-  };
 
   // Handle Stripe success redirect - refresh profile when redirected back after payment
   useEffect(() => {
@@ -569,16 +554,18 @@ const Dashboard = () => {
                 {card.description}
               </p>
 
-              {/* Last Used Label */}
-              <div style={{
-                fontSize: '11px',
-                color: 'rgba(255, 255, 255, 0.35)',
-                marginBottom: '16px',
-                fontWeight: '400',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                Last session: {getTimeAgo(localStorage.getItem(`lastUsed_${card.id}`))}
-              </div>
+              {/* Last Used Label - omitted for features that record no history */}
+              {formatTimeAgo(getLastActivityAt(card.id)) && (
+                <div style={{
+                  fontSize: '11px',
+                  color: 'rgba(255, 255, 255, 0.35)',
+                  marginBottom: '16px',
+                  fontWeight: '400',
+                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+                }}>
+                  Last session: {formatTimeAgo(getLastActivityAt(card.id))}
+                </div>
+              )}
 
               <button
                 onClick={(e) => {
@@ -587,8 +574,6 @@ const Dashboard = () => {
                     navigate('/login');
                     return;
                   }
-                  // Store last used timestamp
-                  localStorage.setItem(`lastUsed_${card.id}`, new Date().toISOString());
                   navigate(`/${card.view}`);
                 }}
                 style={{
