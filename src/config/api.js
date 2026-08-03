@@ -35,6 +35,8 @@ const requiredEnvVars = [
   'VITE_STRIPE_PRICE_ID',
   'VITE_SUPABASE_URL',
   'VITE_SUPABASE_ANON_KEY',
+  // Required in production: there is no correct default for the backend host.
+  'VITE_API_BASE_URL',
   // Note: VITE_GEMINI_API_KEY is NOT required - API key is stored in Supabase Edge Function
 ];
 
@@ -73,10 +75,13 @@ if (missingVars.length > 0 && isDevelopment) {
 }
 
 // Determine API base URL (backend proxy)
-// In production, points to Render backend; in development, points to localhost
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (
-  isProduction ? 'https://mindflow-backend.onrender.com' : 'http://localhost:3000'
-);
+// In development this defaults to the local Express server. In production
+// VITE_API_BASE_URL is required (see requiredEnvVars above) - there is no safe
+// default. The previous fallback pointed at mindflow-backend.onrender.com,
+// which is not the deployed backend, so a missing variable would have sent
+// every API call to the wrong host and failed in a way that looks like the
+// backend being down.
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 // Only create config object if validation passed (or in development)
 // In production, if validation failed above, we never reach this point
