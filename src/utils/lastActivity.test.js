@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getLastFocusSessionAt, getLastActivityAt, formatTimeAgo } from './lastActivity.js';
+import {
+  getLastFocusSessionAt,
+  getLastActivityAt,
+  formatTimeAgo,
+  formatSessionTimestamp,
+} from './lastActivity.js';
 
 const dashboardSource = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), '..', 'components', 'Dashboard.jsx'),
@@ -78,6 +83,70 @@ describe('getLastActivityAt', () => {
       expect(getLastActivityAt(featureId)).toBeNull();
     }
   );
+});
+
+describe('formatSessionTimestamp', () => {
+  // Built from local components so these assertions hold in any timezone -
+  // the bug being fixed is precisely about local vs UTC day boundaries.
+  const now = new Date(2026, 7, 3, 12, 0); // 3 Aug 2026, 12:00 local
+
+  it('returns an empty string when there is nothing to render', () => {
+    expect(formatSessionTimestamp(null, now)).toBe('');
+    expect(formatSessionTimestamp(undefined, now)).toBe('');
+    expect(formatSessionTimestamp('not-a-date', now)).toBe('');
+  });
+
+  it('labels a session from earlier today', () => {
+    const session = new Date(2026, 7, 3, 9, 30);
+    expect(formatSessionTimestamp(session.toISOString(), now)).toMatch(/^Today, /);
+  });
+
+  it('labels a session from yesterday', () => {
+    const session = new Date(2026, 7, 2, 22, 46);
+    expect(formatSessionTimestamp(session.toISOString(), now)).toMatch(/^Yesterday, /);
+  });
+
+  it('shows an explicit date for older sessions', () => {
+    const session = new Date(2026, 6, 28, 14, 55);
+    const formatted = formatSessionTimestamp(session.toISOString(), now);
+
+    expect(formatted).not.toMatch(/^(Today|Yesterday)/);
+    expect(formatted).toMatch(/Jul/);
+  });
+
+  it('uses local calendar days, not 24-hour arithmetic', () => {
+    // 23:30 yesterday is only ~12.5 hours before noon today, so an
+    // elapsed-time comparison would wrongly call it "Today".
+    const lateLastNight = new Date(2026, 7, 2, 23, 30);
+    expect(formatSessionTimestamp(lateLastNight.toISOString(), now)).toMatch(/^Yesterday, /);
+
+    // 00:30 today is only ~11.5 hours before noon and must read "Today".
+    const earlyToday = new Date(2026, 7, 3, 0, 30);
+    expect(formatSessionTimestamp(earlyToday.toISOString(), now)).toMatch(/^Today, /);
+  });
+
+  it('always includes a time component', () => {
+    const session = new Date(2026, 7, 3, 9, 5);
+    expect(formatSessionTimestamp(session.toISOString(), now)).toMatch(/\d{1,2}[:.]\d{2}/);
+  });
+});
+
+describe('TimerMode wiring', () => {
+  const timerSource = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '..', 'components', 'TimerMode.jsx'),
+    'utf8'
+  );
+
+  it('persists the focus intent so it survives unmount', () => {
+    // TimerMode unmounts on navigation, which MiniTimer exists to encourage.
+    expect(timerSource).toContain("localStorage.setItem('timer_focusIntent'");
+    expect(timerSource).toContain("localStorage.getItem('timer_focusIntent')");
+  });
+
+  it('renders session timestamps with their date', () => {
+    expect(timerSource).toContain('formatSessionTimestamp(session.timestamp)');
+    expect(timerSource).not.toContain("date.toLocaleTimeString([], { hour: '2-digit'");
+  });
 });
 
 describe('Dashboard wiring', () => {

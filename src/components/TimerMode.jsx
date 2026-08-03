@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTimer } from '../context/TimerContext';
 import { supabase } from '../lib/supabaseClient';
 import { useAccurateTimer } from '../hooks/useAccurateTimer';
+import { formatSessionTimestamp } from '../utils/lastActivity';
 
 const TimerMode = () => {
   const navigate = useNavigate();
@@ -16,7 +17,17 @@ const TimerMode = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(25 * 60); // in seconds
   const [timeElapsed, setTimeElapsed] = useState(0); // for flowmodoro
-  const [focusIntent, setFocusIntent] = useState(''); // Focus intent text
+  // Focus intent text - persisted because this component unmounts whenever the
+  // user navigates away, which MiniTimer exists to encourage. Without this the
+  // task silently empties mid-session and every entry saves as
+  // 'Untitled Session'.
+  const [focusIntent, setFocusIntent] = useState(() => {
+    try {
+      return localStorage.getItem('timer_focusIntent') || '';
+    } catch {
+      return '';
+    }
+  });
   const [activeSound, setActiveSound] = useState(null); // 'rain', 'forest', 'whitenoise', or null
   const [isSettingsOpen, setIsSettingsOpen] = useState(false); // Settings modal state
   // Custom durations (in minutes) - load from localStorage
@@ -1187,6 +1198,16 @@ const TimerMode = () => {
     }
   }, [sessionHistory]);
 
+  // Keep the focus intent across navigation, alongside the session history and
+  // durations that already survive it.
+  useEffect(() => {
+    try {
+      localStorage.setItem('timer_focusIntent', focusIntent);
+    } catch (error) {
+      console.error('Failed to save focus intent to localStorage:', error);
+    }
+  }, [focusIntent]);
+
   // Cleanup on unmount - stops all audio when user leaves the page or closes the app
   useEffect(() => {
     return () => {
@@ -2223,8 +2244,7 @@ const TimerMode = () => {
                   const durationMinutes = Math.floor(session.duration / 60);
                   const modeLabel = session.mode === 'pomodoro' ? 'Pomodoro' : 'Flowmodoro';
                   const modeColor = session.mode === 'pomodoro' ? '#3b82f6' : '#22d3ee';
-                  const date = new Date(session.timestamp);
-                  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  const timeStr = formatSessionTimestamp(session.timestamp);
 
                   return (
                     <div

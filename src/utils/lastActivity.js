@@ -63,6 +63,44 @@ export function getLastActivityAt(featureId) {
   return null;
 }
 
+/** Midnight local time on the day the given date falls in. */
+function startOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/**
+ * Absolute timestamp for a session log entry, e.g. "Today, 14:55".
+ *
+ * The log previously rendered the time only, so sixteen entries all read as
+ * bare clock times with no way to tell which day they belonged to - useless
+ * for spotting study patterns, which is the point of a session log. The full
+ * ISO timestamp was always stored; only the display dropped it.
+ *
+ * Day boundaries are compared in local time, not UTC, so a late-evening
+ * session does not display as "Yesterday" for users behind UTC.
+ *
+ * @param {string|null} timestamp - ISO timestamp
+ * @param {Date} [now] - injectable for testing
+ * @returns {string} empty string when there is nothing to render
+ */
+export function formatSessionTimestamp(timestamp, now = new Date()) {
+  if (!timestamp) return '';
+
+  const then = new Date(timestamp);
+  if (Number.isNaN(then.getTime())) return '';
+
+  const time = then.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dayDiff = Math.round(
+    (startOfLocalDay(now).getTime() - startOfLocalDay(then).getTime()) / 86400000
+  );
+
+  if (dayDiff === 0) return `Today, ${time}`;
+  if (dayDiff === 1) return `Yesterday, ${time}`;
+
+  const datePart = then.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  return `${datePart}, ${time}`;
+}
+
 /**
  * Human-readable elapsed time, e.g. "3 hours ago".
  *
