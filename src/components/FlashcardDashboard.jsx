@@ -377,19 +377,14 @@ const FlashcardDashboard = () => {
     }
   };
 
-  // DroppableBackButton Component
-  const DroppableBackButton = ({ onClick }) => {
-    const { setNodeRef, isOver } = useDroppable({
-      id: 'root-drop-zone',
-    });
-
+  // BackToLibraryButton Component
+  const BackToLibraryButton = ({ onClick }) => {
     return (
       <button
-        ref={setNodeRef}
         onClick={onClick}
         style={{
-          background: isOver || isDragOverRoot ? 'rgba(0, 255, 148, 0.15)' : 'transparent',
-          border: isOver || isDragOverRoot ? '2px solid #00FF94' : '1px solid rgba(255, 255, 255, 0.2)',
+          background: 'transparent',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
           borderRadius: '8px',
           padding: '8px 12px',
           color: '#ffffff',
@@ -402,16 +397,12 @@ const FlashcardDashboard = () => {
           transition: 'all 0.2s ease',
         }}
         onMouseEnter={(e) => {
-          if (!isOver && !isDragOverRoot) {
-            e.currentTarget.style.borderColor = '#00FF94';
-            e.currentTarget.style.backgroundColor = 'rgba(0, 255, 148, 0.05)';
-          }
+          e.currentTarget.style.borderColor = '#00FF94';
+          e.currentTarget.style.backgroundColor = 'rgba(0, 255, 148, 0.05)';
         }}
         onMouseLeave={(e) => {
-          if (!isOver && !isDragOverRoot) {
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+          e.currentTarget.style.backgroundColor = 'transparent';
         }}
       >
         <ChevronLeft size={18} style={{ stroke: '#00FF94' }} />
@@ -1624,7 +1615,7 @@ const FlashcardDashboard = () => {
             gap: '16px',
           }}>
             {currentFolderId !== null && (
-                <DroppableBackButton onClick={() => {
+                <BackToLibraryButton onClick={() => {
                   setCurrentFolderId(null);
                 }} />
               )}
@@ -1976,14 +1967,6 @@ const FlashcardDashboard = () => {
             </motion.div>
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={pointerWithin}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={visibleItems.map(item => item.id)} strategy={rectSortingStrategy}>
               <div style={{
                 maxWidth: '1200px',
                 margin: '0 auto',
@@ -2053,8 +2036,6 @@ const FlashcardDashboard = () => {
                 </motion.div>
               </AnimatePresence>
             </div>
-          </SortableContext>
-        </DndContext>
         )}
 
         {/* Create Folder Modal */}
