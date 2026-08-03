@@ -8,7 +8,9 @@ import { useTimer } from '../context/TimerContext';
 import { supabase } from '../lib/supabaseClient';
 import { useAccurateTimer } from '../hooks/useAccurateTimer';
 import { formatSessionTimestamp } from '../utils/lastActivity';
+import { recordFocusMinutes } from '../utils/focusProgress';
 import DurationInput from './DurationInput';
+import { toast } from 'react-hot-toast';
 
 const TimerMode = () => {
   const navigate = useNavigate();
@@ -623,48 +625,15 @@ const TimerMode = () => {
         if (isStopped && mode === 'pomodoro' && sessionSecondsRef.current > 0 && user?.id) {
           const partialMinutes = Math.floor(sessionSecondsRef.current / 60);
           if (partialMinutes > 0) {
-            supabase
-              .from('profiles')
-              .select('total_focus_minutes')
-              .eq('id', user.id)
-              .single()
-              .then(async ({ data: currentProfile }) => {
-                if (currentProfile) {
-                  await supabase
-                    .from('profiles')
-                    .update({ total_focus_minutes: (currentProfile.total_focus_minutes || 0) + partialMinutes })
-                    .eq('id', user.id);
-
-                  // Upsert into daily_activity
-                  const today = new Date().toISOString().split('T')[0];
-                  const { data: existingRow } = await supabase
-                    .from('daily_activity')
-                    .select('minutes_focused')
-                    .eq('user_id', user.id)
-                    .eq('date', today)
-                    .single();
-
-                  if (existingRow) {
-                    await supabase
-                      .from('daily_activity')
-                      .update({ minutes_focused: (existingRow.minutes_focused || 0) + partialMinutes })
-                      .eq('user_id', user.id)
-                      .eq('date', today);
-                  } else {
-                    await supabase
-                      .from('daily_activity')
-                      .insert({
-                        user_id: user.id,
-                        date: today,
-                        minutes_focused: partialMinutes,
-                      });
-                  }
-
-                  // Reset counter after saving
-                  sessionSecondsRef.current = sessionSecondsRef.current % 60;
-                  setSessionMinutes(0);
-                }
-              });
+            recordFocusMinutes(user.id, partialMinutes).then((result) => {
+              if (result.ok) {
+                // Only drop the recorded minutes once they are actually saved.
+                sessionSecondsRef.current = sessionSecondsRef.current % 60;
+                setSessionMinutes(0);
+              } else {
+                toast.error('Could not save your focus time. It will be retried next session.');
+              }
+            });
           } else {
             // If less than a minute, just reset the counter
             sessionSecondsRef.current = 0;
@@ -825,44 +794,11 @@ const TimerMode = () => {
       if (remainingSeconds > 0 && user?.id) {
         const partialMinutes = Math.floor(remainingSeconds / 60);
         if (partialMinutes > 0) {
-          supabase
-            .from('profiles')
-            .select('total_focus_minutes')
-            .eq('id', user.id)
-            .single()
-            .then(async ({ data: currentProfile }) => {
-              if (currentProfile) {
-                await supabase
-                  .from('profiles')
-                  .update({ total_focus_minutes: (currentProfile.total_focus_minutes || 0) + partialMinutes })
-                  .eq('id', user.id);
-
-                // Upsert into daily_activity
-                const today = new Date().toISOString().split('T')[0];
-                const { data: existingRow } = await supabase
-                  .from('daily_activity')
-                  .select('minutes_focused')
-                  .eq('user_id', user.id)
-                  .eq('date', today)
-                  .single();
-
-                if (existingRow) {
-                  await supabase
-                    .from('daily_activity')
-                    .update({ minutes_focused: (existingRow.minutes_focused || 0) + partialMinutes })
-                    .eq('user_id', user.id)
-                    .eq('date', today);
-                } else {
-                  await supabase
-                    .from('daily_activity')
-                    .insert({
-                      user_id: user.id,
-                      date: today,
-                      minutes_focused: partialMinutes,
-                    });
-                }
-              }
-            });
+          recordFocusMinutes(user.id, partialMinutes).then((result) => {
+            if (!result.ok) {
+              toast.error('Could not save your focus time for this session.');
+            }
+          });
         }
       }
 
