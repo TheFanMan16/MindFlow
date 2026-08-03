@@ -411,49 +411,23 @@ const FlashcardDashboard = () => {
     );
   };
 
-  // SortableFolderCard Component
-  const SortableFolderCard = ({ folder, itemCount, onClick, isMenuOpen, onToggleMenu, onDelete, isDragOver, isPulsing, isSelected, isSelectionMode, isPartOfDraggedGroup }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ 
-      id: folder.id,
-      disabled: isDragOver, // Disable sorting when deck is dragged over to prevent shifting
-    });
-
-    // Apple-style visual flare when deck is dragged over
-    const isHighlighted = isDragOver || isPulsing;
-    
-    // Get dnd-kit transform (for positioning during drag)
-    const dndTransform = CSS.Transform.toString(transform);
-
+  // FolderCard Component
+  const FolderCard = ({ folder, itemCount, onClick, isMenuOpen, onToggleMenu, onDelete, isSelected, isSelectionMode }) => {
     const style = {
-      transform: dndTransform || undefined, // Let Framer Motion handle scale via animate prop
-      transition: isHighlighted 
-        ? 'border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease'
-        : transition, // Use dnd-kit's transition for smooth dragging
-      opacity: isDragging ? 0.3 : (isPartOfDraggedGroup ? 0.4 : 1), // Dim if part of dragged group
+      transition: 'border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease',
       background: '#0A0A0A', // Deep dark grey/black - matches deck cards
       backdropFilter: 'blur(10px)',
       WebkitBackdropFilter: 'blur(10px)',
       borderRadius: '24px',
-      border: isSelected 
+      border: isSelected
         ? '3px solid #00FF94'
-        : (isHighlighted 
-          ? '3px solid #00FF94' 
-          : (isDragging ? '1px solid rgba(0, 255, 148, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)')),
+        : '1px solid rgba(255, 255, 255, 0.08)',
       outline: isSelected ? '2px solid #00FF94' : 'none',
       outlineOffset: isSelected ? '2px' : '0',
       cursor: 'pointer',
       boxShadow: isSelected
         ? '0 0 40px rgba(0, 255, 148, 0.6), 0 0 20px rgba(0, 255, 148, 0.3), 0 4px 24px rgba(0, 0, 0, 0.4)'
-        : (isHighlighted 
-          ? '0 0 40px rgba(0, 255, 148, 0.6), 0 0 20px rgba(0, 255, 148, 0.3), 0 4px 24px rgba(0, 0, 0, 0.4)'
-          : '0 4px 24px rgba(0, 0, 0, 0.4)'),
+        : '0 4px 24px rgba(0, 0, 0, 0.4)',
       position: 'relative',
       overflow: 'visible',
       display: 'flex',
@@ -461,23 +435,12 @@ const FlashcardDashboard = () => {
       padding: '20px 20px 24px 20px', // Increased bottom padding
       aspectRatio: '1 / 1', // Force square aspect ratio
       width: '100%',
-      zIndex: isDragging ? 50 : (isHighlighted || isSelected ? 40 : 'auto'),
+      zIndex: isSelected ? 40 : 'auto',
     };
 
     return (
       <motion.div
-        ref={setNodeRef}
         style={style}
-        animate={isHighlighted ? {
-          scale: isPulsing ? [1.1, 1.15, 1.1] : 1.1,
-        } : {}}
-        transition={isPulsing ? {
-          duration: 0.6,
-          ease: [0.34, 1.56, 0.64, 1],
-        } : isDragOver ? {
-          duration: 0.2,
-          ease: [0.34, 1.56, 0.64, 1],
-        } : {}}
         onClick={(e) => {
           // Don't trigger folder click if clicking on menu
           if (e.target.closest('.folder-menu-button') || e.target.closest('.folder-menu-dropdown')) {
@@ -492,18 +455,14 @@ const FlashcardDashboard = () => {
           onClick();
         }}
         onMouseEnter={(e) => {
-          if (!isDragging && !isHighlighted) {
-            e.currentTarget.style.transform = (dndTransform || '') + ' scale(1.02)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-            e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4)';
-          }
+          e.currentTarget.style.transform = 'scale(1.02)';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+          e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4)';
         }}
         onMouseLeave={(e) => {
-          if (!isDragging && !isHighlighted) {
-            e.currentTarget.style.transform = dndTransform || '';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-            e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4)';
-          }
+          e.currentTarget.style.transform = '';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+          e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4)';
         }}
       >
         {/* Clean Menu Button */}
@@ -709,30 +668,18 @@ const FlashcardDashboard = () => {
     );
   };
 
-  // SortableDeckCard Component
-  const SortableDeckCard = ({ deck, cardsDue, isMenuOpen, onDeckClick, onToggleMenu, onRename, onDelete, isSelected, isSelectionMode, isPartOfDraggedGroup, editingDeckId, newDeckName, setNewDeckName, onUpdateDeckName }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: deck.id });
-
+  // DeckCard Component
+  const DeckCard = ({ deck, cardsDue, isMenuOpen, onDeckClick, onToggleMenu, onRename, onDelete, isSelected, isSelectionMode, editingDeckId, newDeckName, setNewDeckName, onUpdateDeckName }) => {
     const gradient = getDeckGradient();
 
     const style = {
-      transform: CSS.Transform.toString(transform),
-      transition: transition, // Use dnd-kit's transition for smooth dragging
-      opacity: isDragging ? 0.3 : (isPartOfDraggedGroup ? 0.4 : 1), // Dim if part of dragged group
       background: '#0A0A0A', // Deep dark grey/black
       backdropFilter: 'blur(10px)',
       WebkitBackdropFilter: 'blur(10px)',
       borderRadius: '24px',
-      border: isSelected 
+      border: isSelected
         ? '3px solid #00FF94'
-        : (isDragging ? '1px solid rgba(0, 255, 148, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)'),
+        : '1px solid rgba(255, 255, 255, 0.1)',
       outline: isSelected ? '2px solid #00FF94' : 'none',
       outlineOffset: isSelected ? '2px' : '0',
       cursor: 'pointer',
@@ -747,12 +694,11 @@ const FlashcardDashboard = () => {
       padding: '24px',
       aspectRatio: '1 / 1', // Force square aspect ratio
       width: '100%',
-      zIndex: isDragging ? 50 : (isSelected ? 40 : 'auto'),
+      zIndex: isSelected ? 40 : 'auto',
     };
 
     return (
       <div
-        ref={setNodeRef}
         style={style}
         onClick={(e) => {
           // Don't trigger deck click if clicking on menu
@@ -764,18 +710,14 @@ const FlashcardDashboard = () => {
           onDeckClick(deck.id, e);
         }}
         onMouseEnter={(e) => {
-          if (!isDragging && !transform) {
-            e.currentTarget.style.transform = 'scale(1.02)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-            e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.4)';
-          }
+          e.currentTarget.style.transform = 'scale(1.02)';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+          e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.4)';
         }}
         onMouseLeave={(e) => {
-          if (!isDragging && !transform) {
-            e.currentTarget.style.transform = '';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.3)';
-          }
+          e.currentTarget.style.transform = '';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+          e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.3)';
         }}
       >
 
@@ -1994,12 +1936,10 @@ const FlashcardDashboard = () => {
                 if (item.type === 'folder') {
                   const itemCount = items.filter(i => i.parentId === item.id).length;
                   return (
-                    <SortableFolderCard
+                    <FolderCard
                       key={item.id}
                       folder={item}
                       itemCount={itemCount}
-                      isDragOver={dragOverFolderId === item.id}
-                      isPulsing={pulsingFolderId === item.id}
                       isMenuOpen={activeFolderMenuId === item.id}
                       onClick={() => handleFolderClick(item.id)}
                       onToggleMenu={toggleFolderMenu}
@@ -2013,7 +1953,7 @@ const FlashcardDashboard = () => {
                   if (!deck) return null;
                   const cardsDue = getCardsDue(deck.id);
                   return (
-                    <SortableDeckCard
+                    <DeckCard
                       key={item.id}
                       deck={deck}
                       cardsDue={cardsDue}
