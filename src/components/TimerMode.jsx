@@ -8,6 +8,7 @@ import { useTimer } from '../context/TimerContext';
 import { supabase } from '../lib/supabaseClient';
 import { useAccurateTimer } from '../hooks/useAccurateTimer';
 import { formatSessionTimestamp } from '../utils/lastActivity';
+import DurationInput from './DurationInput';
 
 const TimerMode = () => {
   const navigate = useNavigate();
@@ -2412,131 +2413,27 @@ const TimerMode = () => {
 
             {/* Settings Inputs */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Pomodoro Duration */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  marginBottom: '8px',
-                }}>
-                  Pomodoro Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="120"
-                  value={pomodoroDuration}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 25;
-                    setPomodoroDuration(Math.max(1, Math.min(120, value)));
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    color: '#ffffff',
-                    fontSize: '16px',
-                    outline: 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                />
-              </div>
-
-              {/* Short Break Duration */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  marginBottom: '8px',
-                }}>
-                  Short Break Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="60"
-                  value={shortBreakDuration}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 5;
-                    setShortBreakDuration(Math.max(1, Math.min(60, value)));
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    color: '#ffffff',
-                    fontSize: '16px',
-                    outline: 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                />
-              </div>
-
-              {/* Long Break Duration */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  marginBottom: '8px',
-                }}>
-                  Long Break Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="120"
-                  value={longBreakDuration}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 15;
-                    setLongBreakDuration(Math.max(1, Math.min(120, value)));
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    color: '#ffffff',
-                    fontSize: '16px',
-                    outline: 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                />
-              </div>
+              <DurationInput
+                label="Pomodoro Duration (minutes)"
+                value={pomodoroDuration}
+                min={1}
+                max={120}
+                onCommit={setPomodoroDuration}
+              />
+              <DurationInput
+                label="Short Break Duration (minutes)"
+                value={shortBreakDuration}
+                min={1}
+                max={60}
+                onCommit={setShortBreakDuration}
+              />
+              <DurationInput
+                label="Long Break Duration (minutes)"
+                value={longBreakDuration}
+                min={1}
+                max={120}
+                onCommit={setLongBreakDuration}
+              />
             </div>
 
             {/* Save Button */}
