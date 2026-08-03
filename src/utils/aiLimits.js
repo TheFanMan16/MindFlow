@@ -44,7 +44,7 @@ export async function getAIUsageCount(userId) {
  */
 export async function incrementAIUsage(userId) {
   if (!userId) {
-    console.error('incrementAIUsage: userId is required');
+    console.error('incrementAIUsage called without a user');
     return 0;
   }
 

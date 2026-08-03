@@ -215,12 +215,8 @@ const Dashboard = () => {
     try {
       setIsSubscribing(true);
 
-      // Get user ID from AuthContext (already available, no need to fetch again)
-      console.log('🔍 Step 1: Getting user from AuthContext');
-      console.log('🔍 User from context:', user ? { id: user.id, email: user.email } : 'null/undefined');
-
       if (!user || !user.id) {
-        console.error('❌ Error: User not available in context', { user });
+        console.error('Subscribe blocked: no authenticated user in context');
         alert('Error: Please log in to subscribe.');
         setIsSubscribing(false);
         return;

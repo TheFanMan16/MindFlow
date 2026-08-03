@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }) => {
   // Fetch profile whenever user changes
   useEffect(() => {
     if (user?.id) {
-      console.log('User ID changed, fetching profile:', user.id);
+      console.log('Authenticated user changed, fetching profile');
       fetchProfile(user.id, user.email);
     } else {
       setProfile(null);

@@ -59,20 +59,6 @@ const Sidebar = () => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
 
-  // Debug logging for admin button
-  React.useEffect(() => {
-    console.log('SIDEBAR CHECK -> Email:', profile?.email, 'Role:', profile?.role);
-    console.log('SIDEBAR CHECK -> is_admin:', profile?.is_admin, '(type:', typeof profile?.is_admin, ')');
-    console.log('SIDEBAR CHECK -> is_admin === true?', profile?.is_admin === true);
-    console.log('SIDEBAR CHECK -> Full profile:', profile);
-
-    // Direct database check for debugging
-    if (profile?.email) {
-      console.log('SIDEBAR: To verify in Supabase, run:');
-      console.log(`SELECT email, is_admin, role FROM profiles WHERE email = '${profile.email}';`);
-    }
-  }, [profile]);
-
   const menuItems = [
     {
       path: '/dashboard',
