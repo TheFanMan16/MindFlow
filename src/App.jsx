@@ -17,6 +17,7 @@ import Success from './pages/Success';
 import Login from './pages/Login';
 import UpdatePassword from './pages/Auth/UpdatePassword';
 import AuthCallback from './pages/AuthCallback';
+import NotFound from './pages/NotFound';
 import SentryModal from './components/SentryModal';
 import MiniTimer from './components/MiniTimer';
 import { useAuth } from './context/AuthContext';
@@ -499,8 +500,15 @@ function App() {
           }
         />
 
-        {/* Catch All - redirect to home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Catch All - an unknown path is an error, not a silent trip home */}
+        <Route
+          path="*"
+          element={
+            <MainLayout>
+              <NotFound />
+            </MainLayout>
+          }
+        />
       </Routes>
     </div>
   );
