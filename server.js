@@ -236,14 +236,6 @@ app.use(generalLimiter);
 app.use('/api/generate-from-pdf', aiLimiter);
 app.use('/api/analyze-feynman', aiLimiter);
 
-// Canvas Routes
-const canvasRoutes = require('./routes/canvas');
-app.use('/api/canvas', canvasRoutes);
-
-// Initialize Background Workers
-const scheduleCanvasSync = require('./jobs/canvasCron');
-scheduleCanvasSync();
-
 // Stripe Webhook Handler - MUST be BEFORE express.json() middleware
 // Stripe webhooks require raw body data for signature verification
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
