@@ -7,9 +7,6 @@ import StudyInterface from './StudyInterface';
 import { toast } from 'react-hot-toast';
 import { Zap, Play, Layers, Folder, FolderPlus, ChevronLeft, X, Check, Trash2, Move, Brain, Hand } from 'lucide-react';
 import FolderGroup from './FolderGroup';
-import { DndContext, DragOverlay, pointerWithin, useSensor, useSensors, PointerSensor, useDroppable } from '@dnd-kit/core';
-import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const FlashcardDashboard = () => {
