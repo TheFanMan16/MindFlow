@@ -167,6 +167,15 @@ const allowedOrigins = [
   'https://mind-flow-two-dusky.vercel.app', // Production frontend (Vercel)
 ];
 
+// Where Stripe sends the user back to after checkout or the billing portal.
+// Defaults to the dev server so local behaviour is unchanged; set APP_BASE_URL
+// in the deployed environment or paying users land on localhost.
+const appBaseUrl = (process.env.APP_BASE_URL || 'http://localhost:5173').replace(/\/$/, '');
+
+if (isProduction && !process.env.APP_BASE_URL) {
+  console.warn('⚠️  APP_BASE_URL is not set - Stripe will redirect users to localhost.');
+}
+
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
@@ -605,15 +614,13 @@ function chunkText(text, chunkSize = 4000) {
   return chunks;
 }
 
-app.post('/create-checkout-session', async (req, res) => {
+app.post('/create-checkout-session', requireAuth, async (req, res) => {
   try {
-    const { userId, email, priceId: requestPriceId } = req.body;
-
-    // Validate userId is provided
-    if (!userId) {
-      console.error('❌ Error: userId is missing from request body');
-      return res.status(400).json({ error: 'User ID is required' });
-    }
+    const { priceId: requestPriceId } = req.body;
+    // Checkout is always created for the signed-in user, using the email on
+    // their verified token rather than one supplied by the caller.
+    const userId = req.user.id;
+    const email = req.user.email;
 
     if (!supabase) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -695,8 +702,8 @@ app.post('/create-checkout-session', async (req, res) => {
         metadata: {
           userId: userId,
         },
-        success_url: 'http://localhost:5173/dashboard?success=true',
-        cancel_url: 'http://localhost:5173/dashboard?canceled=true',
+        success_url: `${appBaseUrl}/dashboard?success=true`,
+        cancel_url: `${appBaseUrl}/dashboard?canceled=true`,
       });
 
       console.log('✅ Checkout session created successfully');
@@ -754,8 +761,8 @@ app.post('/create-checkout-session', async (req, res) => {
           metadata: {
             userId: userId,
           },
-          success_url: 'http://localhost:5173/dashboard?success=true',
-          cancel_url: 'http://localhost:5173/dashboard?canceled=true',
+          success_url: `${appBaseUrl}/dashboard?success=true`,
+          cancel_url: `${appBaseUrl}/dashboard?canceled=true`,
         });
 
         console.log('✅ Checkout session created successfully after self-healing');
@@ -1127,12 +1134,9 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
   }
 });
 
-app.post('/cancel-subscription', async (req, res) => {
-  const { userId } = req.body;
-
-  if (!userId) {
-    return res.status(400).json({ error: 'User ID is required' });
-  }
+app.post('/cancel-subscription', requireAuth, async (req, res) => {
+  // Only ever cancels the caller's own subscription.
+  const userId = req.user.id;
 
   try {
     // 1. Get the customer ID from Supabase
@@ -1193,18 +1197,10 @@ app.post('/cancel-subscription', async (req, res) => {
 
 // Get Subscription Details Route
 // GET endpoint - reads userId from query parameters
-app.get('/get-subscription-details', async (req, res) => {
-  // #region agent log
-  console.log('🔍 DEBUG: get-subscription-details GET endpoint called');
-  logEntry({ location: 'server.js:434', message: 'get-subscription-details GET endpoint called', data: { method: req.method, query: req.query, userId: req.query.userId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'L' });
-  // #endregion
-
+app.get('/get-subscription-details', requireAuth, async (req, res) => {
   try {
-    const { userId } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required in query parameters' });
-    }
+    // Subscription details are only ever returned for the caller.
+    const userId = req.user.id;
 
     if (!supabase) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -1271,27 +1267,11 @@ app.get('/get-subscription-details', async (req, res) => {
   }
 });
 
-// POST endpoint - reads userId from request body
-app.post('/get-subscription-details', async (req, res) => {
-  // #region agent log
-  console.log('🔍 DEBUG: get-subscription-details POST endpoint called');
-  logEntry({ location: 'server.js:490', message: 'get-subscription-details POST endpoint called', data: { method: req.method, path: req.path, url: req.url, hasBody: !!req.body, bodyKeys: req.body ? Object.keys(req.body) : [], userId: req.body?.userId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'A' });
-  // #endregion
-
+// POST variant - same behaviour as the GET above
+app.post('/get-subscription-details', requireAuth, async (req, res) => {
   try {
-    // Extract userId from req.body
-    const { userId } = req.body;
-
-    // Debug logging
-    console.log('🔍 Checking subscription for User ID:', userId);
-
-    // Validation: If userId is undefined, return status 400 immediately
-    if (!userId || userId === undefined) {
-      // #region agent log
-      logEntry({ location: 'server.js:502', message: 'Validation failed - userId is undefined', data: { hasBody: !!req.body, bodyKeys: req.body ? Object.keys(req.body) : [] }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'Q' });
-      // #endregion
-      return res.status(400).json({ error: 'User ID is required in request body' });
-    }
+    // Subscription details are only ever returned for the caller.
+    const userId = req.user.id;
 
     if (!supabase) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -1374,13 +1354,10 @@ app.post('/get-subscription-details', async (req, res) => {
 
 // Sync Subscription Status Route
 // Manually sync subscription status from Stripe to database
-app.post('/api/user/sync-subscription', async (req, res) => {
+app.post('/api/user/sync-subscription', requireAuth, async (req, res) => {
   try {
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
+    // Only ever re-syncs the caller's own plan.
+    const userId = req.user.id;
 
     if (!supabase) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -1484,12 +1461,9 @@ app.post('/api/user/sync-subscription', async (req, res) => {
 // Helper to handle portal session creation with error recovery
 async function handleCreatePortalSession(req, res) {
   try {
-    const { userId } = req.body;
-    console.log('Received portal request for user:', userId);
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
+    // The portal URL grants access to invoices and payment methods, so the
+    // customer is resolved from the verified session only.
+    const userId = req.user.id;
 
     if (!supabase) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -1513,7 +1487,7 @@ async function handleCreatePortalSession(req, res) {
     try {
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
-        return_url: 'http://localhost:5173/subscription',
+        return_url: `${appBaseUrl}/settings`,
       });
       return res.json({ url: session.url });
 
@@ -1571,7 +1545,7 @@ async function handleCreatePortalSession(req, res) {
         console.log(`🔄 Retrying portal session with ID: ${newCustomerId}`);
         const session = await stripe.billingPortal.sessions.create({
           customer: newCustomerId,
-          return_url: 'http://localhost:5173/subscription',
+          return_url: `${appBaseUrl}/settings`,
         });
 
         return res.json({ url: session.url });
@@ -1588,10 +1562,10 @@ async function handleCreatePortalSession(req, res) {
 }
 
 // Stripe Customer Portal Route
-app.post('/create-portal-session', handleCreatePortalSession);
+app.post('/create-portal-session', requireAuth, handleCreatePortalSession);
 
 // Also register at /api path for proxy compatibility
-app.post('/api/create-portal-session', handleCreatePortalSession);
+app.post('/api/create-portal-session', requireAuth, handleCreatePortalSession);
 
 // Admin User Deletion Endpoint
 // Requires a verified Supabase session (requireAuth) AND profiles.is_admin

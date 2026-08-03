@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import config from '../config/api';
+import { getAuthHeader } from '../utils/authHeader';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -225,23 +226,14 @@ const Dashboard = () => {
         return;
       }
 
-      // Prepare request body (include email for customer creation)
-      const requestBody = {
-        userId: user.id,
-        email: user.email || undefined, // Include email if available
-      };
-      console.log('🔍 Step 2: Preparing request body:', requestBody);
-      console.log('Sending User ID:', user.id);
-      console.log('Sending Email:', user.email);
-      console.log('Request body stringified:', JSON.stringify(requestBody));
-
-      // Call the Express server to create checkout session
+      // The server takes the user and email from the verified token.
       const response = await fetch(`${config.api.baseUrl}/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(await getAuthHeader()),
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({}),
       });
 
       if (!response.ok) {
@@ -296,13 +288,13 @@ const Dashboard = () => {
       }
 
       // Call the Express server to cancel subscription
-      console.log('📤 Calling cancel-subscription with userId:', user.id);
       const response = await fetch(`${config.api.baseUrl}/cancel-subscription`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(await getAuthHeader()),
         },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({}),
       });
 
       console.log('📥 Response status:', response.status, response.statusText);
@@ -357,13 +349,13 @@ const Dashboard = () => {
 
     try {
       // Call the Express server to create billing portal session
-      console.log('📤 Creating billing portal session for userId:', user.id);
       const response = await fetch(`${config.api.baseUrl}/create-portal-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(await getAuthHeader()),
         },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({}),
       });
 
       if (!response.ok) {

@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import config from '../config/api';
+import { getAuthHeader } from '../utils/authHeader';
 import {
   Clock,
   Volume2,
@@ -44,8 +45,8 @@ const SettingsMode = () => {
       try {
         const response = await fetch(`${config.api.baseUrl}/get-subscription-details`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id }),
+          headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+          body: JSON.stringify({}),
         });
 
         if (response.ok) {
@@ -83,8 +84,8 @@ const SettingsMode = () => {
       try {
         const response = await fetch(`${config.api.baseUrl}/get-subscription-details`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id }),
+          headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+          body: JSON.stringify({}),
         });
 
         if (response.ok) {
@@ -175,8 +176,8 @@ const SettingsMode = () => {
 
       const response = await fetch(`${config.api.baseUrl}/create-checkout-session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, email: user.email }),
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+        body: JSON.stringify({}),
       });
 
       if (!response.ok) {
@@ -205,8 +206,8 @@ const SettingsMode = () => {
     try {
       const response = await fetch(`${config.api.baseUrl}/create-portal-session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+        body: JSON.stringify({}),
       });
       const data = await response.json();
 
@@ -230,8 +231,8 @@ const SettingsMode = () => {
     try {
       const response = await fetch(`${config.api.baseUrl}/api/user/sync-subscription`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+        body: JSON.stringify({}),
       });
 
       const data = await response.json();
