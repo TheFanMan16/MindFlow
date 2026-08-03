@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
+import { validateAiInput } from '../utils/aiInput';
 
 const FeynmanMode = () => {
   const { user, profile, isPro } = useAuth();
@@ -42,13 +43,16 @@ const FeynmanMode = () => {
 
   // Analyze explanation using backend API
   const analyzeExplanation = async () => {
-    if (!concept.trim()) {
-      alert('Please enter a target concept first.');
+    // Checked again on the server - this is fast feedback, not the control.
+    const conceptError = validateAiInput(concept, 'concept', 'A concept');
+    if (conceptError) {
+      toast.error(conceptError);
       return;
     }
 
-    if (!explanation.trim()) {
-      alert('Please enter an explanation first.');
+    const explanationError = validateAiInput(explanation, 'explanation', 'Your explanation');
+    if (explanationError) {
+      toast.error(explanationError);
       return;
     }
 

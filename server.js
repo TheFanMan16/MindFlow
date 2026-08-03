@@ -142,6 +142,9 @@ const {
   InvalidSourceTextError,
 } = require('./services/flashcardGenerator');
 
+// Minimum input lengths, shared with the browser so the two cannot drift.
+const aiInputLimits = require('./utils/aiInputLimits.json');
+
 const { createRequireAuth, createRequireAdmin } = require('./utils/auth');
 const requireAuth = createRequireAuth(supabaseAdmin);
 const requireAdmin = createRequireAdmin(supabaseAdmin);
@@ -898,8 +901,26 @@ app.post('/api/analyze-feynman', requireAuth, async (req, res) => {
     // Quota is spent against the verified session, not a body field.
     const userId = req.user.id;
 
-    if (!concept || !explanation) {
+    // Validated before the quota is touched, so junk input costs nothing.
+    // The client checks the same minimums for fast feedback, but a client
+    // check is a convenience, not a control.
+    const conceptText = typeof concept === 'string' ? concept.trim() : '';
+    const explanationText = typeof explanation === 'string' ? explanation.trim() : '';
+
+    if (!conceptText || !explanationText) {
       return res.status(400).json({ error: 'Both concept and explanation are required' });
+    }
+
+    if (conceptText.length < aiInputLimits.concept) {
+      return res
+        .status(400)
+        .json({ error: `Concept must be at least ${aiInputLimits.concept} characters` });
+    }
+
+    if (explanationText.length < aiInputLimits.explanation) {
+      return res
+        .status(400)
+        .json({ error: `Explanation must be at least ${aiInputLimits.explanation} characters` });
     }
 
     const limitCheck = await checkAndIncrementAILimit(userId);

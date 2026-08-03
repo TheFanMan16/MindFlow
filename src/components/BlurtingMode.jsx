@@ -4,6 +4,8 @@ import { generateJSONWithGemini } from '../utils/gemini';
 import { useAuth } from '../context/AuthContext';
 import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
 import { supabase } from '../lib/supabaseClient';
+import { toast } from 'react-hot-toast';
+import { validateAiInput } from '../utils/aiInput';
 
 const BlurtingMode = () => {
   const { isPro, user, profile, refreshProfile } = useAuth();
@@ -113,6 +115,19 @@ const BlurtingMode = () => {
   const handleAIAnalysis = async () => {
     if (!user?.id) {
       alert('Please log in to use AI features.');
+      return;
+    }
+
+    // Reject input too thin to grade before spending a daily AI use on it.
+    const sourceError = validateAiInput(sourceText, 'sourceText', 'Your source material');
+    if (sourceError) {
+      toast.error(sourceError);
+      return;
+    }
+
+    const attemptError = validateAiInput(userAttempt, 'blurt', 'Your recall attempt');
+    if (attemptError) {
+      toast.error(attemptError);
       return;
     }
 

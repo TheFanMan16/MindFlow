@@ -1047,10 +1047,10 @@ const FlashcardDashboard = () => {
     }
   };
 
-  // Handle bulk move (placeholder for now)
+  // Handle bulk move (not built yet - decks move one at a time via the card menu)
   const handleBulkMove = () => {
     if (selectedItemIds.size === 0) return;
-    toast.info('Bulk move feature coming soon!');
+    toast('Bulk move is not available yet - move decks individually from the card menu.');
   };
 
   // Handle delete deck

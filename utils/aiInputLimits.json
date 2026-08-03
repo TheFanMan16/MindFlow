@@ -1,0 +1,7 @@
+{
+  "_comment": "Minimum characters accepted by each AI feature. Shared by the Express server (require) and the browser (Vite JSON import) so the client's fast feedback and the server's enforcement cannot drift apart. Below these lengths there is nothing for the model to work with, and a request would spend a user's daily quota to produce nonsense.",
+  "concept": 3,
+  "explanation": 50,
+  "blurt": 50,
+  "sourceText": 100
+}
