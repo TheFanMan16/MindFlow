@@ -7,9 +7,15 @@ import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import ConfirmModal from './ConfirmModal';
 import {
+  getReminderPreference,
+  setReminderPreference,
+  requestNotificationPermission,
+} from '../utils/notifications';
+import {
   Clock,
   Volume2,
   Shield,
+  Bell,
   Crown,
   RefreshCw,
   ExternalLink,
@@ -40,6 +46,30 @@ const SettingsMode = () => {
 
   // Destructive-action confirmation
   const [showResetModal, setShowResetModal] = useState(false);
+
+  // Cards-due reminders
+  const [remindersEnabled, setRemindersEnabled] = useState(() => getReminderPreference());
+
+  const handleToggleReminders = async () => {
+    if (remindersEnabled) {
+      setReminderPreference(false);
+      setRemindersEnabled(false);
+      toast.success('Review reminders turned off.');
+      return;
+    }
+    const permission = await requestNotificationPermission();
+    if (permission === 'unsupported') {
+      toast.error('This browser does not support notifications.');
+      return;
+    }
+    if (permission !== 'granted') {
+      toast.error('Notifications are blocked for this site. Allow them in your browser settings first.');
+      return;
+    }
+    setReminderPreference(true);
+    setRemindersEnabled(true);
+    toast.success("You'll get one reminder a day when cards are due.");
+  };
 
   // Fetch subscription status
   useEffect(() => {
@@ -446,6 +476,36 @@ const SettingsMode = () => {
             </div>
           </section>
         </div>
+
+        {/* Notifications */}
+        <section className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <Bell className="text-purple-400" size={24} />
+            <h2 className="text-xl font-semibold text-white">Notifications</h2>
+          </div>
+          <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-6">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+              <div>
+                <h3 className="text-white font-medium mb-1">Daily review reminder</h3>
+                <p className="text-sm text-slate-500">
+                  One browser notification a day when flashcards are due — never more.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleReminders}
+                role="switch"
+                aria-checked={remindersEnabled}
+                className={`px-6 py-2.5 rounded-xl font-medium transition-all border ${
+                  remindersEnabled
+                    ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+                    : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {remindersEnabled ? 'On' : 'Off'}
+              </button>
+            </div>
+          </div>
+        </section>
 
         {/* Data & Privacy */}
         <section>

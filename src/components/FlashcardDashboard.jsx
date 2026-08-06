@@ -5,10 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import PDFToFlashcardUploader from './PDFToFlashcardUploader';
 import StudyInterface from './StudyInterface';
 import { toast } from 'react-hot-toast';
-import { Zap, Play, Layers, Folder, FolderPlus, ChevronLeft, X, Check, Trash2, Move, Brain, Hand } from 'lucide-react';
+import { Zap, Play, Layers, Folder, FolderPlus, ChevronLeft, X, Check, Trash2, Move, Brain, Hand, Upload } from 'lucide-react';
 import FolderGroup from './FolderGroup';
 import { AnimatePresence, motion } from 'framer-motion';
-import { downloadAnkiCsv } from '../utils/ankiExport';
+import { downloadAnkiCsv, parseAnkiText } from '../utils/ankiExport';
+import { saveGeneratedDeck } from '../utils/deckUtils';
 
 const FlashcardDashboard = () => {
   const navigate = useNavigate();
@@ -17,6 +18,12 @@ const FlashcardDashboard = () => {
   const [selectedDeckId, setSelectedDeckId] = useState(null);
   const [decks, setDecks] = useState([]);
   const [decksLoading, setDecksLoading] = useState(true);
+  const [deckRefresh, setDeckRefresh] = useState(0); // bump to refetch decks in place
+  // Anki import modal
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importDeckName, setImportDeckName] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState(null); // Track which deck's menu is open
   const [activeFolderMenuId, setActiveFolderMenuId] = useState(null); // Track which folder's menu is open
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Multi-select mode
@@ -209,7 +216,7 @@ const FlashcardDashboard = () => {
     if (view === 'dashboard') {
       fetchDecks();
     }
-  }, [user, view]);
+  }, [user, view, deckRefresh]);
 
   // BackToLibraryButton Component
   const BackToLibraryButton = ({ onClick }) => {
@@ -1257,6 +1264,55 @@ const FlashcardDashboard = () => {
     toast.success('Deck moved to Library');
   };
 
+  // Import an Anki text export (or our CSV) into a new deck
+  const handleImportDeck = async () => {
+    if (!user?.id) {
+      toast.error('Log in to import decks.');
+      return;
+    }
+    const cards = parseAnkiText(importText);
+    if (cards.length === 0) {
+      toast.error('No cards found. Export from Anki as "Notes in Plain Text" and paste or upload the file.');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const title = importDeckName.trim() ||
+        `Anki Import - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      const result = await saveGeneratedDeck(cards, title, user.id);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save deck');
+      }
+      toast.success(`Imported ${result.cardCount} cards into "${title}".`);
+      setShowImportModal(false);
+      setImportText('');
+      setImportDeckName('');
+      setDeckRefresh((c) => c + 1);
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Anki import failed:', error);
+      }
+      toast.error('Could not import the deck. Please try again.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImportText(String(reader.result || ''));
+      if (!importDeckName && file.name) {
+        setImportDeckName(file.name.replace(/\.(txt|csv|tsv)$/i, ''));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   // Export a saved deck as an Anki-importable CSV
   const handleExportDeck = async (deckId, deckTitle) => {
     setActiveMenuId(null);
@@ -1673,8 +1729,164 @@ const FlashcardDashboard = () => {
               </button>
             )}
 
+            {/* Import Anki Button */}
+            {!isSelectionMode && (
+              <button
+                onClick={() => setShowImportModal(true)}
+                style={{
+                  background: 'rgba(10, 10, 10, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '12px',
+                  padding: '10px 16px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(10, 10, 10, 0.8)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                }}
+              >
+                <Upload size={18} style={{ stroke: '#00FF94', fill: 'none' }} />
+                Import
+              </button>
+            )}
+
           </div>
         </div>
+
+        {/* Anki Import Modal */}
+        {showImportModal && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isImporting) setShowImportModal(false);
+            }}
+          >
+            <div style={{
+              backgroundColor: 'rgba(17, 24, 39, 0.95)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '16px',
+              padding: '32px',
+              maxWidth: '560px',
+              width: '92%',
+            }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
+                Import from Anki
+              </h2>
+              <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', marginBottom: '20px', lineHeight: 1.5 }}>
+                In Anki: File → Export → "Notes in Plain Text (.txt)". Upload that file
+                or paste its contents below. Semicolon CSVs (like MindFlow's own export) work too.
+              </p>
+              <input
+                type="text"
+                value={importDeckName}
+                onChange={(e) => setImportDeckName(e.target.value)}
+                placeholder="Deck name (optional)"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  color: '#ffffff',
+                  fontSize: '15px',
+                  marginBottom: '12px',
+                  outline: 'none',
+                }}
+              />
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder={'Front of card\tBack of card\n…'}
+                style={{
+                  width: '100%',
+                  minHeight: '160px',
+                  padding: '12px 16px',
+                  backgroundColor: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontFamily: 'monospace',
+                  resize: 'vertical',
+                  outline: 'none',
+                  marginBottom: '12px',
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                <label style={{
+                  padding: '10px 16px',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                }}>
+                  Upload file…
+                  <input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" onChange={handleImportFile} style={{ display: 'none' }} />
+                </label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={() => setShowImportModal(false)}
+                    disabled={isImporting}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      color: 'rgba(255,255,255,0.7)',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: isImporting ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleImportDeck}
+                    disabled={isImporting || !importText.trim()}
+                    style={{
+                      padding: '10px 20px',
+                      background: (isImporting || !importText.trim())
+                        ? 'rgba(34, 197, 94, 0.3)'
+                        : 'linear-gradient(90deg, #22c55e, #10b981)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#ffffff',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: (isImporting || !importText.trim()) ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isImporting ? 'Importing…' : `Import${parseAnkiText(importText).length > 0 ? ` ${parseAnkiText(importText).length} cards` : ''}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Content Area */}
         {/* Check for Empty State - Show Welcome Hero */}

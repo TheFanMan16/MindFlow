@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateNextReview, BOX_INTERVALS, MAX_BOX } from './spacedRepetition';
+import { calculateNextReview, compressForExam, BOX_INTERVALS, MAX_BOX } from './spacedRepetition';
 
 const daysFromNow = (iso) =>
   Math.round((new Date(iso) - new Date()) / (1000 * 60 * 60 * 24));
@@ -51,5 +51,48 @@ describe('calculateNextReview (Leitner 1/2/4/8/16)', () => {
 describe('BOX_INTERVALS', () => {
   it('doubles per box: 1/2/4/8/16', () => {
     expect(BOX_INTERVALS).toEqual({ 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 });
+  });
+});
+
+describe('compressForExam (Exam Countdown Mode)', () => {
+  const today = new Date('2026-08-06T10:00:00');
+  // Local date string - toISOString would shift the day in non-UTC zones.
+  const examIn = (days) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  it('leaves the interval alone with no exam date', () => {
+    expect(compressForExam(16, null, today)).toBe(16);
+    expect(compressForExam(16, undefined, today)).toBe(16);
+  });
+
+  it('never schedules a review after the exam', () => {
+    expect(compressForExam(16, examIn(10), today)).toBe(10);
+    expect(compressForExam(8, examIn(30), today)).toBe(8);
+  });
+
+  it('accelerates in the final week: at most half the remaining runway', () => {
+    expect(compressForExam(16, examIn(6), today)).toBe(3);
+    expect(compressForExam(8, examIn(4), today)).toBe(2);
+    expect(compressForExam(4, examIn(2), today)).toBe(1);
+  });
+
+  it('never drops below one day', () => {
+    expect(compressForExam(1, examIn(1), today)).toBe(1);
+  });
+
+  it('resumes normal scheduling once the exam has passed', () => {
+    expect(compressForExam(16, examIn(-3), today)).toBe(16);
+    expect(compressForExam(16, examIn(0), today)).toBe(16);
+  });
+
+  it('is applied by calculateNextReview via options.examDate', () => {
+    // Box 4 -> Good would normally be box 5, 16 days out; exam in 5 days
+    // compresses that to 2.
+    const result = calculateNextReview(4, null, 3, { examDate: examIn(5), today });
+    expect(result.box).toBe(5);
+    expect(result.daysUntil).toBe(2);
   });
 });

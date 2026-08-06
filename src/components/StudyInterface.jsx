@@ -21,6 +21,8 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const [slideDirection, setSlideDirection] = useState(null); // 'left' | 'right' | 'up'
   const [loading, setLoading] = useState(true);
   const [sessionComplete, setSessionComplete] = useState(false);
+  // Exam Countdown Mode: the deck topic's exam date compresses SRS intervals
+  const [examDate, setExamDate] = useState(null);
   const [studySessionData, setStudySessionData] = useState({
     totalCards: 0,
     reviewed: 0,
@@ -71,7 +73,20 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
       try {
         setLoading(true);
-        
+
+        // If the deck belongs to a topic with an exam date, reviews get
+        // backward-planned toward it. Failure here is non-fatal.
+        supabase
+          .from('decks')
+          .select('topic_id, topics ( exam_date )')
+          .eq('id', deckId)
+          .eq('user_id', user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            const topicExam = data?.topics?.exam_date;
+            if (topicExam) setExamDate(topicExam);
+          });
+
         // Fetch flashcards for this deck
         const { data: cardsData, error: cardsError } = await supabase
           .from('flashcards')
@@ -146,7 +161,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
     const currentCard = flashcards[currentCardIndex];
     if (currentCard) {
       const currentBox = currentCard.box || 1;
-      updateCardProgress(supabase, currentCard.id, 3, currentBox); // 3 = good
+      updateCardProgress(supabase, currentCard.id, 3, currentBox, { examDate }); // 3 = good
     }
 
     // Step A: Set exit direction and start animation
@@ -184,7 +199,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
     // Update SRS progress in Supabase (mark as "again")
     const currentBox = currentCard.box || 1;
-    updateCardProgress(supabase, currentCard.id, 1, currentBox); // 1 = again
+    updateCardProgress(supabase, currentCard.id, 1, currentBox, { examDate }); // 1 = again
 
     // Study Queue Behavior: Move card to the very back of the array
     setFlashcards(prev => {
@@ -273,7 +288,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
     // Update SRS progress in Supabase
     const currentBox = currentCard.box || 1;
-    const result = await updateCardProgress(supabase, currentCard.id, rating, currentBox);
+    const result = await updateCardProgress(supabase, currentCard.id, rating, currentBox, { examDate });
 
     if (!result.success) {
       toast.error(result.error || 'Failed to update card');

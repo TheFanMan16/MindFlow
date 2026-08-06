@@ -217,12 +217,18 @@ export function toLocalDateKey(date) {
  * Consecutive-day streak from a set of active-day keys.
  * The streak survives if the most recent activity was today OR yesterday -
  * you haven't lost today's streak just because you haven't studied yet.
+ *
+ * Streak freezes: options.freezesPerWeek lets single missed days be bridged
+ * (1/week on free, Infinity on Pro). A freeze bridges exactly one missed day
+ * between two active days; at most freezesPerWeek freezes may be used in any
+ * rolling 7-day window, and the frozen day itself doesn't add to the count.
  * Pure function for testability.
  *
  * @param {Iterable<string>} dateKeys - local YYYY-MM-DD keys with any loop activity
  * @param {Date} [today]
+ * @param {{ freezesPerWeek?: number }} [options]
  */
-export function computeStreakFromDates(dateKeys, today = new Date()) {
+export function computeStreakFromDates(dateKeys, today = new Date(), { freezesPerWeek = 0 } = {}) {
   const active = new Set(dateKeys);
   if (active.size === 0) return 0;
 
@@ -234,19 +240,48 @@ export function computeStreakFromDates(dateKeys, today = new Date()) {
   }
 
   let streak = 0;
-  while (active.has(toLocalDateKey(cursor))) {
-    streak += 1;
+  let offset = 0; // days walked back from the anchor
+  const freezeOffsets = []; // where freezes were spent, for the rolling window
+
+  for (;;) {
+    if (active.has(toLocalDateKey(cursor))) {
+      streak += 1;
+    } else {
+      // A gap. Bridgeable only if it's a single missed day (the day before it
+      // is active) and a freeze is available in this rolling week.
+      const dayBefore = new Date(cursor);
+      dayBefore.setDate(dayBefore.getDate() - 1);
+      const usedThisWindow = freezeOffsets.filter((o) => offset - o < 7).length;
+      if (active.has(toLocalDateKey(dayBefore)) && usedThisWindow < freezesPerWeek) {
+        freezeOffsets.push(offset); // frozen: streak survives, day not counted
+      } else {
+        break;
+      }
+    }
     cursor.setDate(cursor.getDate() - 1);
+    offset += 1;
   }
   return streak;
 }
 
+/** Days with any loop activity in the trailing 7 days (today included), 0-7. */
+export function countActiveDaysThisWeek(dateKeys, today = new Date()) {
+  const active = new Set(dateKeys);
+  let count = 0;
+  const cursor = new Date(today);
+  for (let i = 0; i < 7; i++) {
+    if (active.has(toLocalDateKey(cursor))) count += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return count;
+}
+
 /**
- * Daily streak where ANY completed loop activity counts: a focus session,
+ * Every local day key with ANY completed loop activity: a focus session,
  * a recall attempt, or a day with recorded focus minutes.
  */
-export async function getLoopStreak(userId) {
-  if (!userId) return 0;
+export async function getLoopActiveDays(userId) {
+  if (!userId) return [];
   try {
     const [sessions, attempts, activityResult] = await Promise.all([
       getRecentFocusSessions(userId, 400),
@@ -254,17 +289,24 @@ export async function getLoopStreak(userId) {
       supabase.from('daily_activity').select('date').eq('user_id', userId),
     ]);
 
-    const keys = [
+    return [
       ...sessions.map((s) => toLocalDateKey(s.started_at)),
       ...attempts.map((a) => toLocalDateKey(a.created_at)),
       // daily_activity.date is already a plain date string
       ...((activityResult.data || []).map((row) => row.date)),
     ];
-    return computeStreakFromDates(keys);
   } catch (err) {
-    devError('getLoopStreak failed:', err);
-    return 0;
+    devError('getLoopActiveDays failed:', err);
+    return [];
   }
+}
+
+/** Daily loop streak. Pro users get unlimited streak freezes, free gets 1/week. */
+export async function getLoopStreak(userId, { isPro = false } = {}) {
+  const keys = await getLoopActiveDays(userId);
+  return computeStreakFromDates(keys, new Date(), {
+    freezesPerWeek: isPro ? Infinity : 1,
+  });
 }
 
 // ============================================================

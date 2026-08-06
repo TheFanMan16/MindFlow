@@ -5,7 +5,17 @@ import { useAuth } from '../context/AuthContext';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { getLastActivityAt, formatTimeAgo } from '../utils/lastActivity';
-import { getDueCards, getTopicMastery, getLoopStreak, setTopicExamDate, daysUntilExam } from '../utils/studyLoop';
+import {
+  getDueCards,
+  getTopicMastery,
+  getLoopActiveDays,
+  computeStreakFromDates,
+  countActiveDaysThisWeek,
+  setTopicExamDate,
+  daysUntilExam,
+  toLocalDateKey,
+} from '../utils/studyLoop';
+import { maybeNotifyDueCards } from '../utils/notifications';
 
 /** Tiny inline sparkline for a topic's recall trend (oldest -> newest). */
 const Sparkline = ({ values, color = '#a78bfa', width = 96, height = 28 }) => {
@@ -51,26 +61,36 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
-  // Today's Plan: due cards, per-topic mastery and streak from the study loop
+  // Today's Plan: due cards, per-topic mastery, streak and weekly momentum
   const [dueCards, setDueCards] = useState([]);
   const [topicMastery, setTopicMastery] = useState([]);
   const [loopStreak, setLoopStreak] = useState(0);
+  const [weeklyMomentum, setWeeklyMomentum] = useState(0);
 
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
-    Promise.all([getDueCards(user.id), getTopicMastery(user.id), getLoopStreak(user.id)]).then(
-      ([due, mastery, streak]) => {
+    Promise.all([getDueCards(user.id), getTopicMastery(user.id), getLoopActiveDays(user.id)]).then(
+      ([due, mastery, activeDays]) => {
         if (cancelled) return;
         setDueCards(due);
         setTopicMastery(mastery);
-        setLoopStreak(streak);
+        // Pro gets unlimited streak freezes, free bridges one missed day/week.
+        setLoopStreak(
+          computeStreakFromDates(activeDays, new Date(), {
+            freezesPerWeek: profile?.is_pro ? Infinity : 1,
+          })
+        );
+        setWeeklyMomentum(countActiveDaysThisWeek(activeDays));
+        maybeNotifyDueCards(due.length, {
+          streakSlipping: !activeDays.includes(toLocalDateKey(new Date())),
+        });
       }
     );
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, profile?.is_pro]);
 
   const handleSetExamDate = async (topicId, examDate) => {
     const ok = await setTopicExamDate(user?.id, topicId, examDate);
@@ -563,21 +583,40 @@ const Dashboard = () => {
                     ? `${dueCards.length} card${dueCards.length === 1 ? '' : 's'} due for review`
                     : 'All caught up — start a new focus session'}
                 </div>
-                {loopStreak > 0 && (
-                  <div style={{
-                    display: 'inline-block',
-                    marginTop: '8px',
-                    backgroundColor: 'rgba(251, 191, 36, 0.12)',
-                    border: '1px solid rgba(251, 191, 36, 0.35)',
-                    borderRadius: '20px',
-                    padding: '4px 14px',
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    color: '#fbbf24',
-                  }}>
-                    🔥 {loopStreak}-day streak
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                  {loopStreak > 0 && (
+                    <div style={{
+                      backgroundColor: 'rgba(251, 191, 36, 0.12)',
+                      border: '1px solid rgba(251, 191, 36, 0.35)',
+                      borderRadius: '20px',
+                      padding: '4px 14px',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      color: '#fbbf24',
+                    }}>
+                      🔥 {loopStreak}-day streak
+                    </div>
+                  )}
+                  {weeklyMomentum > 0 && (
+                    <div
+                      title={`Active ${weeklyMomentum} of the last 7 days`}
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                        <circle cx="16" cy="16" r="13" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                        <circle
+                          cx="16" cy="16" r="13" fill="none"
+                          stroke="#a78bfa" strokeWidth="4" strokeLinecap="round"
+                          strokeDasharray={`${(weeklyMomentum / 7) * 2 * Math.PI * 13} ${2 * Math.PI * 13}`}
+                          transform="rotate(-90 16 16)"
+                        />
+                      </svg>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#a78bfa' }}>
+                        {weeklyMomentum}/7 days this week
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => navigate(dueCards.length > 0 ? '/flashcards' : '/focus')}

@@ -59,3 +59,17 @@ the Vercel deployment itself, and the frontend is a static SPA.
 The real fix is upgrading the Render service to a paid always-on instance
 (Starter tier), which removes spin-downs entirely. Do this before charging
 customers; keep-warm pings are a best-effort workaround, not a guarantee.
+
+Operations: email digest (not yet wired)
+
+Browser "cards due" reminders are built in (Settings → Notifications; one
+notification per day, gated on the user's toggle + browser permission). The
+email digest requires two external pieces before it can ship:
+
+1. A transactional email provider (e.g. Resend) and its API key.
+2. A scheduled Supabase Edge Function (supabase functions deploy + a cron
+   schedule) that queries each opted-in user's due-card count and mastery
+   slippage, then sends the digest through the provider.
+
+Neither secret exists in this repo, so the function is intentionally not
+scaffolded - wire it when the Resend account exists.

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { computeMastery, computeStreakFromDates, toLocalDateKey } from './studyLoop';
+import {
+  computeMastery,
+  computeStreakFromDates,
+  countActiveDaysThisWeek,
+  toLocalDateKey,
+} from './studyLoop';
 
 describe('computeMastery', () => {
   it('returns null with no signal at all', () => {
@@ -78,5 +83,44 @@ describe('computeStreakFromDates', () => {
 
   it('duplicate same-day activity does not inflate the streak', () => {
     expect(computeStreakFromDates([key(0), key(0), key(0)], today)).toBe(1);
+  });
+
+  describe('streak freezes', () => {
+    const freeUser = { freezesPerWeek: 1 };
+    const proUser = { freezesPerWeek: Infinity };
+
+    it('a freeze bridges a single missed day without counting it', () => {
+      // Active today and 2 days ago; yesterday missed.
+      expect(computeStreakFromDates([key(0), key(2), key(3)], today, freeUser)).toBe(3);
+      // Without freezes the same history is a 1-day streak.
+      expect(computeStreakFromDates([key(0), key(2), key(3)], today)).toBe(1);
+    });
+
+    it('free users get one freeze per rolling week', () => {
+      // Two single-day gaps three days apart: only the first is bridged.
+      const days = [key(0), key(2), key(3), key(5), key(6)];
+      expect(computeStreakFromDates(days, today, freeUser)).toBe(3);
+      expect(computeStreakFromDates(days, today, proUser)).toBe(5);
+    });
+
+    it('a freeze cannot bridge a two-day gap', () => {
+      expect(computeStreakFromDates([key(0), key(3), key(4)], today, proUser)).toBe(1);
+    });
+  });
+});
+
+describe('countActiveDaysThisWeek', () => {
+  const today = new Date('2026-08-06T14:00:00');
+  const key = (daysAgo) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    return toLocalDateKey(d);
+  };
+
+  it('counts distinct active days in the trailing 7 days only', () => {
+    expect(countActiveDaysThisWeek([], today)).toBe(0);
+    expect(countActiveDaysThisWeek([key(0), key(1), key(6)], today)).toBe(3);
+    expect(countActiveDaysThisWeek([key(7), key(8)], today)).toBe(0);
+    expect(countActiveDaysThisWeek([key(0), key(0)], today)).toBe(1);
   });
 });
