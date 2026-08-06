@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAccurateTimer } from '../hooks/useAccurateTimer';
 import { formatSessionTimestamp } from '../utils/lastActivity';
 import { recordFocusMinutes } from '../utils/focusProgress';
+import { getTopics, findOrCreateTopic, recordFocusSession } from '../utils/studyLoop';
 import DurationInput from './DurationInput';
 import { toast } from 'react-hot-toast';
 
@@ -59,6 +60,12 @@ const TimerMode = () => {
     }
   });
   const [customBreakTime, setCustomBreakTime] = useState(null); // For flowmodoro calculated breaks
+  // The user's topics, for the task-input autocomplete. The task typed here
+  // becomes (or matches) a topic - the spine that links this session to
+  // recall tests and flashcard decks.
+  const [topics, setTopics] = useState([]);
+  // Set when a session completes: offers "Test what you just studied".
+  const [recallHandoff, setRecallHandoff] = useState(null);
   // Session History - load from localStorage on mount
   const [sessionHistory, setSessionHistory] = useState(() => {
     try {
@@ -496,7 +503,40 @@ const TimerMode = () => {
       timestamp: new Date().toISOString(),
     };
     setSessionHistory((prev) => [newSession, ...prev].slice(0, 50)); // Keep last 50 sessions
-  }, [focusIntent]);
+
+    if (user?.id) {
+      // Server-side record with topic resolution, so the session survives this
+      // device and feeds Today's Plan / mastery. Fire-and-forget: the local
+      // log above is the user-visible source of truth for this screen.
+      (async () => {
+        const topic = await findOrCreateTopic(user.id, focusIntent);
+        await recordFocusSession(user.id, {
+          title: task,
+          topicId: topic?.id,
+          mode: sessionMode,
+          durationSeconds: duration,
+        });
+        if (topic) {
+          setTopics((prev) => (prev.some((t) => t.id === topic.id) ? prev : [topic, ...prev]));
+        }
+        setRecallHandoff({ topicId: topic?.id || null, topicName: topic?.name || task });
+      })();
+    } else {
+      setRecallHandoff({ topicId: null, topicName: task });
+    }
+  }, [focusIntent, user?.id]);
+
+  // Load topics for the task autocomplete
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getTopics(user.id).then((rows) => {
+      if (!cancelled) setTopics(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // Track session seconds for live updates (only for pomodoro mode)
   const sessionSecondsRef = useRef(0); // Total seconds elapsed in current session
@@ -1803,12 +1843,13 @@ const TimerMode = () => {
                   </div>
                 </div>
               ) : (
-                // Edit mode - show as input
+                // Edit mode - show as input with topic autocomplete
                 <input
                   type="text"
                   value={focusIntent}
                   onChange={(e) => setFocusIntent(e.target.value)}
                   placeholder="What is your main task?"
+                  list="topic-suggestions"
                   style={{
                     width: '100%',
                     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -2419,6 +2460,87 @@ const TimerMode = () => {
               Save Settings
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Topic autocomplete for the task input */}
+      <datalist id="topic-suggestions">
+        {topics.map((topic) => (
+          <option key={topic.id} value={topic.name} />
+        ))}
+      </datalist>
+
+      {/* Session -> Recall handoff: the loop's first stitch */}
+      {recallHandoff && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(17, 24, 39, 0.95)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(139, 92, 246, 0.4)',
+          borderRadius: '16px',
+          padding: '20px 24px',
+          zIndex: 900,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '20px',
+          boxShadow: '0 8px 40px rgba(139, 92, 246, 0.25)',
+          maxWidth: 'calc(100vw - 32px)',
+          animation: 'slideInDown 0.4s ease-out',
+        }}>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff', marginBottom: '2px' }}>
+              Session saved{recallHandoff.topicName !== 'Untitled Session' ? ` — ${recallHandoff.topicName}` : ''}
+            </div>
+            <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.6)' }}>
+              The best moment to test yourself is right now.
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/recall', {
+              state: {
+                topicId: recallHandoff.topicId,
+                topicName: recallHandoff.topicName,
+                from: 'focus-session',
+              },
+            })}
+            style={{
+              background: 'linear-gradient(90deg, #8b5cf6, #ec4899)',
+              color: '#ffffff',
+              border: 'none',
+              padding: '12px 20px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Test what you just studied
+          </button>
+          <button
+            onClick={() => setRecallHandoff(null)}
+            aria-label="Dismiss"
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '8px',
+              width: '32px',
+              height: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'rgba(255, 255, 255, 0.7)',
+              flexShrink: 0,
+            }}
+          >
+            <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
     </div>

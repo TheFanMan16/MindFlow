@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import PDFUploader from './PDFUploader';
-import { generateJSONWithGemini } from '../utils/gemini';
+import { generateJSONWithGemini, generateFlashcardSet } from '../utils/gemini';
+import { recordRecallAttempt, findOrCreateTopic } from '../utils/studyLoop';
+import { saveGeneratedDeck } from '../utils/deckUtils';
 import { useAuth } from '../context/AuthContext';
 import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
 import { supabase } from '../lib/supabaseClient';
@@ -18,6 +21,14 @@ const ANALYSIS_STATUS_MESSAGES = [
 
 const BlurtingMode = () => {
   const { isPro, user, profile, refreshProfile } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Arrived from a completed focus session? The attempt gets tagged to that
+  // topic and misses can become a deck named after it.
+  const [topicContext, setTopicContext] = useState(() => ({
+    topicId: location.state?.topicId || null,
+    topicName: location.state?.topicName || null,
+  }));
   const [aiUsageCount, setAiUsageCount] = useState(0);
   const [phase, setPhase] = useState('SETUP'); // SETUP, WRITING, ANALYSIS
   const [sourceText, setSourceText] = useState('');
@@ -33,6 +44,8 @@ const BlurtingMode = () => {
   const [quizResults, setQuizResults] = useState({}); // Object mapping question index to correct/incorrect
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null); // Friendly message when analysis fails
+  const [isGeneratingMissCards, setIsGeneratingMissCards] = useState(false);
+  const [missDeck, setMissDeck] = useState(null); // { deckId, cardCount } once misses became cards
   const [inputMode, setInputMode] = useState('pdf'); // 'pdf' or 'text'
   const [expandedSection, setExpandedSection] = useState(null); // For accordion: 'performance', 'improvements', 'quiz'
   const textareaRef = useRef(null);
@@ -211,8 +224,21 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       setAiSummary(summary);
       setAiFeedback(missingConcepts);
       setAiQuiz(quiz);
+      setMissDeck(null);
       // Auto-expand the first section (Performance Summary) when analysis completes
       setExpandedSection('performance');
+
+      // Persist the attempt so mastery trends and Today's Plan see it.
+      // Fire-and-forget: a failed write must not disturb the results screen.
+      if (user?.id) {
+        recordRecallAttempt(user.id, {
+          topicId: topicContext.topicId,
+          score,
+          grade,
+          summary,
+          missingConcepts,
+        });
+      }
 
       // Increment AI usage in Supabase ONLY after successful response
       try {
@@ -247,6 +273,68 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       // CRITICAL: Always turn off loading, even if it crashes
       setIsAnalyzing(false);
       abortRef.current = null;
+    }
+  };
+
+  // The loop's magic moment: cards generated ONLY for what the student
+  // missed, into a deck named after the topic, in one click.
+  const handleTurnMissesIntoCards = async () => {
+    if (!user?.id) {
+      toast.error('Log in to save flashcards.');
+      return;
+    }
+    if (!aiFeedback || aiFeedback.length === 0 || isGeneratingMissCards) return;
+
+    setIsGeneratingMissCards(true);
+    try {
+      const conceptLines = aiFeedback
+        .map((item) => {
+          const concept = typeof item === 'string' ? item : item.concept;
+          const explanation = typeof item === 'object' && item.explanation ? item.explanation : '';
+          return `- ${concept}${explanation ? `: ${explanation}` : ''}`;
+        })
+        .join('\n');
+
+      const prompt = `A student just took a recall test and missed ONLY the following concepts. Create one or two flashcards per missed concept - no cards for anything else. Use the source material for accurate answers.
+
+Missed concepts:
+${conceptLines}
+
+Source material (for correct answers):
+${sourceText.slice(0, 6000)}`;
+
+      const cards = await generateFlashcardSet(prompt);
+      if (!cards || cards.length === 0) {
+        throw new Error('No cards were generated');
+      }
+
+      // Resolve the topic: prefer the session handoff, otherwise create one
+      // from the topic name so the deck still joins the loop.
+      let topicId = topicContext.topicId;
+      if (!topicId && topicContext.topicName) {
+        const topic = await findOrCreateTopic(user.id, topicContext.topicName);
+        topicId = topic?.id || null;
+        if (topic) setTopicContext((prev) => ({ ...prev, topicId: topic.id }));
+      }
+
+      const deckTitle = topicContext.topicName
+        ? `${topicContext.topicName} — Missed Concepts`
+        : `Recall Misses — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+      const result = await saveGeneratedDeck(cards, deckTitle, user.id, { topicId });
+      if (!result.success) {
+        throw new Error(result.error || 'Could not save the deck');
+      }
+
+      setMissDeck({ deckId: result.deckId, cardCount: result.cardCount });
+      toast.success(`${result.cardCount} flashcards created from your missed concepts.`);
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Turn misses into cards failed:', error);
+      }
+      toast.error('Could not create flashcards from your misses. Please try again.');
+    } finally {
+      setIsGeneratingMissCards(false);
     }
   };
 
@@ -341,6 +429,21 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
               }}>
                 Active Recall
               </h1>
+              {topicContext.topicName && (
+                <div style={{
+                  display: 'inline-block',
+                  backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                  border: '1px solid rgba(139, 92, 246, 0.4)',
+                  borderRadius: '20px',
+                  padding: '6px 16px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#a78bfa',
+                  marginBottom: '8px',
+                }}>
+                  Testing: {topicContext.topicName}
+                </div>
+              )}
               <p style={{
                 fontSize: '16px',
                 color: 'rgba(255, 255, 255, 0.6)',
@@ -1066,6 +1169,52 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                               );
                             })}
                           </ul>
+
+                          {/* Misses -> flashcards, one click */}
+                          <div style={{ marginTop: '20px' }}>
+                            {missDeck ? (
+                              <button
+                                onClick={() => navigate('/flashcards')}
+                                style={{
+                                  width: '100%',
+                                  padding: '14px 24px',
+                                  background: 'rgba(34, 197, 94, 0.15)',
+                                  border: '1px solid rgba(34, 197, 94, 0.4)',
+                                  borderRadius: '12px',
+                                  color: '#22c55e',
+                                  fontSize: '15px',
+                                  fontWeight: '600',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                ✓ {missDeck.cardCount} cards saved — open your flashcards
+                              </button>
+                            ) : (
+                              <button
+                                onClick={handleTurnMissesIntoCards}
+                                disabled={isGeneratingMissCards}
+                                style={{
+                                  width: '100%',
+                                  padding: '14px 24px',
+                                  background: isGeneratingMissCards
+                                    ? 'rgba(34, 197, 94, 0.3)'
+                                    : 'linear-gradient(90deg, #22c55e, #10b981)',
+                                  border: 'none',
+                                  borderRadius: '12px',
+                                  color: '#ffffff',
+                                  fontSize: '15px',
+                                  fontWeight: '600',
+                                  cursor: isGeneratingMissCards ? 'wait' : 'pointer',
+                                  boxShadow: isGeneratingMissCards ? 'none' : '0 4px 20px rgba(34, 197, 94, 0.3)',
+                                  transition: 'all 0.3s ease',
+                                }}
+                              >
+                                {isGeneratingMissCards
+                                  ? 'Building cards from your misses…'
+                                  : 'Turn misses into flashcards'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
 

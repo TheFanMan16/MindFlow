@@ -4,52 +4,58 @@
  * Implements a box-based spaced repetition algorithm for flashcard learning.
  */
 
+/** Days until the next review for each Leitner box. */
+export const BOX_INTERVALS = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };
+
+export const MAX_BOX = 5;
+
+const clampBox = (box) => Math.min(MAX_BOX, Math.max(1, box || 1));
+
 /**
- * Calculate next review date and box based on rating
- * 
- * @param {number} currentBox - Current box number (default: 1)
- * @param {string} difficulty - Current difficulty (optional)
+ * Calculate next review date and box based on rating.
+ *
+ * Classic 5-box Leitner with 1/2/4/8/16-day intervals:
+ * - Again: back to box 1, see it tomorrow.
+ * - Hard:  stay in the box, but come back on the previous box's (shorter)
+ *          interval - the card wasn't solid enough to earn the full wait.
+ * - Good:  advance one box, wait that box's interval.
+ * - Easy:  advance two boxes, wait that box's interval.
+ *
+ * @param {number} currentBox - Current box number 1-5 (default: 1)
+ * @param {string} difficulty - Unused, kept for call-site compatibility
  * @param {number} rating - User rating: 1 (Again), 2 (Hard), 3 (Good), 4 (Easy)
  * @returns {Object} { box: number, nextReview: string (ISO date), daysUntil: number }
  */
 export function calculateNextReview(currentBox = 1, difficulty = null, rating) {
-  let newBox = currentBox || 1;
-  const today = new Date();
-  const nextReview = new Date();
+  const box = clampBox(currentBox);
+  let newBox;
+  let daysUntil;
 
   switch (rating) {
-    case 1: // Again/Fail
-      newBox = 1; // Reset to box 1
-      nextReview.setDate(today.getDate() + 1); // Tomorrow
-      break;
-
     case 2: // Hard
-      // Keep current box
-      newBox = currentBox || 1;
-      nextReview.setDate(today.getDate() + 3); // 3 days from now
+      newBox = box;
+      daysUntil = BOX_INTERVALS[clampBox(box - 1)];
       break;
 
     case 3: // Good
-      // Increment box by 1
-      newBox = (currentBox || 1) + 1;
-      // Next review: 7 days * box number
-      nextReview.setDate(today.getDate() + (7 * newBox));
+      newBox = clampBox(box + 1);
+      daysUntil = BOX_INTERVALS[newBox];
       break;
 
     case 4: // Easy
-      // Increment box by 2
-      newBox = (currentBox || 1) + 2;
-      // Next review: 14 days * box number
-      nextReview.setDate(today.getDate() + (14 * newBox));
+      newBox = clampBox(box + 2);
+      daysUntil = BOX_INTERVALS[newBox];
       break;
 
+    case 1: // Again/Fail
     default:
-      // Default: treat as "Again"
       newBox = 1;
-      nextReview.setDate(today.getDate() + 1);
+      daysUntil = BOX_INTERVALS[1];
+      break;
   }
 
-  const daysUntil = Math.ceil((nextReview - today) / (1000 * 60 * 60 * 24));
+  const nextReview = new Date();
+  nextReview.setDate(nextReview.getDate() + daysUntil);
 
   return {
     box: newBox,

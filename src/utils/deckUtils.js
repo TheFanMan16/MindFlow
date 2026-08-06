@@ -12,9 +12,10 @@ import { supabase } from '../lib/supabaseClient';
  * @param {Array} cards - Array of flashcard objects with { front, back } or { question, answer }
  * @param {string} deckTitle - Title for the deck (defaults to 'PDF Import - [Date]' if empty)
  * @param {string} userId - User UUID
+ * @param {Object} [options] - { topicId } links the deck to a study-loop topic
  * @returns {Promise<{ deckId: string, success: boolean, error?: string }>}
  */
-export async function saveGeneratedDeck(cards, deckTitle, userId) {
+export async function saveGeneratedDeck(cards, deckTitle, userId, options = {}) {
   try {
     if (!cards || !Array.isArray(cards) || cards.length === 0) {
       throw new Error('No flashcards provided');
@@ -32,13 +33,18 @@ export async function saveGeneratedDeck(cards, deckTitle, userId) {
       day: 'numeric' 
     })}`;
 
+    const deckRow = {
+      user_id: userId,
+      title: finalTitle,
+      is_public: false,
+    };
+    if (options.topicId) {
+      deckRow.topic_id = options.topicId;
+    }
+
     const { data: deckData, error: deckError } = await supabase
       .from('decks')
-      .insert({
-        user_id: userId,
-        title: finalTitle,
-        is_public: false,
-      })
+      .insert(deckRow)
       .select('id')
       .single();
 

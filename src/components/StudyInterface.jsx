@@ -92,8 +92,29 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           return;
         }
 
-        setFlashcards(cardsData);
-        setStudySessionData(prev => ({ ...prev, totalCards: cardsData.length }));
+        // Leitner ordering: overdue cards first (most overdue at the front),
+        // then brand-new cards, then cards whose next review hasn't arrived.
+        // Previously the queue was creation-ordered and due dates were
+        // written but never read.
+        const now = Date.now();
+        const dueTime = (card) => (card.next_review ? new Date(card.next_review).getTime() : null);
+        const bucket = (card) => {
+          const due = dueTime(card);
+          if (due !== null && due <= now) return 0; // due for review
+          if (due === null) return 1; // never studied
+          return 2; // scheduled for later
+        };
+        const orderedCards = [...cardsData].sort((a, b) => {
+          const bucketDiff = bucket(a) - bucket(b);
+          if (bucketDiff !== 0) return bucketDiff;
+          const aDue = dueTime(a);
+          const bDue = dueTime(b);
+          if (aDue !== null && bDue !== null) return aDue - bDue;
+          return new Date(a.created_at) - new Date(b.created_at);
+        });
+
+        setFlashcards(orderedCards);
+        setStudySessionData(prev => ({ ...prev, totalCards: orderedCards.length }));
       } catch (error) {
         toast.error('An error occurred while loading flashcards');
       } finally {

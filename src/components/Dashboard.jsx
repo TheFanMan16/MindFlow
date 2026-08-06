@@ -5,6 +5,34 @@ import { useAuth } from '../context/AuthContext';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { getLastActivityAt, formatTimeAgo } from '../utils/lastActivity';
+import { getDueCards, getTopicMastery } from '../utils/studyLoop';
+
+/** Tiny inline sparkline for a topic's recall trend (oldest -> newest). */
+const Sparkline = ({ values, color = '#a78bfa', width = 96, height = 28 }) => {
+  if (!values || values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * (width - 4) + 2;
+      const y = height - 3 - ((v - min) / range) * (height - 6);
+      return `${x},${y}`;
+    })
+    .join(' ');
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }} aria-hidden="true">
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -23,6 +51,22 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
+  // Today's Plan: due cards + per-topic mastery from the study loop
+  const [dueCards, setDueCards] = useState([]);
+  const [topicMastery, setTopicMastery] = useState([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    Promise.all([getDueCards(user.id), getTopicMastery(user.id)]).then(([due, mastery]) => {
+      if (cancelled) return;
+      setDueCards(due);
+      setTopicMastery(mastery);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // Handle Stripe success redirect - refresh profile when redirected back after payment
   useEffect(() => {
@@ -457,6 +501,115 @@ const Dashboard = () => {
             </p>
           </div>
         </div>
+        {/* Today's Plan - the loop's daily entry point */}
+        {user && (dueCards.length > 0 || topicMastery.length > 0) && (
+          <div
+            className="max-w-7xl mx-auto"
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.4)',
+              backdropFilter: 'blur(16px)',
+              borderRadius: '20px',
+              padding: '28px 32px',
+              border: '1px solid rgba(139, 92, 246, 0.25)',
+              marginBottom: '32px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+            }}>
+              <div>
+                <div style={{
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  color: '#a78bfa',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginBottom: '6px',
+                }}>
+                  Today's Plan
+                </div>
+                <div style={{ fontSize: '22px', fontWeight: '700', color: '#ffffff' }}>
+                  {dueCards.length > 0
+                    ? `${dueCards.length} card${dueCards.length === 1 ? '' : 's'} due for review`
+                    : 'All caught up — start a new focus session'}
+                </div>
+              </div>
+              <button
+                onClick={() => navigate(dueCards.length > 0 ? '/flashcards' : '/focus')}
+                style={{
+                  background: 'linear-gradient(90deg, #8b5cf6, #ec4899)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '14px 28px',
+                  borderRadius: '12px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 20px rgba(139, 92, 246, 0.3)',
+                }}
+              >
+                {dueCards.length > 0 ? "Start today's loop" : 'Start focusing'}
+              </button>
+            </div>
+
+            {topicMastery.length > 0 && (
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '12px',
+                marginTop: '20px',
+                paddingTop: '20px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              }}>
+                {topicMastery.slice(0, 6).map(({ topic, mastery, recallTrend }) => (
+                  <div
+                    key={topic.id}
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: '12px',
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '14px',
+                      minWidth: '200px',
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: '#ffffff',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {topic.name}
+                      </div>
+                      <div style={{
+                        fontSize: '12px',
+                        color: mastery >= 70 ? '#34d399' : mastery >= 40 ? '#fbbf24' : '#f87171',
+                        fontWeight: '600',
+                      }}>
+                        {mastery}% mastery
+                      </div>
+                    </div>
+                    <Sparkline
+                      values={recallTrend}
+                      color={mastery >= 70 ? '#34d399' : mastery >= 40 ? '#fbbf24' : '#f87171'}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Main Tools Grid - Single Row Layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {cards.map((card) => (
