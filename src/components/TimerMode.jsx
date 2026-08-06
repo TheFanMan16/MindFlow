@@ -115,6 +115,8 @@ const TimerMode = () => {
   // Tab visibility Sentry Mode state
   const [showFocusBrokenAlert, setShowFocusBrokenAlert] = useState(false);
   const wasTabHiddenPaused = useRef(false); // Track if pause was due to tab visibility
+  const tabHiddenAtRef = useRef(null); // When the user left, for "you left for Xs"
+  const distractionsRef = useRef([]); // Seconds away per departure, this session
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
   const webcamRef = useRef(null);
@@ -829,6 +831,19 @@ const TimerMode = () => {
       const totalDuration = pomodoroDuration * 60;
       saveSession('pomodoro', totalDuration);
 
+      // End-of-session focus report (Sentry Mode's receipts)
+      const distractions = distractionsRef.current;
+      if (distractions.length > 0) {
+        const totalAway = distractions.reduce((sum, s) => sum + s, 0);
+        toast(
+          `Focus report: ${distractions.length} distraction${distractions.length === 1 ? '' : 's'}, ${totalAway}s away in total.`,
+          { icon: '🛡️', duration: 8000 }
+        );
+      } else if (isSentryActive) {
+        toast('Focus report: zero distractions. Locked in.', { icon: '🛡️', duration: 6000 });
+      }
+      distractionsRef.current = [];
+
       // Save any remaining partial minutes
       const remainingSeconds = sessionSecondsRef.current;
       if (remainingSeconds > 0 && user?.id) {
@@ -847,7 +862,7 @@ const TimerMode = () => {
       sessionStartTimeRef.current = null;
       setSessionMinutes(0);
     }
-  }, [mode, pomodoroDuration, saveSession, user?.id, setSessionMinutes]);
+  }, [mode, pomodoroDuration, saveSession, user?.id, setSessionMinutes, isSentryActive]);
 
   // Update completion callback ref
   useEffect(() => {
@@ -864,6 +879,7 @@ const TimerMode = () => {
           // Pause the timer immediately
           setIsRunning(false);
           wasTabHiddenPaused.current = true;
+          tabHiddenAtRef.current = Date.now();
 
           // Control worker timer for countdown modes
           if (isCountdownMode) {
@@ -894,6 +910,19 @@ const TimerMode = () => {
         // Tab is now visible again
         // Reset the tab hidden pause flag
         wasTabHiddenPaused.current = false;
+
+        // Confront the user with exactly how long they were gone.
+        if (tabHiddenAtRef.current) {
+          const awaySeconds = Math.round((Date.now() - tabHiddenAtRef.current) / 1000);
+          tabHiddenAtRef.current = null;
+          if (awaySeconds > 0) {
+            distractionsRef.current.push(awaySeconds);
+            toast(`You left for ${awaySeconds} second${awaySeconds === 1 ? '' : 's'}.`, {
+              icon: '👀',
+              duration: 4000,
+            });
+          }
+        }
       }
     };
 

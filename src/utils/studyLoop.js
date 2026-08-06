@@ -61,6 +61,31 @@ export async function findOrCreateTopic(userId, rawName) {
   }
 }
 
+export async function setTopicExamDate(userId, topicId, examDate) {
+  if (!userId || !topicId) return false;
+  try {
+    const { error } = await supabase
+      .from('topics')
+      .update({ exam_date: examDate || null })
+      .eq('id', topicId)
+      .eq('user_id', userId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    devError('setTopicExamDate failed:', err);
+    return false;
+  }
+}
+
+/** Whole days from now until the exam; null without a date, negative if past. */
+export function daysUntilExam(examDate, today = new Date()) {
+  if (!examDate) return null;
+  const exam = new Date(`${examDate}T00:00:00`);
+  const start = new Date(today);
+  start.setHours(0, 0, 0, 0);
+  return Math.round((exam - start) / (1000 * 60 * 60 * 24));
+}
+
 // ============================================================
 // Focus sessions
 // ============================================================
@@ -172,6 +197,73 @@ export async function getDueCards(userId, { limit = 200 } = {}) {
   } catch (err) {
     devError('getDueCards failed:', err);
     return [];
+  }
+}
+
+// ============================================================
+// Streak
+// ============================================================
+
+/** Local YYYY-MM-DD key for a date (streaks are a human concept - local time). */
+export function toLocalDateKey(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Consecutive-day streak from a set of active-day keys.
+ * The streak survives if the most recent activity was today OR yesterday -
+ * you haven't lost today's streak just because you haven't studied yet.
+ * Pure function for testability.
+ *
+ * @param {Iterable<string>} dateKeys - local YYYY-MM-DD keys with any loop activity
+ * @param {Date} [today]
+ */
+export function computeStreakFromDates(dateKeys, today = new Date()) {
+  const active = new Set(dateKeys);
+  if (active.size === 0) return 0;
+
+  const cursor = new Date(today);
+  // Anchor on today if active, otherwise yesterday (grace day).
+  if (!active.has(toLocalDateKey(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (!active.has(toLocalDateKey(cursor))) return 0;
+  }
+
+  let streak = 0;
+  while (active.has(toLocalDateKey(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+/**
+ * Daily streak where ANY completed loop activity counts: a focus session,
+ * a recall attempt, or a day with recorded focus minutes.
+ */
+export async function getLoopStreak(userId) {
+  if (!userId) return 0;
+  try {
+    const [sessions, attempts, activityResult] = await Promise.all([
+      getRecentFocusSessions(userId, 400),
+      getRecentRecallAttempts(userId, 400),
+      supabase.from('daily_activity').select('date').eq('user_id', userId),
+    ]);
+
+    const keys = [
+      ...sessions.map((s) => toLocalDateKey(s.started_at)),
+      ...attempts.map((a) => toLocalDateKey(a.created_at)),
+      // daily_activity.date is already a plain date string
+      ...((activityResult.data || []).map((row) => row.date)),
+    ];
+    return computeStreakFromDates(keys);
+  } catch (err) {
+    devError('getLoopStreak failed:', err);
+    return 0;
   }
 }
 

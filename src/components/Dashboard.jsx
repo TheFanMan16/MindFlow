@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { getLastActivityAt, formatTimeAgo } from '../utils/lastActivity';
-import { getDueCards, getTopicMastery } from '../utils/studyLoop';
+import { getDueCards, getTopicMastery, getLoopStreak, setTopicExamDate, daysUntilExam } from '../utils/studyLoop';
 
 /** Tiny inline sparkline for a topic's recall trend (oldest -> newest). */
 const Sparkline = ({ values, color = '#a78bfa', width = 96, height = 28 }) => {
@@ -51,22 +51,39 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
-  // Today's Plan: due cards + per-topic mastery from the study loop
+  // Today's Plan: due cards, per-topic mastery and streak from the study loop
   const [dueCards, setDueCards] = useState([]);
   const [topicMastery, setTopicMastery] = useState([]);
+  const [loopStreak, setLoopStreak] = useState(0);
 
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
-    Promise.all([getDueCards(user.id), getTopicMastery(user.id)]).then(([due, mastery]) => {
-      if (cancelled) return;
-      setDueCards(due);
-      setTopicMastery(mastery);
-    });
+    Promise.all([getDueCards(user.id), getTopicMastery(user.id), getLoopStreak(user.id)]).then(
+      ([due, mastery, streak]) => {
+        if (cancelled) return;
+        setDueCards(due);
+        setTopicMastery(mastery);
+        setLoopStreak(streak);
+      }
+    );
     return () => {
       cancelled = true;
     };
   }, [user?.id]);
+
+  const handleSetExamDate = async (topicId, examDate) => {
+    const ok = await setTopicExamDate(user?.id, topicId, examDate);
+    if (ok) {
+      setTopicMastery((prev) =>
+        prev.map((entry) =>
+          entry.topic.id === topicId
+            ? { ...entry, topic: { ...entry.topic, exam_date: examDate || null } }
+            : entry
+        )
+      );
+    }
+  };
 
   // Handle Stripe success redirect - refresh profile when redirected back after payment
   useEffect(() => {
@@ -538,6 +555,21 @@ const Dashboard = () => {
                     ? `${dueCards.length} card${dueCards.length === 1 ? '' : 's'} due for review`
                     : 'All caught up — start a new focus session'}
                 </div>
+                {loopStreak > 0 && (
+                  <div style={{
+                    display: 'inline-block',
+                    marginTop: '8px',
+                    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+                    border: '1px solid rgba(251, 191, 36, 0.35)',
+                    borderRadius: '20px',
+                    padding: '4px 14px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: '#fbbf24',
+                  }}>
+                    🔥 {loopStreak}-day streak
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => navigate(dueCards.length > 0 ? '/flashcards' : '/focus')}
@@ -566,45 +598,78 @@ const Dashboard = () => {
                 paddingTop: '20px',
                 borderTop: '1px solid rgba(255, 255, 255, 0.08)',
               }}>
-                {topicMastery.slice(0, 6).map(({ topic, mastery, recallTrend }) => (
-                  <div
-                    key={topic.id}
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      borderRadius: '12px',
-                      padding: '12px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '14px',
-                      minWidth: '200px',
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        color: '#ffffff',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}>
-                        {topic.name}
+                {topicMastery.slice(0, 6).map(({ topic, mastery, recallTrend }) => {
+                  const examDays = daysUntilExam(topic.exam_date);
+                  return (
+                    <div
+                      key={topic.id}
+                      style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: '12px',
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '14px',
+                        minWidth: '220px',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          color: '#ffffff',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}>
+                          {topic.name}
+                        </div>
+                        <div style={{
+                          fontSize: '12px',
+                          color: mastery >= 70 ? '#34d399' : mastery >= 40 ? '#fbbf24' : '#f87171',
+                          fontWeight: '600',
+                        }}>
+                          {mastery}% mastery
+                        </div>
+                        {examDays !== null && examDays >= 0 && (
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            marginTop: '2px',
+                            color: mastery >= 60 ? '#34d399' : '#f87171',
+                          }}>
+                            {examDays === 0 ? 'Exam today' : `${examDays} day${examDays === 1 ? '' : 's'} to exam`}
+                            {' · '}
+                            {mastery >= 60 ? 'on track' : 'behind'}
+                          </div>
+                        )}
+                        <input
+                          type="date"
+                          value={topic.exam_date || ''}
+                          onChange={(e) => handleSetExamDate(topic.id, e.target.value)}
+                          aria-label={`Exam date for ${topic.name}`}
+                          title="Set exam date"
+                          style={{
+                            marginTop: '6px',
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            color: 'rgba(255, 255, 255, 0.35)',
+                            fontSize: '11px',
+                            fontFamily: 'inherit',
+                            padding: 0,
+                            cursor: 'pointer',
+                            colorScheme: 'dark',
+                          }}
+                        />
                       </div>
-                      <div style={{
-                        fontSize: '12px',
-                        color: mastery >= 70 ? '#34d399' : mastery >= 40 ? '#fbbf24' : '#f87171',
-                        fontWeight: '600',
-                      }}>
-                        {mastery}% mastery
-                      </div>
+                      <Sparkline
+                        values={recallTrend}
+                        color={mastery >= 70 ? '#34d399' : mastery >= 40 ? '#fbbf24' : '#f87171'}
+                      />
                     </div>
-                    <Sparkline
-                      values={recallTrend}
-                      color={mastery >= 70 ? '#34d399' : mastery >= 40 ? '#fbbf24' : '#f87171'}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

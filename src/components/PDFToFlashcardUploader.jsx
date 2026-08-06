@@ -7,6 +7,7 @@ import { Sparkles } from 'lucide-react';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
+import { downloadAnkiCsv } from '../utils/ankiExport';
 import AiLoadingIndicator from './AiLoadingIndicator';
 
 const GENERATE_STATUS_MESSAGES = [
@@ -437,39 +438,9 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       return;
     }
 
-    // Convert to Anki CSV format: front;back
-    const csvContent = generatedCards
-      .map(card => {
-        // Get front and back text, handle missing values
-        let front = card.front || card.question || '';
-        let back = card.back || card.answer || '';
-        
-        // Replace newlines with <br> so Anki renders them correctly
-        front = front.replace(/\n/g, '<br>');
-        back = back.replace(/\n/g, '<br>');
-        
-        // Escape double quotes for CSV (replace " with "")
-        front = front.replace(/"/g, '""');
-        back = back.replace(/"/g, '""');
-        
-        return `"${front}";"${back}"`;
-      })
-      .join('\n');
-
-    // Create blob and download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'flashcards.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
+    downloadAnkiCsv(generatedCards, deckTitle || 'flashcards');
     toast.success('Exported! Import this file into Anki.');
-  }, [generatedCards]);
+  }, [generatedCards, deckTitle]);
 
   // Show preview section if cards are generated
   if (generatedCards && generatedCards.length > 0) {

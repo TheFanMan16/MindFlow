@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { Zap, Play, Layers, Folder, FolderPlus, ChevronLeft, X, Check, Trash2, Move, Brain, Hand } from 'lucide-react';
 import FolderGroup from './FolderGroup';
 import { AnimatePresence, motion } from 'framer-motion';
+import { downloadAnkiCsv } from '../utils/ankiExport';
 
 const FlashcardDashboard = () => {
   const navigate = useNavigate();
@@ -502,7 +503,7 @@ const FlashcardDashboard = () => {
   };
 
   // DeckCard Component
-  const DeckCard = ({ deck, cardsDue, isMenuOpen, onDeckClick, onToggleMenu, onRename, onDelete, isSelected, isSelectionMode, editingDeckId, newDeckName, setNewDeckName, onUpdateDeckName }) => {
+  const DeckCard = ({ deck, cardsDue, isMenuOpen, onDeckClick, onToggleMenu, onRename, onDelete, onExport, isSelected, isSelectionMode, editingDeckId, newDeckName, setNewDeckName, onUpdateDeckName }) => {
     const gradient = getDeckGradient();
 
     const style = {
@@ -849,6 +850,40 @@ const FlashcardDashboard = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
               </svg>
               Move to Folder
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onExport(deck.id, deck.title);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'transparent',
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                transition: 'background 0.2s ease',
+                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              Export to Anki
             </button>
             <button
               onClick={(e) => {
@@ -1220,6 +1255,34 @@ const FlashcardDashboard = () => {
     setShowMoveToFolderModal(false);
     setDeckToMove(null);
     toast.success('Deck moved to Library');
+  };
+
+  // Export a saved deck as an Anki-importable CSV
+  const handleExportDeck = async (deckId, deckTitle) => {
+    setActiveMenuId(null);
+    if (!user?.id) {
+      toast.error('Log in to export decks.');
+      return;
+    }
+    try {
+      const { data: cards, error } = await supabase
+        .from('flashcards')
+        .select('front, back')
+        .eq('deck_id', deckId)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      if (!cards || cards.length === 0) {
+        toast.error('This deck has no cards to export.');
+        return;
+      }
+      downloadAnkiCsv(cards, deckTitle);
+      toast.success('Exported! In Anki: File → Import, choose this file.');
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Deck export failed:', error);
+      }
+      toast.error('Could not export this deck. Please try again.');
+    }
   };
 
   // Handle delete folder
@@ -1787,6 +1850,7 @@ const FlashcardDashboard = () => {
                       onToggleMenu={toggleMenu}
                       onRename={handleRenameDeck}
                       onDelete={handleDeleteDeck}
+                      onExport={handleExportDeck}
                       isSelected={selectedItemIds.has(item.id)}
                       isSelectionMode={isSelectionMode}
                       editingDeckId={editingDeckId}
