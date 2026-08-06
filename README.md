@@ -35,3 +35,27 @@ The codebase is split to keep UI components isolated from API and business logic
 ├── scripts/             # Internal security and build scripts
 ├── server.js            # Node.js entry point
 └── vercel.json          # Deployment routing
+
+Operations: Render cold starts
+
+The backend runs on Render's free tier, which spins the instance down after
+~15 minutes of inactivity. The first request after a spin-down can take
+30-60 seconds while the instance boots ("cold start").
+
+Mitigations in place:
+
+* `GET /api/health` — a cheap, unauthenticated health endpoint (registered
+  before the rate limiters so pings never consume quota).
+* Every AI request in the frontend goes through `src/utils/aiFetch.js`: a
+  60-second hard timeout with an AbortController, a Cancel button, rotating
+  status copy, and an honest "we're waking the AI up" notice after 8 seconds.
+  Timeouts surface a Try Again button instead of a frozen page.
+
+To keep the instance warm, point a free uptime monitor (e.g. UptimeRobot) at
+`https://mindflow-backend-1mag.onrender.com/api/health` on a 10-minute
+interval. Note: Vercel Cron cannot be used for this — it only invokes paths on
+the Vercel deployment itself, and the frontend is a static SPA.
+
+The real fix is upgrading the Render service to a paid always-on instance
+(Starter tier), which removes spin-downs entirely. Do this before charging
+customers; keep-warm pings are a best-effort workaround, not a guarantee.

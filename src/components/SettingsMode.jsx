@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
+import ConfirmModal from './ConfirmModal';
 import {
   Clock,
   Volume2,
@@ -36,6 +37,9 @@ const SettingsMode = () => {
   const [subscriptionData, setSubscriptionData] = useState(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Destructive-action confirmation
+  const [showResetModal, setShowResetModal] = useState(false);
 
   // Fetch subscription status
   useEffect(() => {
@@ -150,13 +154,11 @@ const SettingsMode = () => {
     toast.success('Sound settings saved!');
   };
 
-  // Reset all data
+  // Reset all data - the modal requires typing DELETE first
   const handleResetData = () => {
-    if (window.confirm('Are you sure you want to reset all data? This will clear all local history and settings. This cannot be undone.')) {
-      localStorage.clear();
-      toast.success('All data has been reset.');
-      setTimeout(() => window.location.reload(), 1000);
-    }
+    localStorage.clear();
+    toast.success('All data has been reset.');
+    setTimeout(() => window.location.reload(), 1000);
   };
 
   // Account Management Functions
@@ -460,7 +462,7 @@ const SettingsMode = () => {
                 </p>
               </div>
               <button
-                onClick={handleResetData}
+                onClick={() => setShowResetModal(true)}
                 className="px-6 py-2.5 border border-red-500/20 hover:bg-red-500/10 text-red-500 rounded-xl font-medium transition-all flex items-center gap-2"
               >
                 <Trash2 size={16} />
@@ -470,6 +472,16 @@ const SettingsMode = () => {
           </div>
         </section>
       </div>
+
+      <ConfirmModal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onConfirm={handleResetData}
+        title="Reset All Data?"
+        message="This permanently deletes all session history, local settings, and progress on this device. This cannot be undone."
+        confirmText="Reset Everything"
+        typeToConfirm="DELETE"
+      />
     </div>
   );
 };

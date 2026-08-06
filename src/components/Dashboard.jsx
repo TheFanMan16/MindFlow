@@ -378,7 +378,7 @@ const Dashboard = () => {
       icon: 'M13 10V3L4 14h7v7l9-11h-7z', // Lightning/Brain
       gradient: ['#8b5cf6', '#ec4899'], // Purple to Pink
       neonColor: '#8b5cf6', // Neon Purple
-      view: 'blurting',
+      view: 'recall',
     },
     {
       id: 'feynman',
@@ -446,7 +446,7 @@ const Dashboard = () => {
               backdropFilter: 'none',
               WebkitBackdropFilter: 'none',
             }}>
-              Mindflow
+              MindFlow
             </h1>
             <p className="text-xs md:text-sm text-white/50 mb-8 fade-in-up-delay tracking-widest uppercase" style={{
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',

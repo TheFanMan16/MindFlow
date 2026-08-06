@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { aiFetch } from './aiFetch';
 
 /**
  * BASE GEMINI FUNCTION
@@ -23,10 +24,12 @@ export async function generateWithGemini(prompt, options = {}) {
   }
 
   // 3. Send Request
-  // We use 'gemini-1.5-flash' here as it is the standard stable version.
-  console.log(`🚀 Sending Request to Gemini (${options.model || 'gemini-1.5-flash'})...`);
-  
-  const response = await fetch(functionUrl, {
+  if (import.meta.env.DEV) {
+    console.log(`🚀 Sending Request to Gemini (${options.model || 'gemini-flash-latest'})...`);
+  }
+
+  // aiFetch enforces a 60s timeout; options.signal lets the caller cancel.
+  const response = await aiFetch(functionUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -35,11 +38,11 @@ export async function generateWithGemini(prompt, options = {}) {
     body: JSON.stringify({
       prompt: prompt,
       // If you specifically need 'gemini-flash-latest', change it here:
-      model: options.model || 'gemini-flash-latest', 
+      model: options.model || 'gemini-flash-latest',
       temperature: options.temperature || 0.7,
       maxTokens: options.maxTokens || 2048 // Default limit
     })
-  });
+  }, { signal: options.signal });
 
   const textData = await response.text();
   let data;
@@ -102,8 +105,10 @@ export async function generateJSONWithGemini(prompt, options = {}) {
     if (!cleanJson) throw new Error("No JSON found in response");
     return JSON.parse(cleanJson);
   } catch (parseError) {
-    console.error("🔥 JSON Parse Error:", parseError);
-    console.error("Raw Text:", text);
+    if (import.meta.env.DEV) {
+      console.error("🔥 JSON Parse Error:", parseError);
+      console.error("Raw Text:", text);
+    }
     throw new Error('AI response was not valid JSON.');
   }
 }
@@ -113,7 +118,9 @@ export async function generateJSONWithGemini(prompt, options = {}) {
  * Enforces Array format [...] and handles large responses.
  */
 export async function generateFlashcardSet(prompt, options = {}) {
-  console.log("⚡ Generating Flashcard Set (High Capacity Mode)...");
+  if (import.meta.env.DEV) {
+    console.log("⚡ Generating Flashcard Set (High Capacity Mode)...");
+  }
 
   // 1. Strict Prompting
   const strictPrompt = `
@@ -150,7 +157,9 @@ export async function generateFlashcardSet(prompt, options = {}) {
     throw new Error("Response was valid JSON but not an Array.");
 
   } catch (error) {
-    console.error("🔥 Flashcard Error:", error);
+    if (import.meta.env.DEV) {
+      console.error("🔥 Flashcard Error:", error);
+    }
     throw new Error(`Failed to generate flashcards: ${error.message}`);
   }
 }

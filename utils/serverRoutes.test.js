@@ -27,6 +27,31 @@ function routeRegistration(method, path) {
   return match ? match[1] : null;
 }
 
+describe('frontend/backend route contract', () => {
+  // Every backend path the frontend fetches. If a route is renamed or
+  // unmounted without updating the callers, this list fails loudly instead of
+  // users meeting a 404 in production (which is exactly how the
+  // /api/generate-from-text deck generator silently broke).
+  const frontendCalledRoutes = [
+    ['post', '/api/generate-from-pdf'],
+    ['post', '/api/generate-from-text'],
+    ['post', '/api/analyze-feynman'],
+    ['post', '/create-checkout-session'],
+    ['post', '/cancel-subscription'],
+    ['post', '/create-portal-session'],
+    ['get', '/get-subscription-details'],
+    ['post', '/api/user/sync-subscription'],
+  ];
+
+  it.each(frontendCalledRoutes)('registers %s %s', (method, path) => {
+    expect(routeRegistration(method, path)).not.toBeNull();
+  });
+
+  it('registers /api/health for keep-warm pings', () => {
+    expect(routeRegistration('get', '/api/health')).not.toBeNull();
+  });
+});
+
 describe('privileged route guards', () => {
   it('registers /admin/delete-user behind requireAuth and requireAdmin', () => {
     const registration = routeRegistration('post', '/admin/delete-user');

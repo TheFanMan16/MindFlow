@@ -1,10 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { validateAiInput } from '../utils/aiInput';
+import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
+import AiLoadingIndicator from './AiLoadingIndicator';
+
+const ANALYZE_STATUS_MESSAGES = [
+  'Reading your explanation…',
+  'Checking for jargon…',
+  'Scoring clarity and depth…',
+  'Writing your feedback…',
+];
 
 const FeynmanMode = () => {
   const { user, profile, isPro } = useAuth();
@@ -12,7 +21,9 @@ const FeynmanMode = () => {
   const [explanation, setExplanation] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState(null);
   const [aiUsageCount, setAiUsageCount] = useState(0);
+  const abortRef = useRef(null);
 
   // Fetch AI usage count from profile
   useEffect(() => {
@@ -58,9 +69,13 @@ const FeynmanMode = () => {
 
     setIsAnalyzing(true);
     setFeedback(null);
-    
+    setAnalysisError(null);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      const response = await fetch(`${config.api.baseUrl}/api/analyze-feynman`, {
+      const response = await aiFetch(`${config.api.baseUrl}/api/analyze-feynman`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,7 +86,7 @@ const FeynmanMode = () => {
           concept: concept.trim(),
           explanation: explanation.trim(),
         }),
-      });
+      }, { signal: controller.signal });
 
       if (response.status === 403) {
         const errorData = await response.json().catch(() => ({ error: 'Daily AI Limit Reached' }));
@@ -106,13 +121,28 @@ const FeynmanMode = () => {
 
       setFeedback(result);
     } catch (error) {
-      console.error('Feynman analysis error:', error);
-      toast.error(`Failed to generate analysis: ${error.message || 'Check console for details.'}`);
+      if (error instanceof AiCancelledError) {
+        // The user hit Cancel - nothing to report.
+        return;
+      }
+      if (error instanceof AiTimeoutError) {
+        setAnalysisError(AI_TIMEOUT_MESSAGE);
+        return;
+      }
+      if (import.meta.env.DEV) {
+        console.error('Feynman analysis error:', error);
+      }
+      setAnalysisError(error.message || 'Something went wrong while analyzing. Please try again.');
       setFeedback(null);
     } finally {
       // CRITICAL: Always turn off loading, even if it crashes
       setIsAnalyzing(false);
+      abortRef.current = null;
     }
+  };
+
+  const cancelAnalysis = () => {
+    abortRef.current?.abort();
   };
 
   return (
@@ -308,7 +338,55 @@ const FeynmanMode = () => {
             Feedback
           </h2>
 
-          {!feedback ? (
+          {isAnalyzing ? (
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <AiLoadingIndicator
+                messages={ANALYZE_STATUS_MESSAGES}
+                accent="#f59e0b"
+                onCancel={cancelAnalysis}
+              />
+            </div>
+          ) : analysisError ? (
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '16px',
+              textAlign: 'center',
+              padding: '0 16px',
+            }}>
+              <div style={{
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: '15px',
+                maxWidth: '360px',
+                lineHeight: '1.6',
+              }}>
+                {analysisError}
+              </div>
+              <button
+                onClick={analyzeExplanation}
+                style={{
+                  background: 'linear-gradient(90deg, #f59e0b, #ea580c)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 24px',
+                  borderRadius: '12px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+              >
+                Try Again
+              </button>
+            </div>
+          ) : !feedback ? (
             <div style={{
               flex: 1,
               display: 'flex',

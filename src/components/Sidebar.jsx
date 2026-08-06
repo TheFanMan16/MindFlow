@@ -16,7 +16,7 @@ const Sidebar = () => {
     if (!p || p === '/') return 'dashboard';
     if (p.startsWith('/dashboard')) return 'dashboard';
     if (p.startsWith('/focus') || p.startsWith('/study')) return 'timer';
-    if (p.startsWith('/blurting')) return 'blurting';
+    if (p.startsWith('/recall') || p.startsWith('/blurting')) return 'recall';
     if (p.startsWith('/feynman')) return 'feynman';
     if (p.startsWith('/flashcards') || p.startsWith('/flashcard-study')) return 'flashcards';
     return 'default';
@@ -25,7 +25,7 @@ const Sidebar = () => {
   const modeToColorClass = {
     dashboard: 'text-indigo-400',
     timer: 'text-blue-400',
-    blurting: 'text-purple-400',
+    recall: 'text-purple-400',
     feynman: 'text-amber-400',
     flashcards: 'text-emerald-400',
     default: 'text-white',
@@ -42,7 +42,7 @@ const Sidebar = () => {
   const modeToHex = {
     dashboard: '#818cf8', // indigo
     timer: '#60a5fa', // blue
-    blurting: '#A78BFA', // purple
+    recall: '#A78BFA', // purple
     feynman: '#fbbf24', // amber
     flashcards: '#34d399', // emerald
     default: '#FFFFFF',
@@ -75,7 +75,7 @@ const Sidebar = () => {
       activeText: '#60a5fa',
     },
     {
-      path: '/blurting',
+      path: '/recall',
       label: 'Active Recall',
       icon: 'M13 10V3L4 14h7v7l9-11h-7z',
       activeBg: 'rgba(139, 92, 246, 0.2)',

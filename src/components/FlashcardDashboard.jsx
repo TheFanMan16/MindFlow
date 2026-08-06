@@ -1222,14 +1222,6 @@ const FlashcardDashboard = () => {
     toast.success('Deck moved to Library');
   };
 
-  // Handle reset data
-  const handleResetData = () => {
-    if (window.confirm('Are you sure you want to reset all data? This will clear your library and reload the page.')) {
-      localStorage.removeItem('mindflow-library');
-      window.location.reload();
-    }
-  };
-
   // Handle delete folder
   const handleDeleteFolder = (folderId, e) => {
     e.stopPropagation(); // Prevent folder click
@@ -1697,7 +1689,7 @@ const FlashcardDashboard = () => {
                 marginBottom: '16px',
                 fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
               }}>
-                Welcome to Mindflow
+                Welcome to MindFlow
               </h2>
 
               {/* Subtitle */}
@@ -2165,36 +2157,6 @@ const FlashcardDashboard = () => {
           </div>
         )}
 
-        {/* Reset Data Button */}
-        <button
-          onClick={handleResetData}
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            padding: '10px 16px',
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '12px',
-            color: '#ef4444',
-            fontSize: '12px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-            transition: 'all 0.2s ease',
-            zIndex: 100,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-            e.currentTarget.style.borderColor = '#ef4444';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-          }}
-        >
-          Reset Data
-        </button>
       </div>
     );
   }

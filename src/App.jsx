@@ -420,13 +420,16 @@ function App() {
           }
         />
         <Route
-          path="/blurting"
+          path="/recall"
           element={
             <MainLayout>
               <BlurtingMode />
             </MainLayout>
           }
         />
+        {/* Legacy alias: the nav has always called this "Active Recall", so
+            the URL now matches. Old bookmarks still land in the right place. */}
+        <Route path="/blurting" element={<Navigate to="/recall" replace />} />
         <Route
           path="/focus"
           element={

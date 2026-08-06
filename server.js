@@ -202,6 +202,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+// Health check for uptime monitors and keep-warm pings (UptimeRobot / cron).
+// Registered before the rate limiters so pings never consume request quota.
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
 // Rate Limiting: General limit for all routes (100 requests per 15 minutes)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -234,6 +240,7 @@ app.use(generalLimiter);
 
 // Apply stricter rate limiting to AI/PDF processing endpoints
 app.use('/api/generate-from-pdf', aiLimiter);
+app.use('/api/generate-from-text', aiLimiter);
 app.use('/api/analyze-feynman', aiLimiter);
 
 // Stripe Webhook Handler - MUST be BEFORE express.json() middleware

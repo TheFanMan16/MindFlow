@@ -6,6 +6,15 @@ import { saveGeneratedDeck } from '../utils/deckUtils';
 import { Sparkles } from 'lucide-react';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
+import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
+import AiLoadingIndicator from './AiLoadingIndicator';
+
+const GENERATE_STATUS_MESSAGES = [
+  'Reading your material…',
+  'Picking out the key concepts…',
+  'Writing questions and answers…',
+  'Assembling your deck…',
+];
 
 const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   const { user } = useAuth();
@@ -23,7 +32,13 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   const [revealedCards, setRevealedCards] = useState(new Set()); // Track which cards have revealed answers
   const [editingCardIndex, setEditingCardIndex] = useState(null); // Track which card is being edited
   const [editingCardData, setEditingCardData] = useState(null); // Store temporary edit data
+  const [timedOut, setTimedOut] = useState(false); // Offer a retry after a cold-start timeout
   const fileInputRef = useRef(null);
+  const abortRef = useRef(null);
+
+  const cancelGeneration = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
 
   // Handle Upload: Validate and send PDF to backend
   const handleUpload = useCallback(async (uploadedFile) => {
@@ -51,20 +66,24 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
 
     setIsLoading(true);
     setError(null);
+    setTimedOut(false);
     setFile(uploadedFile);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       // API Call: Use FormData to send the file
       const formData = new FormData();
       formData.append('pdf', uploadedFile);
 
-      const response = await fetch(`${config.api.baseUrl}/api/generate-from-pdf`, {
+      const response = await aiFetch(`${config.api.baseUrl}/api/generate-from-pdf`, {
         method: 'POST',
         // The backend spends AI quota against this token, not a body field.
         // Content-Type is left unset so the browser adds the multipart boundary.
         headers: await getAuthHeader(),
         body: formData,
-      });
+      }, { signal: controller.signal });
 
       if (response.status === 403) {
         const errorData = await response.json().catch(() => ({ error: 'Limit Reached' }));
@@ -127,13 +146,27 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       
       // Don't clear file yet - show preview first
     } catch (err) {
-      console.error('PDF to Flashcard error:', err);
+      if (err instanceof AiCancelledError) {
+        // The user hit Cancel - reset quietly.
+        setFile(null);
+        return;
+      }
+      if (err instanceof AiTimeoutError) {
+        // Keep the file around so Retry can resend it without re-picking.
+        setError(AI_TIMEOUT_MESSAGE);
+        setTimedOut(true);
+        return;
+      }
+      if (import.meta.env.DEV) {
+        console.error('PDF to Flashcard error:', err);
+      }
       const errorMessage = err.message || 'Failed to generate flashcards from PDF';
       setError(errorMessage);
       toast.error(errorMessage);
       setFile(null);
     } finally {
       setIsLoading(false);
+      abortRef.current = null;
     }
   }, [user, onFlashcardsGenerated]);
 
@@ -193,10 +226,14 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
 
     setIsLoading(true);
     setError(null);
+    setTimedOut(false);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       // API Call: Send text to backend
-      const response = await fetch(`${config.api.baseUrl}/api/generate-from-text`, {
+      const response = await aiFetch(`${config.api.baseUrl}/api/generate-from-text`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -206,7 +243,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
         body: JSON.stringify({
           text: pastedText.trim(),
         }),
-      });
+      }, { signal: controller.signal });
 
       if (response.status === 403) {
         const errorData = await response.json().catch(() => ({ error: 'Limit Reached' }));
@@ -265,12 +302,23 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       toast.success(`Deck Generated Successfully! Created ${validCards.length} flashcards.`);
       
     } catch (err) {
-      console.error('Text to Flashcard error:', err);
+      if (err instanceof AiCancelledError) {
+        return;
+      }
+      if (err instanceof AiTimeoutError) {
+        setError(AI_TIMEOUT_MESSAGE);
+        setTimedOut(true);
+        return;
+      }
+      if (import.meta.env.DEV) {
+        console.error('Text to Flashcard error:', err);
+      }
       const errorMessage = err.message || 'Failed to generate flashcards from text';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
+      abortRef.current = null;
     }
   }, [pastedText, user, onFlashcardsGenerated]);
 
@@ -278,6 +326,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     setFile(null);
     setPastedText('');
     setError(null);
+    setTimedOut(false);
     setGeneratedCards(null);
     setShowSaveModal(false);
     setDeckTitle('');
@@ -1052,8 +1101,31 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             borderRadius: '8px',
             fontSize: '14px',
             color: '#ef4444',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
           }}>
-            {error}
+            <span style={{ color: timedOut ? 'rgba(255, 255, 255, 0.8)' : '#ef4444' }}>
+              {error}
+            </span>
+            {timedOut && (
+              <button
+                onClick={() => handleUpload(file)}
+                style={{
+                  alignSelf: 'flex-start',
+                  padding: '8px 20px',
+                  background: 'linear-gradient(90deg, #22c55e, #10b981)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+              >
+                Try Again
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1201,31 +1273,11 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
           />
           
           {isLoading ? (
-            <>
-              <div style={{
-                width: '48px',
-                height: '48px',
-                border: '3px solid rgba(0, 255, 148, 0.3)',
-                borderTopColor: '#00FF94',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                marginBottom: '16px',
-              }} />
-              <style>
-                {`
-                  @keyframes spin {
-                    to { transform: rotate(360deg); }
-                  }
-                `}
-              </style>
-              <div style={{
-                fontSize: '16px',
-                color: 'rgba(255, 255, 255, 0.7)',
-                fontWeight: '500',
-              }}>
-                Generating flashcards from PDF...
-              </div>
-            </>
+            <AiLoadingIndicator
+              messages={GENERATE_STATUS_MESSAGES}
+              accent="#00FF94"
+              onCancel={cancelGeneration}
+            />
           ) : (
             <>
               <svg
@@ -1325,6 +1377,19 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             />
           </div>
           
+          {isLoading && (
+            <div style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              borderRadius: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}>
+              <AiLoadingIndicator
+                messages={GENERATE_STATUS_MESSAGES}
+                accent="#00FF94"
+                onCancel={cancelGeneration}
+              />
+            </div>
+          )}
           <button
             onClick={handleGenerateFromText}
             disabled={isLoading || !pastedText.trim()}
@@ -1391,9 +1456,31 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
               border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: '8px',
               fontSize: '14px',
-              color: '#ef4444',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
             }}>
-              {error}
+              <span style={{ color: timedOut ? 'rgba(255, 255, 255, 0.8)' : '#ef4444' }}>
+                {error}
+              </span>
+              {timedOut && (
+                <button
+                  onClick={handleGenerateFromText}
+                  style={{
+                    alignSelf: 'flex-start',
+                    padding: '8px 20px',
+                    background: 'linear-gradient(90deg, #22c55e, #10b981)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#ffffff',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Try Again
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -28,9 +28,9 @@ describe('NotFound', () => {
   });
 
   it('shows which path failed, so a typo is distinguishable from a bug', () => {
-    renderAt('/recall');
+    renderAt('/reccall');
 
-    expect(screen.getByText('/recall')).toBeInTheDocument();
+    expect(screen.getByText('/reccall')).toBeInTheDocument();
   });
 
   it('offers a way back', () => {
@@ -45,6 +45,12 @@ describe('App routing', () => {
     // Previously: <Route path="*" element={<Navigate to="/" replace />} />
     // which made a typo, a dead link and a broken route indistinguishable.
     expect(appSource).toContain('<NotFound />');
+  });
+
+  it('routes /recall to the Active Recall page, matching the nav label', () => {
+    expect(appSource).toContain('path="/recall"');
+    // The old URL keeps working for bookmarks.
+    expect(appSource).toMatch(/path="\/blurting" element=\{<Navigate to="\/recall"/);
   });
 
   it('keeps the narrow recovery-flow redirects', () => {

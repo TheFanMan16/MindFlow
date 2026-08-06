@@ -1,7 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmText = 'Confirm', cancelText = 'Cancel' }) => {
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmText = 'Confirm', cancelText = 'Cancel', typeToConfirm }) => {
+  // For irreversible actions: the caller passes typeToConfirm (e.g. "DELETE")
+  // and the confirm button stays disabled until the user types it exactly.
+  const [typedValue, setTypedValue] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) setTypedValue('');
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const confirmBlocked = typeToConfirm ? typedValue !== typeToConfirm : false;
 
   return (
     <div
@@ -57,6 +67,38 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmText 
           {message}
         </p>
 
+        {typeToConfirm && (
+          <div style={{ marginBottom: '24px' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '14px',
+                color: 'rgba(255, 255, 255, 0.6)',
+                marginBottom: '8px',
+              }}
+            >
+              Type <span style={{ color: '#ef4444', fontWeight: '700' }}>{typeToConfirm}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={typedValue}
+              onChange={(e) => setTypedValue(e.target.value)}
+              placeholder={typeToConfirm}
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '8px',
+                color: '#ffffff',
+                fontSize: '16px',
+                outline: 'none',
+              }}
+            />
+          </div>
+        )}
+
         {/* Buttons */}
         <div
           style={{
@@ -94,25 +136,29 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmText 
           {/* Confirm/Action Button */}
           <button
             onClick={() => {
+              if (confirmBlocked) return;
               onConfirm();
               onClose();
             }}
+            disabled={confirmBlocked}
             style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.9)', // red-500
+              backgroundColor: confirmBlocked ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.9)', // red-500
               border: '1px solid rgba(220, 38, 38, 0.8)', // red-600
-              color: '#ffffff',
+              color: confirmBlocked ? 'rgba(255, 255, 255, 0.5)' : '#ffffff',
               borderRadius: '12px',
               padding: '12px 24px',
               fontSize: '16px',
               fontWeight: '600',
-              cursor: 'pointer',
+              cursor: confirmBlocked ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s ease',
             }}
             onMouseEnter={(e) => {
+              if (confirmBlocked) return;
               e.currentTarget.style.backgroundColor = 'rgba(220, 38, 38, 1)';
               e.currentTarget.style.borderColor = 'rgba(185, 28, 28, 0.9)';
             }}
             onMouseLeave={(e) => {
+              if (confirmBlocked) return;
               e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
               e.currentTarget.style.borderColor = 'rgba(220, 38, 38, 0.8)';
             }}

@@ -6,6 +6,15 @@ import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { validateAiInput } from '../utils/aiInput';
+import { AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
+import AiLoadingIndicator from './AiLoadingIndicator';
+
+const ANALYSIS_STATUS_MESSAGES = [
+  'Reading your blurt…',
+  'Comparing it to the source material…',
+  'Finding the concepts you missed…',
+  'Grading your recall…',
+];
 
 const BlurtingMode = () => {
   const { isPro, user, profile, refreshProfile } = useAuth();
@@ -23,9 +32,11 @@ const BlurtingMode = () => {
   const [quizAnswers, setQuizAnswers] = useState({}); // Object mapping question index to selected answer
   const [quizResults, setQuizResults] = useState({}); // Object mapping question index to correct/incorrect
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState(null); // Friendly message when analysis fails
   const [inputMode, setInputMode] = useState('pdf'); // 'pdf' or 'text'
   const [expandedSection, setExpandedSection] = useState(null); // For accordion: 'performance', 'improvements', 'quiz'
   const textareaRef = useRef(null);
+  const abortRef = useRef(null);
 
   // Define handleDone at the top so it's available for useEffect dependencies
   const handleDone = useCallback(() => {
@@ -139,6 +150,7 @@ const BlurtingMode = () => {
     }
 
     setIsAnalyzing(true);
+    setAnalysisError(null);
     setAiFeedback(null);
     setAiScore(null);
     setAiGrade(null);
@@ -146,6 +158,9 @@ const BlurtingMode = () => {
     setAiQuiz(null);
     setQuizAnswers({});
     setQuizResults({});
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       const systemPrompt = `Compare the Source Text to the Student's Attempt. Identify key concepts that are MISSING or MISUNDERSTOOD. Do not nitpick spelling. 
@@ -175,6 +190,7 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       const parsedResponse = await generateJSONWithGemini(prompt, {
         temperature: 0.7,
         maxTokens: 2048,
+        signal: controller.signal,
       });
 
       // Validate and set the response
@@ -211,9 +227,18 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
         // Non-fatal: usage was already tracked by Edge Function, but local state might be stale
       }
     } catch (error) {
-      console.error('AI Analysis error:', error);
-      alert(`Failed to generate analysis: ${error.message || 'Check console for details.'}`);
-      setAiFeedback([{ concept: 'Error', explanation: `Error analyzing: ${error.message}. Please try again.` }]);
+      if (error instanceof AiCancelledError) {
+        // The user hit Cancel - leave the Analyze button ready for another go.
+        return;
+      }
+      if (error instanceof AiTimeoutError) {
+        setAnalysisError(AI_TIMEOUT_MESSAGE);
+        return;
+      }
+      if (import.meta.env.DEV) {
+        console.error('AI Analysis error:', error);
+      }
+      setAnalysisError(error.message || 'Something went wrong while analyzing. Please try again.');
       setAiScore(null);
       setAiGrade(null);
       setAiSummary(null);
@@ -221,6 +246,7 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
     } finally {
       // CRITICAL: Always turn off loading, even if it crashes
       setIsAnalyzing(false);
+      abortRef.current = null;
     }
   };
 
@@ -272,6 +298,9 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       padding: '48px',
       flex: 1,
       overflowY: 'auto',
+      // The decorative blob below hangs 200px past the right edge; without
+      // this it drags a horizontal scrollbar onto the whole page.
+      overflowX: 'hidden',
       position: 'relative',
       minHeight: '100%',
     }}>
@@ -635,10 +664,10 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                 </button>
               </div>
 
-            {/* Split Screen */}
+            {/* Split Screen - stacks to one column on narrow screens */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))',
               gap: '24px',
               marginBottom: '32px',
             }}>
@@ -729,6 +758,21 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                 
                 return (
                   <div>
+                    {analysisError && (
+                      <div style={{
+                        marginBottom: '16px',
+                        padding: '16px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        borderRadius: '12px',
+                        textAlign: 'center',
+                        color: 'rgba(255, 255, 255, 0.8)',
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                      }}>
+                        {analysisError}
+                      </div>
+                    )}
                     <button
                       onClick={handleAIAnalysis}
                       disabled={isLimitReached}
@@ -763,7 +807,7 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
                         }
                       }}
                     >
-                      Analyze Understanding with AI
+                      {analysisError ? 'Try Again' : 'Analyze Understanding with AI'}
                     </button>
                     {isLimitReached && (
                       <div style={{
@@ -785,34 +829,11 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
               })()}
 
               {isAnalyzing && (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '32px',
-                }}>
-                  <div style={{
-                    fontSize: '16px',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    marginBottom: '16px',
-                  }}>
-                    AI is reading your blurt...
-                  </div>
-                  <div style={{
-                    display: 'inline-block',
-                    width: '40px',
-                    height: '40px',
-                    border: '3px solid rgba(245, 158, 11, 0.3)',
-                    borderTopColor: '#f59e0b',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                  }} />
-                  <style>
-                    {`
-                      @keyframes spin {
-                        to { transform: rotate(360deg); }
-                      }
-                    `}
-                  </style>
-                </div>
+                <AiLoadingIndicator
+                  messages={ANALYSIS_STATUS_MESSAGES}
+                  accent="#f59e0b"
+                  onCancel={() => abortRef.current?.abort()}
+                />
               )}
 
               {aiFeedback && !isAnalyzing && (
