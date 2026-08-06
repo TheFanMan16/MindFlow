@@ -7,6 +7,7 @@ import { getAuthHeader } from '../utils/authHeader';
 import { validateAiInput } from '../utils/aiInput';
 import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
 import AiLoadingIndicator from './AiLoadingIndicator';
+import UpgradeModal from './UpgradeModal';
 
 const ANALYZE_STATUS_MESSAGES = [
   'Reading your explanation…',
@@ -23,6 +24,8 @@ const FeynmanMode = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
   const [aiUsageCount, setAiUsageCount] = useState(0);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState(null);
   const abortRef = useRef(null);
 
   // Fetch AI usage count from profile
@@ -89,9 +92,9 @@ const FeynmanMode = () => {
       }, { signal: controller.signal });
 
       if (response.status === 403) {
-        const errorData = await response.json().catch(() => ({ error: 'Daily AI Limit Reached' }));
-        toast.error(errorData.error || 'Daily AI Limit Reached (5/5). Upgrade to Pro for unlimited.');
-        // Optionally navigate to subscription page
+        const errorData = await response.json().catch(() => ({}));
+        setUpgradeMessage(errorData.error || null);
+        setShowUpgradeModal(true);
         return;
       }
 
@@ -146,6 +149,12 @@ const FeynmanMode = () => {
   };
 
   return (
+    <>
+    <UpgradeModal
+      isOpen={showUpgradeModal}
+      onClose={() => setShowUpgradeModal(false)}
+      message={upgradeMessage}
+    />
     <div style={{
       padding: 'clamp(16px, 5vw, 48px)',
       flex: 1,
@@ -567,6 +576,7 @@ const FeynmanMode = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

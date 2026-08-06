@@ -12,6 +12,7 @@ import { toast } from 'react-hot-toast';
 import { validateAiInput } from '../utils/aiInput';
 import { AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
 import AiLoadingIndicator from './AiLoadingIndicator';
+import UpgradeModal from './UpgradeModal';
 
 const ANALYSIS_STATUS_MESSAGES = [
   'Reading your blurt…',
@@ -47,6 +48,7 @@ const BlurtingMode = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null); // Friendly message when analysis fails
   const [isGeneratingMissCards, setIsGeneratingMissCards] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [missDeck, setMissDeck] = useState(null); // { deckId, cardCount } once misses became cards
   const [inputMode, setInputMode] = useState(() => (location.state?.sourceText ? 'text' : 'pdf')); // 'pdf' or 'text'
   const [expandedSection, setExpandedSection] = useState(null); // For accordion: 'performance', 'improvements', 'quiz'
@@ -160,7 +162,7 @@ const BlurtingMode = () => {
     // Check AI usage limits using current aiUsageCount
     const usage = canUseAI(isPro, aiUsageCount);
     if (!usage.canUse) {
-      alert(`You've reached your daily limit of ${usage.limit} AI analyses. Upgrade to Pro for unlimited AI.`);
+      setShowUpgradeModal(true);
       return;
     }
 
@@ -406,6 +408,8 @@ ${sourceText.slice(0, 6000)}`;
       position: 'relative',
       minHeight: '100%',
     }}>
+      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
+
       {/* Gradient blob background */}
       <div style={{
         position: 'absolute',

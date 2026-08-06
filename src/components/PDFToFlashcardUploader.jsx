@@ -9,6 +9,7 @@ import { getAuthHeader } from '../utils/authHeader';
 import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
 import { downloadAnkiCsv } from '../utils/ankiExport';
 import AiLoadingIndicator from './AiLoadingIndicator';
+import UpgradeModal from './UpgradeModal';
 
 const GENERATE_STATUS_MESSAGES = [
   'Reading your material…',
@@ -34,6 +35,8 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   const [editingCardIndex, setEditingCardIndex] = useState(null); // Track which card is being edited
   const [editingCardData, setEditingCardData] = useState(null); // Store temporary edit data
   const [timedOut, setTimedOut] = useState(false); // Offer a retry after a cold-start timeout
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState(null);
   const fileInputRef = useRef(null);
   const abortRef = useRef(null);
 
@@ -87,28 +90,11 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       }, { signal: controller.signal });
 
       if (response.status === 403) {
-        const errorData = await response.json().catch(() => ({ error: 'Limit Reached' }));
-        const errorMessage = errorData.error || 'Limit Reached';
-        
-        // Check if it's the PDF limit (monthly) or AI limit (daily)
-        if (errorMessage.includes('Free limit reached') || errorMessage.includes('Upgrade to Pro')) {
-          // PDF limit reached - show upgrade modal
-          toast.error('You have used your 3 free credits. Upgrade for unlimited study.', {
-            duration: 5000,
-            style: {
-              background: '#1f2937',
-              color: '#fff',
-              border: '1px solid #ef4444',
-            },
-            icon: '🔒',
-          });
-          setError('You have used your 3 free PDF upload credits this month. Upgrade to Pro for unlimited study.');
-        } else {
-          // AI limit reached (daily)
-          toast.error(errorMessage || 'Daily AI Limit Reached (5/5). Upgrade to Pro for unlimited.');
-          setError(errorMessage || 'Daily AI Limit Reached');
-        }
-        
+        // Limit reached (PDF credits or daily AI) - graceful paywall, not a
+        // raw error toast.
+        const errorData = await response.json().catch(() => ({}));
+        setUpgradeMessage(errorData.error || null);
+        setShowUpgradeModal(true);
         setIsLoading(false);
         return;
       }
@@ -441,6 +427,15 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     downloadAnkiCsv(generatedCards, deckTitle || 'flashcards');
     toast.success('Exported! Import this file into Anki.');
   }, [generatedCards, deckTitle]);
+
+  // Rendered in every branch - a limit can be hit from upload or paste.
+  const upgradeModal = (
+    <UpgradeModal
+      isOpen={showUpgradeModal}
+      onClose={() => setShowUpgradeModal(false)}
+      message={upgradeMessage}
+    />
+  );
 
   // Show preview section if cards are generated
   if (generatedCards && generatedCards.length > 0) {
@@ -971,6 +966,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
         flexDirection: 'column',
         gap: '12px',
       }}>
+        {upgradeModal}
         <div style={{
           backgroundColor: 'rgba(34, 197, 94, 0.1)',
           backdropFilter: 'blur(10px)',
@@ -1109,6 +1105,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       flexDirection: 'column',
       gap: '24px',
     }}>
+      {upgradeModal}
       {/* Tab Switcher */}
       <div style={{
         display: 'flex',
