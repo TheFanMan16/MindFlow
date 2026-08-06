@@ -147,7 +147,7 @@ const FeynmanMode = () => {
 
   return (
     <div style={{
-      padding: '48px',
+      padding: 'clamp(16px, 5vw, 48px)',
       flex: 1,
       display: 'flex',
       flexDirection: 'column',

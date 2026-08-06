@@ -93,6 +93,61 @@ export const PrivacyPage = () => (
   </LegalLayout>
 );
 
+export const AboutPage = () => (
+  <LegalLayout title="About MindFlow" updated="August 6, 2026">
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '20px',
+      marginBottom: '28px',
+    }}>
+      <div style={{
+        width: '72px',
+        height: '72px',
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '28px',
+        fontWeight: 700,
+        color: '#ffffff',
+        flexShrink: 0,
+      }}>
+        JH
+      </div>
+      <div>
+        <div style={{ fontSize: '18px', fontWeight: 600, color: '#ffffff' }}>John Hanna</div>
+        <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>Builder of MindFlow</div>
+      </div>
+    </div>
+
+    <p>
+      MindFlow exists because most studying is re-reading, and re-reading barely
+      works. The research is unambiguous: testing yourself and spacing your reviews
+      beats highlighting and rewatching lectures, every time. The problem is that
+      doing it properly takes four separate tools and a spreadsheet's worth of
+      discipline.
+    </p>
+
+    <H2>What it does</H2>
+    <p>
+      MindFlow runs the whole loop in one place: focus on a topic, blurt what you
+      remember, let the AI find exactly what you missed, turn only the misses into
+      flashcards, and see them again right before you'd forget. Every feature exists
+      to serve that loop — if it doesn't help you remember on exam day, it isn't
+      here.
+    </p>
+
+    <H2>Get in touch</H2>
+    <p>
+      Bugs, ideas, or just want to say the recall grader was too harsh:{' '}
+      <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#a78bfa' }}>{CONTACT_EMAIL}</a>.
+      I read everything.
+    </p>
+  </LegalLayout>
+);
+
 export const TermsPage = () => (
   <LegalLayout title="Terms of Service" updated="August 6, 2026">
     <p>

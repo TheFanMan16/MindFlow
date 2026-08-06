@@ -1,8 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Lightbulb, Settings, LogOut } from 'lucide-react';
+import { Lightbulb, Settings, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
+
+/** Matches Tailwind's md breakpoint: below 768px the sidebar becomes bottom tabs. */
+const MOBILE_QUERY = '(max-width: 767px)';
+
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return isMobile;
+};
 
 
 const Sidebar = () => {
@@ -10,6 +26,7 @@ const Sidebar = () => {
   const location = useLocation();
   const { profile, user, signOut } = useAuth();
   const profileCtx = useProfile();
+  const isMobile = useIsMobile();
 
   // Active mode detection and color mapping
   const getActiveMode = (p) => {
@@ -96,6 +113,92 @@ const Sidebar = () => {
       activeText: '#34d399',
     },
   ];
+
+  // Mobile: fixed bottom tab bar instead of the side rail. Students study on
+  // phones; a 96px-wide vertical bar eats a quarter of a 375px screen.
+  if (isMobile) {
+    const tabs = [
+      ...menuItems,
+      user
+        ? { path: '/profile', label: 'Profile', icon: null, lucide: User }
+        : { path: '/login', label: 'Sign In', icon: null, lucide: User },
+    ];
+    return (
+      <nav style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 40,
+        display: 'flex',
+        backgroundColor: 'rgba(17, 24, 39, 0.95)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+        padding: '6px 4px calc(6px + env(safe-area-inset-bottom))',
+      }}>
+        {tabs.map((item) => {
+          const isActive = location.pathname === item.path;
+          const itemMode = getActiveMode(item.path);
+          const itemHex = modeToHex[itemMode] || modeToHex.default;
+          const LucideIcon = item.lucide;
+          return (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              style={{
+                flex: 1,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '6px 2px',
+                minWidth: 0,
+              }}
+            >
+              {LucideIcon ? (
+                <LucideIcon
+                  size={22}
+                  style={{
+                    color: isActive ? itemHex : 'rgba(255, 255, 255, 0.6)',
+                    filter: isActive ? `drop-shadow(0 0 8px ${itemHex})` : 'none',
+                  }}
+                />
+              ) : (
+                <svg
+                  style={{
+                    width: '22px',
+                    height: '22px',
+                    stroke: isActive ? itemHex : 'rgba(255, 255, 255, 0.6)',
+                    fill: 'none',
+                    strokeWidth: '2',
+                    filter: isActive ? `drop-shadow(0 0 8px ${itemHex})` : 'none',
+                  }}
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+              )}
+              <span style={{
+                fontSize: '9px',
+                fontWeight: isActive ? '700' : '500',
+                color: isActive ? itemHex : 'rgba(255, 255, 255, 0.55)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
+              }}>
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+    );
+  }
 
   return (
     <div style={{

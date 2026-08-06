@@ -397,7 +397,7 @@ ${sourceText.slice(0, 6000)}`;
 
   return (
     <div style={{
-      padding: '48px',
+      padding: 'clamp(16px, 5vw, 48px)',
       flex: 1,
       overflowY: 'auto',
       // The decorative blob below hangs 200px past the right edge; without

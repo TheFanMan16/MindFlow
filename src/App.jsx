@@ -18,7 +18,7 @@ import Login from './pages/Login';
 import UpdatePassword from './pages/Auth/UpdatePassword';
 import AuthCallback from './pages/AuthCallback';
 import NotFound from './pages/NotFound';
-import { PrivacyPage, TermsPage } from './pages/Legal';
+import { PrivacyPage, TermsPage, AboutPage } from './pages/Legal';
 import PanicMode from './pages/PanicMode';
 import SentryModal from './components/SentryModal';
 import MiniTimer from './components/MiniTimer';
@@ -42,7 +42,8 @@ const MainLayout = ({ children }) => {
     <ProfileProvider>
       <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
         <Sidebar />
-        <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-6 relative">
+        {/* pb-24 clears the mobile bottom tab bar; md+ has the side rail instead */}
+        <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-4 pb-24 md:p-6 relative">
           {children}
         </main>
       </div>
@@ -416,6 +417,14 @@ function App() {
           element={
             <GuestLayout>
               <TermsPage />
+            </GuestLayout>
+          }
+        />
+        <Route
+          path="/about"
+          element={
+            <GuestLayout>
+              <AboutPage />
             </GuestLayout>
           }
         />

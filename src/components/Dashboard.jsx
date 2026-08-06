@@ -483,7 +483,7 @@ const Dashboard = () => {
 
   return (
     <div style={{
-      padding: '48px',
+      padding: 'clamp(16px, 5vw, 48px)',
       width: '100%',
       minHeight: '100%',
       position: 'relative',
@@ -546,6 +546,75 @@ const Dashboard = () => {
             </p>
           </div>
         </div>
+        {/* First-run onboarding: the aha moment must happen in session one */}
+        {user && !loading && dueCards.length === 0 && topicMastery.length === 0 && weeklyMomentum === 0 && stats.sessionsCompleted === 0 && (
+          <div
+            className="max-w-7xl mx-auto"
+            style={{
+              backgroundColor: 'rgba(139, 92, 246, 0.08)',
+              border: '1px solid rgba(139, 92, 246, 0.35)',
+              borderRadius: '20px',
+              padding: '32px',
+              marginBottom: '32px',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{
+              fontSize: '13px',
+              fontWeight: '600',
+              color: '#a78bfa',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              marginBottom: '10px',
+            }}>
+              Start here
+            </div>
+            <h2 style={{ fontSize: '26px', fontWeight: '700', color: '#ffffff', marginBottom: '12px' }}>
+              Feel the loop in 60 seconds
+            </h2>
+            <p style={{
+              fontSize: '15px',
+              color: 'rgba(255, 255, 255, 0.65)',
+              maxWidth: '560px',
+              margin: '0 auto 24px',
+              lineHeight: '1.6',
+            }}>
+              Paste any notes, blurt what you remember, and watch the AI find your gaps
+              and turn them into flashcards that resurface right before you'd forget them.
+            </p>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '24px',
+              flexWrap: 'wrap',
+              marginBottom: '28px',
+              fontSize: '14px',
+              color: 'rgba(255, 255, 255, 0.75)',
+              fontWeight: '600',
+            }}>
+              <span>1 · Paste your notes</span>
+              <span>2 · Test yourself</span>
+              <span>3 · Misses become cards</span>
+            </div>
+            <button
+              onClick={() => navigate('/recall')}
+              style={{
+                background: 'linear-gradient(90deg, #8b5cf6, #ec4899)',
+                color: '#ffffff',
+                border: 'none',
+                padding: '16px 36px',
+                borderRadius: '14px',
+                fontSize: '16px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                boxShadow: '0 4px 24px rgba(139, 92, 246, 0.4)',
+              }}
+            >
+              Paste your notes → start the loop
+            </button>
+          </div>
+        )}
+
         {/* Panic Button - the night-before-the-exam entry point */}
         {user && (
           <div className="max-w-7xl mx-auto" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
@@ -918,6 +987,7 @@ const Dashboard = () => {
         }}>
           <div>© {new Date().getFullYear()} MindFlow</div>
           <div style={{ display: 'flex', gap: '20px' }}>
+            <a href="/about" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>About</a>
             <a href="/privacy" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Privacy</a>
             <a href="/terms" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Terms</a>
             <a href="mailto:hannajohn37@gmail.com" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Contact</a>
