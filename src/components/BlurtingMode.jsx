@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PDFUploader from './PDFUploader';
 import { generateJSONWithGemini, generateFlashcardSet } from '../utils/gemini';
-import { recordRecallAttempt, findOrCreateTopic } from '../utils/studyLoop';
+import { recordRecallAttempt, findOrCreateTopic, getLoopStreak } from '../utils/studyLoop';
+import { downloadRecapImage } from '../utils/recapImage';
 import { saveGeneratedDeck } from '../utils/deckUtils';
 import { useAuth } from '../context/AuthContext';
 import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
@@ -31,7 +32,8 @@ const BlurtingMode = () => {
   }));
   const [aiUsageCount, setAiUsageCount] = useState(0);
   const [phase, setPhase] = useState('SETUP'); // SETUP, WRITING, ANALYSIS
-  const [sourceText, setSourceText] = useState('');
+  // The Panic Button (and other handoffs) can arrive with notes preloaded.
+  const [sourceText, setSourceText] = useState(() => location.state?.sourceText || '');
   const [userAttempt, setUserAttempt] = useState('');
   const [timeRemaining, setTimeRemaining] = useState(5 * 60); // 5 minutes in seconds
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -46,7 +48,7 @@ const BlurtingMode = () => {
   const [analysisError, setAnalysisError] = useState(null); // Friendly message when analysis fails
   const [isGeneratingMissCards, setIsGeneratingMissCards] = useState(false);
   const [missDeck, setMissDeck] = useState(null); // { deckId, cardCount } once misses became cards
-  const [inputMode, setInputMode] = useState('pdf'); // 'pdf' or 'text'
+  const [inputMode, setInputMode] = useState(() => (location.state?.sourceText ? 'text' : 'pdf')); // 'pdf' or 'text'
   const [expandedSection, setExpandedSection] = useState(null); // For accordion: 'performance', 'improvements', 'quiz'
   const textareaRef = useRef(null);
   const abortRef = useRef(null);
@@ -274,6 +276,18 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       setIsAnalyzing(false);
       abortRef.current = null;
     }
+  };
+
+  // One-tap story-format recap image (zero-budget growth loop)
+  const handleShareRecap = async (scoreOverride) => {
+    const streak = user?.id ? await getLoopStreak(user.id, { isPro }) : 0;
+    downloadRecapImage({
+      score: typeof scoreOverride === 'number' ? scoreOverride : (aiScore ?? 0),
+      grade: aiGrade,
+      topicName: topicContext.topicName,
+      streak,
+    });
+    toast.success('Recap image saved — share it to your story.');
   };
 
   // The loop's magic moment: cards generated ONLY for what the student
@@ -970,6 +984,22 @@ ${sourceText.slice(0, 6000)}`;
                       }}>
                         You've captured all the key concepts from the source material.
                       </div>
+                      <button
+                        onClick={() => handleShareRecap(100)}
+                        style={{
+                          marginTop: '20px',
+                          padding: '12px 24px',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          border: '1px solid rgba(16, 185, 129, 0.4)',
+                          borderRadius: '12px',
+                          color: '#10b981',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        📸 Share your perfect recall
+                      </button>
                     </div>
                   ) : (
                     <>
@@ -1088,6 +1118,22 @@ ${sourceText.slice(0, 6000)}`;
                               {aiSummary}
                             </div>
                           )}
+                          <button
+                            onClick={() => handleShareRecap()}
+                            style={{
+                              marginTop: '16px',
+                              padding: '10px 20px',
+                              background: 'rgba(139, 92, 246, 0.12)',
+                              border: '1px solid rgba(139, 92, 246, 0.35)',
+                              borderRadius: '12px',
+                              color: '#a78bfa',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            📸 Share recap
+                          </button>
                         </div>
                       )}
 

@@ -19,6 +19,7 @@ import UpdatePassword from './pages/Auth/UpdatePassword';
 import AuthCallback from './pages/AuthCallback';
 import NotFound from './pages/NotFound';
 import { PrivacyPage, TermsPage } from './pages/Legal';
+import PanicMode from './pages/PanicMode';
 import SentryModal from './components/SentryModal';
 import MiniTimer from './components/MiniTimer';
 import { useAuth } from './context/AuthContext';
@@ -449,6 +450,14 @@ function App() {
         {/* Legacy alias: the nav has always called this "Active Recall", so
             the URL now matches. Old bookmarks still land in the right place. */}
         <Route path="/blurting" element={<Navigate to="/recall" replace />} />
+        <Route
+          path="/panic"
+          element={
+            <MainLayout>
+              <PanicMode />
+            </MainLayout>
+          }
+        />
         <Route
           path="/focus"
           element={

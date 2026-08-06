@@ -546,6 +546,34 @@ const Dashboard = () => {
             </p>
           </div>
         </div>
+        {/* Panic Button - the night-before-the-exam entry point */}
+        {user && (
+          <div className="max-w-7xl mx-auto" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+            <button
+              onClick={() => navigate('/panic')}
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                borderRadius: '12px',
+                padding: '10px 18px',
+                color: '#f87171',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              }}
+            >
+              🚨 Exam soon? Paste your notes
+            </button>
+          </div>
+        )}
+
         {/* Today's Plan - the loop's daily entry point */}
         {user && (dueCards.length > 0 || topicMastery.length > 0) && (
           <div
