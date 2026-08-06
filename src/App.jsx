@@ -18,6 +18,7 @@ import Login from './pages/Login';
 import UpdatePassword from './pages/Auth/UpdatePassword';
 import AuthCallback from './pages/AuthCallback';
 import NotFound from './pages/NotFound';
+import { PrivacyPage, TermsPage } from './pages/Legal';
 import SentryModal from './components/SentryModal';
 import MiniTimer from './components/MiniTimer';
 import { useAuth } from './context/AuthContext';
@@ -397,6 +398,24 @@ function App() {
             <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden items-center justify-center">
               <UpdatePassword />
             </div>
+          }
+        />
+
+        {/* PUBLIC ROUTES: Legal pages */}
+        <Route
+          path="/privacy"
+          element={
+            <GuestLayout>
+              <PrivacyPage />
+            </GuestLayout>
+          }
+        />
+        <Route
+          path="/terms"
+          element={
+            <GuestLayout>
+              <TermsPage />
+            </GuestLayout>
           }
         />
 

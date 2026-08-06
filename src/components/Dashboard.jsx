@@ -514,7 +514,15 @@ const Dashboard = () => {
               letterSpacing: '0.2em',
               fontWeight: '400',
             }}>
-              Discover your peak state of flow and productivity
+              Study it once. Remember it on exam day.
+            </p>
+            <p className="text-sm md:text-base text-white/60 mb-8 fade-in-up-delay" style={{
+              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+              maxWidth: '520px',
+              margin: '0 auto 32px',
+              lineHeight: '1.6',
+            }}>
+              MindFlow runs your whole study loop — focus, self-test, and spaced review — so nothing you learn leaks away.
             </p>
           </div>
         </div>
@@ -825,6 +833,29 @@ const Dashboard = () => {
             </div>
           ))}
         </div>
+
+        {/* Footer */}
+        <footer style={{
+          maxWidth: '80rem',
+          margin: '64px auto 0',
+          padding: '24px 0',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          fontSize: '13px',
+          color: 'rgba(255, 255, 255, 0.4)',
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+        }}>
+          <div>© {new Date().getFullYear()} MindFlow</div>
+          <div style={{ display: 'flex', gap: '20px' }}>
+            <a href="/privacy" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Privacy</a>
+            <a href="/terms" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Terms</a>
+            <a href="mailto:hannajohn37@gmail.com" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Contact</a>
+          </div>
+        </footer>
 
       </div>
     </div>

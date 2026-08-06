@@ -60,6 +60,16 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// PWA: register the service worker in production builds only, so dev never
+// fights a stale cache.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Install-to-home-screen is an enhancement; the app works without it.
+    });
+  });
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
