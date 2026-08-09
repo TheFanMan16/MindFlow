@@ -1,25 +1,6 @@
 // CRITICAL: Load environment variables FIRST, before any other imports
 require('dotenv').config();
 
-// Debug logging setup
-const fs = require('fs');
-const path = require('path');
-const logDir = path.join(__dirname, '.cursor');
-const logPath = path.join(logDir, 'debug.log');
-const logEntry = (data) => {
-  try {
-    // Ensure directory exists
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-    }
-    const entry = JSON.stringify(data) + '\n';
-    fs.appendFileSync(logPath, entry, 'utf8');
-  } catch (e) {
-    // Log to console if file write fails
-    console.error('Debug log write failed:', e.message);
-  }
-};
-
 // CRITICAL: FAIL-HARD VALIDATION - Must run BEFORE any other code
 // This ensures the server fails to start if required environment variables are missing
 // Check environment mode
@@ -376,17 +357,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
 // Apply express.json() middleware AFTER webhook route (so webhook gets raw body)
 app.use(express.json());
-
-// Debug middleware to log all requests
-app.use((req, res, next) => {
-  if (req.path === '/get-subscription-details' || req.url === '/get-subscription-details') {
-    // #region agent log
-    console.log('🔍 DEBUG: Middleware caught request for /get-subscription-details', req.method, req.path, req.url);
-    logEntry({ location: 'server.js:137', message: 'Request received for get-subscription-details', data: { method: req.method, path: req.path, url: req.url, originalUrl: req.originalUrl }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'F' });
-    // #endregion
-  }
-  next();
-});
 
 // Get Stripe secret key from environment variable (TEST key expected: sk_test_...)
 // CRITICAL: Variable is guaranteed to exist due to fail-hard validation above
@@ -1137,31 +1107,19 @@ app.get('/get-subscription-details', requireAuth, async (req, res) => {
     }
 
     // Step A: Query Supabase to find the stripe_customer_id
-    // #region agent log
-    logEntry({ location: 'server.js:448', message: 'Querying database for stripe_customer_id (GET)', data: { userId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'I' });
-    // #endregion
     const { data: user, error: dbError } = await supabase
       .from('profiles')
       .select('stripe_customer_id, is_pro')
       .eq('id', userId)
       .single();
 
-    // #region agent log
-    logEntry({ location: 'server.js:454', message: 'Database query result (GET)', data: { hasUser: !!user, hasStripeCustomerId: !!user?.stripe_customer_id, isPro: user?.is_pro, dbError: dbError?.message }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'J' });
-    // #endregion
 
     // If stripe_customer_id is missing, return isSubscribed: false
     if (dbError || !user?.stripe_customer_id) {
-      // #region agent log
-      logEntry({ location: 'server.js:459', message: 'No stripe_customer_id found, returning isSubscribed: false', data: { dbError: dbError?.message, hasUser: !!user }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'M' });
-      // #endregion
       return res.json({ isSubscribed: false });
     }
 
     // Step B: Use Stripe to find active subscriptions
-    // #region agent log
-    logEntry({ location: 'server.js:464', message: 'Querying Stripe for subscriptions (GET)', data: { stripeCustomerId: user.stripe_customer_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'N' });
-    // #endregion
     const subscriptions = await stripe.subscriptions.list({
       customer: user.stripe_customer_id,
       limit: 1,
@@ -1169,17 +1127,11 @@ app.get('/get-subscription-details', requireAuth, async (req, res) => {
 
     // If no subscription found, return isSubscribed: false
     if (subscriptions.data.length === 0) {
-      // #region agent log
-      logEntry({ location: 'server.js:472', message: 'No subscriptions found in Stripe, returning isSubscribed: false', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'O' });
-      // #endregion
       return res.json({ isSubscribed: false });
     }
 
     const subscription = subscriptions.data[0];
 
-    // #region agent log
-    logEntry({ location: 'server.js:478', message: 'Subscription found, returning details (GET)', data: { status: subscription.status, currentPeriodEnd: subscription.current_period_end }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'P' });
-    // #endregion
 
     // Return subscription details
     res.json({
@@ -1189,9 +1141,6 @@ app.get('/get-subscription-details', requireAuth, async (req, res) => {
       renewsAt: subscription.current_period_end, // unix timestamp
     });
   } catch (error) {
-    // #region agent log
-    logEntry({ location: 'server.js:488', message: 'Error in get-subscription-details GET', data: { errorName: error.name, errorMessage: error.message }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H' });
-    // #endregion
     console.error('Error fetching subscription details (GET):', error);
     res.status(500).json({ error: error.message });
   }
@@ -1208,25 +1157,16 @@ app.post('/get-subscription-details', requireAuth, async (req, res) => {
     }
 
     // Query Supabase for the stripe_customer_id
-    // #region agent log
-    logEntry({ location: 'server.js:511', message: 'Querying database for stripe_customer_id', data: { userId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'I' });
-    // #endregion
     const { data: user, error: dbError } = await supabase
       .from('profiles')
       .select('stripe_customer_id, is_pro')
       .eq('id', userId)
       .single();
 
-    // #region agent log
-    logEntry({ location: 'server.js:518', message: 'Database query result', data: { hasUser: !!user, hasStripeCustomerId: !!user?.stripe_customer_id, isPro: user?.is_pro, dbError: dbError?.message }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'J' });
-    // #endregion
 
     // If the ID is null or missing, return { isSubscribed: false, message: 'No Customer ID found' }
     if (dbError || !user?.stripe_customer_id) {
       console.error('User not found or no Stripe ID:', dbError);
-      // #region agent log
-      logEntry({ location: 'server.js:525', message: 'No stripe_customer_id found, returning isSubscribed: false', data: { dbError: dbError?.message, hasUser: !!user, hasStripeCustomerId: !!user?.stripe_customer_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'R' });
-      // #endregion
       return res.json({
         isSubscribed: false,
         message: 'No Customer ID found'
@@ -1234,9 +1174,6 @@ app.post('/get-subscription-details', requireAuth, async (req, res) => {
     }
 
     // If the ID exists, call stripe.subscriptions.list and return the plan details
-    // #region agent log
-    logEntry({ location: 'server.js:532', message: 'Querying Stripe for subscriptions', data: { stripeCustomerId: user.stripe_customer_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'N' });
-    // #endregion
     const subscriptions = await stripe.subscriptions.list({
       customer: user.stripe_customer_id,
       limit: 1,
@@ -1244,9 +1181,6 @@ app.post('/get-subscription-details', requireAuth, async (req, res) => {
 
     // If no subscription found, return isSubscribed: false
     if (subscriptions.data.length === 0) {
-      // #region agent log
-      logEntry({ location: 'server.js:540', message: 'No subscriptions found in Stripe, returning isSubscribed: false', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'O' });
-      // #endregion
       return res.json({
         isSubscribed: false,
         message: 'No active subscription found'
@@ -1256,9 +1190,6 @@ app.post('/get-subscription-details', requireAuth, async (req, res) => {
     const subscription = subscriptions.data[0];
     const price = subscription.items.data[0]?.price;
 
-    // #region agent log
-    logEntry({ location: 'server.js:550', message: 'Subscription found, returning plan details', data: { status: subscription.status, currentPeriodEnd: subscription.current_period_end, hasPrice: !!price, amount: price?.unit_amount }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'P' });
-    // #endregion
 
     // Return subscription details
     res.json({
@@ -1274,9 +1205,6 @@ app.post('/get-subscription-details', requireAuth, async (req, res) => {
       cancelAt: subscription.cancel_at,
     });
   } catch (error) {
-    // #region agent log
-    logEntry({ location: 'server.js:568', message: 'Error in get-subscription-details POST', data: { errorName: error.name, errorMessage: error.message, errorStack: error.stack?.substring(0, 200) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H' });
-    // #endregion
     console.error('Error fetching subscription details:', error);
     res.status(500).json({ error: error.message });
   }
@@ -1682,25 +1610,4 @@ app.listen(PORT, () => {
     console.log('🔍 DEBUG: Registered routes include /get-subscription-details');
   }
 
-  // #region agent log
-  // Updated to log the dynamic PORT variable instead of hardcoded 3000
-  logEntry({
-    location: 'server.js:485',
-    message: 'Server started',
-    data: {
-      port: PORT,
-      hasGetSubscriptionRoute: true,
-      routesRegistered: [
-        '/get-subscription-details',
-        '/create-portal-session',
-        '/cancel-subscription',
-        '/create-checkout-session'
-      ]
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run2',
-    hypothesisId: 'E'
-  });
-  // #endregion
 });
