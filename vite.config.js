@@ -34,6 +34,10 @@ export default defineConfig({
     // jsdom so component tests can render; node-only tests still work fine.
     environment: 'jsdom',
     globals: true,
+    // The default 'forks' pool cannot start workers on Windows here - every
+    // test file dies with "Timeout waiting for worker to respond" before a
+    // single test runs. Threads work fine on every platform we target.
+    pool: 'threads',
     setupFiles: ['./src/test/setup.js'],
     // Vitest otherwise walks node_modules and the Electron build output.
     include: ['src/**/*.test.{js,jsx}', 'utils/**/*.test.js', 'services/**/*.test.js'],
