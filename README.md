@@ -24,17 +24,28 @@ Repository Structure
 The codebase is split to keep UI components isolated from API and business logic:
 
 ├── src/
-│   ├── components/      # UI components
-│   ├── context/         # Global state
+│   ├── components/      # Study modes and app shell
+│   ├── config/          # Client env validation and API endpoints
+│   ├── context/         # Global state (auth, profile, timer)
 │   ├── hooks/           # Custom React hooks
-│   ├── pages/           # Route views
-│   ├── routes/          # Express API handlers
-│   ├── services/        # Stripe, Gemini, and Supabase logic
-│   └── utils/           # Web workers and helper functions
-├── supabase/            # Schema, RLS policies, and migrations
+│   ├── lib/             # Supabase browser client
+│   ├── pages/           # Route views (auth, legal, panic mode, 404)
+│   ├── test/            # Vitest setup and cross-cutting guards
+│   └── utils/           # Spaced repetition, AI fetch, helpers
+├── services/            # Server-side flashcard generation
+├── utils/               # Server-side auth middleware and shared limits
+├── supabase/
+│   ├── migrations/      # Schema and RLS policies
+│   └── functions/       # Deno Edge Functions (Stripe, Gemini)
+├── public/              # Static assets and the timer Web Worker
 ├── scripts/             # Internal security and build scripts
-├── server.js            # Node.js entry point
+├── server.js            # Express API entry point
+├── main.js              # Electron main process
 └── vercel.json          # Deployment routing
+
+Environment variables are documented in `.env.example`; copy it to `.env` and
+fill in real values. Both the Vite build and the Express server fail hard on
+startup when a required variable is missing.
 
 Operations: Render cold starts
 
