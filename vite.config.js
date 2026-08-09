@@ -1,8 +1,25 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// Open Graph requires absolute URLs - Twitter and most other scrapers will not
+// resolve a relative og:image against the page, so the card silently renders
+// without an image. The canonical host is not knowable at author time, so
+// index.html carries a __SITE_URL__ placeholder that this plugin substitutes at
+// build time. Default keeps the previously hardcoded value.
+const SITE_URL_FALLBACK = 'https://mindflow.app';
+
+function siteUrlPlugin() {
+  const siteUrl = (process.env.VITE_PUBLIC_SITE_URL || SITE_URL_FALLBACK).replace(/\/+$/, '');
+  return {
+    name: 'mindflow-site-url',
+    transformIndexHtml(html) {
+      return html.replaceAll('__SITE_URL__', siteUrl);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), siteUrlPlugin()],
   base: '/',
   server: {
     port: 5173,
