@@ -200,6 +200,44 @@ export async function getDueCards(userId, { limit = 200 } = {}) {
   }
 }
 
+/**
+ * Tallies due cards per deck for the deck library badges.
+ *
+ * One query for the whole user rather than a count per deck: the library
+ * already runs a per-deck query for total card counts, and doubling that on
+ * every dashboard render is the difference between one request and dozens.
+ *
+ * `cap` bounds the rows pulled back. A user with more due cards than this sees
+ * a tally that stops climbing, which is fine for a badge - `capped` is returned
+ * so a caller can tell the difference between "exactly n" and "at least n".
+ *
+ * @param {string} userId
+ * @param {{cap?: number}} [options]
+ * @returns {Promise<{counts: Record<string, number>, capped: boolean}>}
+ */
+export async function getDueCountsByDeck(userId, { cap = 2000 } = {}) {
+  if (!userId) return { counts: {}, capped: false };
+  try {
+    const { data, error } = await supabase
+      .from('flashcards')
+      .select('deck_id')
+      .eq('user_id', userId)
+      .lte('next_review', new Date().toISOString())
+      .limit(cap);
+    if (error) throw error;
+
+    const counts = {};
+    for (const row of data || []) {
+      if (!row?.deck_id) continue;
+      counts[row.deck_id] = (counts[row.deck_id] || 0) + 1;
+    }
+    return { counts, capped: (data || []).length >= cap };
+  } catch (err) {
+    devError('getDueCountsByDeck failed:', err);
+    return { counts: {}, capped: false };
+  }
+}
+
 // ============================================================
 // Streak
 // ============================================================

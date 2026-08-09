@@ -10,6 +10,7 @@ import FolderGroup from './FolderGroup';
 import { AnimatePresence, motion } from 'framer-motion';
 import { downloadAnkiCsv, parseAnkiText } from '../utils/ankiExport';
 import { saveGeneratedDeck } from '../utils/deckUtils';
+import { getDueCountsByDeck } from '../utils/studyLoop';
 
 const FlashcardDashboard = () => {
   const navigate = useNavigate();
@@ -18,6 +19,8 @@ const FlashcardDashboard = () => {
   const [selectedDeckId, setSelectedDeckId] = useState(null);
   const [decks, setDecks] = useState([]);
   const [decksLoading, setDecksLoading] = useState(true);
+  // deck id -> number of cards whose next_review has arrived.
+  const [dueByDeck, setDueByDeck] = useState({});
   const [deckRefresh, setDeckRefresh] = useState(0); // bump to refetch decks in place
   // Anki import modal
   const [showImportModal, setShowImportModal] = useState(false);
@@ -169,6 +172,12 @@ const FlashcardDashboard = () => {
           );
           
           setDecks(decksWithCounts);
+
+          // Due badges for every deck in one query. Failure here returns an
+          // empty tally rather than throwing, so the library still renders.
+          const { counts: dueCounts } = await getDueCountsByDeck(user.id);
+          setDueByDeck(dueCounts);
+
           // Merge Supabase decks with localStorage items
           // Keep folders and order from localStorage, update/add decks from Supabase
           setItems((prevItems) => {
@@ -953,12 +962,10 @@ const FlashcardDashboard = () => {
     return { from: '#00FF94', to: '#00D977' }; // Neon green to darker emerald
   };
 
-  // Calculate cards due (placeholder - can be enhanced later)
-  const getCardsDue = (deckId) => {
-    // For now, return a dummy value
-    // Later: Query flashcards where next_review <= today
-    return 0;
-  };
+  // Cards whose next_review has arrived, tallied when the library loads.
+  // Cards that have never been reviewed are not due - they enter the schedule
+  // after their first study session.
+  const getCardsDue = (deckId) => dueByDeck[deckId] ?? 0;
 
   // Handle deck saved callback from PDFToFlashcardUploader
   const handleDeckSaved = () => {

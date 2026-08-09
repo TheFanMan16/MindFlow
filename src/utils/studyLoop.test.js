@@ -1,9 +1,31 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// studyLoop talks to Supabase at module scope, so the client is stubbed. The
+// query builder is chainable and resolves at .limit(), matching the real shape.
+const db = vi.hoisted(() => ({ result: { data: [], error: null }, lastLimit: null }));
+
+vi.mock('../lib/supabaseClient', () => ({
+  supabase: {
+    from: () => {
+      const q = {};
+      q.select = () => q;
+      q.eq = () => q;
+      q.lte = () => q;
+      q.limit = (n) => {
+        db.lastLimit = n;
+        return Promise.resolve(db.result);
+      };
+      return q;
+    },
+  },
+}));
+
 import {
   computeMastery,
   computeStreakFromDates,
   countActiveDaysThisWeek,
   toLocalDateKey,
+  getDueCountsByDeck,
 } from './studyLoop';
 
 describe('computeMastery', () => {
@@ -122,5 +144,55 @@ describe('countActiveDaysThisWeek', () => {
     expect(countActiveDaysThisWeek([key(0), key(1), key(6)], today)).toBe(3);
     expect(countActiveDaysThisWeek([key(7), key(8)], today)).toBe(0);
     expect(countActiveDaysThisWeek([key(0), key(0)], today)).toBe(1);
+  });
+});
+
+describe('getDueCountsByDeck', () => {
+  beforeEach(() => {
+    db.result = { data: [], error: null };
+    db.lastLimit = null;
+  });
+
+  it('returns an empty tally without a user', async () => {
+    expect(await getDueCountsByDeck(null)).toEqual({ counts: {}, capped: false });
+  });
+
+  it('tallies rows per deck', async () => {
+    db.result = {
+      data: [{ deck_id: 'a' }, { deck_id: 'b' }, { deck_id: 'a' }],
+      error: null,
+    };
+    const { counts } = await getDueCountsByDeck('user-1');
+    expect(counts).toEqual({ a: 2, b: 1 });
+  });
+
+  it('omits decks with nothing due rather than reporting zero', async () => {
+    db.result = { data: [{ deck_id: 'a' }], error: null };
+    const { counts } = await getDueCountsByDeck('user-1');
+    expect(counts.b).toBeUndefined();
+  });
+
+  it('ignores rows with no deck_id', async () => {
+    db.result = { data: [{ deck_id: null }, {}, { deck_id: 'a' }], error: null };
+    const { counts } = await getDueCountsByDeck('user-1');
+    expect(counts).toEqual({ a: 1 });
+  });
+
+  it('flags a saturated result so a caller can say "at least n"', async () => {
+    db.result = { data: [{ deck_id: 'a' }, { deck_id: 'a' }], error: null };
+    const { capped } = await getDueCountsByDeck('user-1', { cap: 2 });
+    expect(capped).toBe(true);
+    expect(db.lastLimit).toBe(2);
+  });
+
+  it('is not flagged as capped when under the cap', async () => {
+    db.result = { data: [{ deck_id: 'a' }], error: null };
+    expect((await getDueCountsByDeck('user-1', { cap: 2 })).capped).toBe(false);
+  });
+
+  it('degrades to an empty tally when the query errors', async () => {
+    // The library must still render if the migration has not been applied.
+    db.result = { data: null, error: { message: 'relation does not exist' } };
+    expect(await getDueCountsByDeck('user-1')).toEqual({ counts: {}, capped: false });
   });
 });
