@@ -1,29 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabaseClient';
 import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import BlurtingMode from './components/BlurtingMode';
-import TimerMode from './components/TimerMode';
-import SettingsMode from './components/SettingsMode';
-import ProfileMode from './components/ProfileMode';
-import FeynmanMode from './components/FeynmanMode';
-import FlashcardMode from './components/FlashcardMode';
-import FlashcardStudy from './components/FlashcardStudy';
-import GestureFlashcards from './components/GestureFlashcards';
-import StudyInterface from './components/StudyInterface';
-import Success from './pages/Success';
 import Login from './pages/Login';
 import UpdatePassword from './pages/Auth/UpdatePassword';
 import AuthCallback from './pages/AuthCallback';
 import NotFound from './pages/NotFound';
-import { PrivacyPage, TermsPage, AboutPage } from './pages/Legal';
-import PanicMode from './pages/PanicMode';
 import SentryModal from './components/SentryModal';
 import MiniTimer from './components/MiniTimer';
 import { useAuth } from './context/AuthContext';
 import { ProfileProvider } from './context/ProfileContext';
+
+// Study modes are split into their own chunks: each is large, and no session
+// visits all of them. The shell (sidebar, auth screens, timer) stays eager so
+// first paint and the login path do not wait on a second request.
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const BlurtingMode = lazy(() => import('./components/BlurtingMode'));
+const TimerMode = lazy(() => import('./components/TimerMode'));
+const SettingsMode = lazy(() => import('./components/SettingsMode'));
+const ProfileMode = lazy(() => import('./components/ProfileMode'));
+const FeynmanMode = lazy(() => import('./components/FeynmanMode'));
+const FlashcardMode = lazy(() => import('./components/FlashcardMode'));
+const StudyInterface = lazy(() => import('./components/StudyInterface'));
+const PanicMode = lazy(() => import('./pages/PanicMode'));
+const Success = lazy(() => import('./pages/Success'));
+const PrivacyPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.PrivacyPage })));
+const TermsPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.TermsPage })));
+const AboutPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.AboutPage })));
+
+/** Shown while a route chunk is in flight. Mirrors the session-loading state. */
+const RouteFallback = () => (
+  <div className="flex h-full w-full items-center justify-center py-20">
+    <div className="w-10 h-10 border-4 border-white/10 border-t-purple-500 rounded-full animate-spin" />
+  </div>
+);
 
 // Guest Layout (No Sidebar)
 const GuestLayout = ({ children }) => {
@@ -44,7 +55,9 @@ const MainLayout = ({ children }) => {
         <Sidebar />
         {/* pb-24 clears the mobile bottom tab bar; md+ has the side rail instead */}
         <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-4 pb-24 md:p-6 relative">
-          {children}
+          {/* Inner boundary so a route chunk loads without unmounting the
+              sidebar - React resolves to the nearest Suspense ancestor. */}
+          <Suspense fallback={<RouteFallback />}>{children}</Suspense>
         </main>
       </div>
     </ProfileProvider>
@@ -389,6 +402,8 @@ function App() {
           },
         }}
       />
+      {/* Outer boundary for routes that render outside MainLayout. */}
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         {/* PUBLIC ROUTE: Login */}
         <Route path="/login" element={<Login />} />
@@ -500,22 +515,6 @@ function App() {
           }
         />
         <Route
-          path="/flashcard-study"
-          element={
-            <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden">
-              <FlashcardStudy />
-            </div>
-          }
-        />
-        <Route
-          path="/gesture-flashcard"
-          element={
-            <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden">
-              <GestureFlashcards />
-            </div>
-          }
-        />
-        <Route
           path="/settings"
           element={
             <MainLayout>
@@ -550,6 +549,7 @@ function App() {
           }
         />
       </Routes>
+      </Suspense>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
-import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision';
 import { RotateCcw, Play, Pause } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTimer } from '../context/TimerContext';
@@ -286,6 +285,12 @@ const TimerMode = () => {
       try {
         setFaceDetectorStatus('Loading Google Vision...');
         console.log('Sentry Mode: Initializing MediaPipe...');
+
+        // Imported here rather than at module scope: the vision bundle is by
+        // far the heaviest dependency in the app, and Sentry Mode is a Pro
+        // feature most sessions never turn on. Loading it on demand keeps it
+        // out of the initial download.
+        const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
 
         const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"

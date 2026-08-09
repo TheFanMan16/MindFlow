@@ -35,7 +35,7 @@ const Sidebar = () => {
     if (p.startsWith('/focus') || p.startsWith('/study')) return 'timer';
     if (p.startsWith('/recall') || p.startsWith('/blurting')) return 'recall';
     if (p.startsWith('/feynman')) return 'feynman';
-    if (p.startsWith('/flashcards') || p.startsWith('/flashcard-study')) return 'flashcards';
+    if (p.startsWith('/flashcards')) return 'flashcards';
     return 'default';
   };
 

@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { updateCardProgress } from '../utils/spacedRepetition';
 import { ArrowLeft } from 'lucide-react';
-import { GestureRecognizer, FilesetResolver } from '@mediapipe/tasks-vision';
 
 const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const navigate = useNavigate();
@@ -543,6 +542,10 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
     const initializeRecognizer = async () => {
       try {
+        // Loaded on demand - see the note in TimerMode. Gesture control is
+        // optional, so the vision bundle should not be in the initial download.
+        const { GestureRecognizer, FilesetResolver } = await import('@mediapipe/tasks-vision');
+
         const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
