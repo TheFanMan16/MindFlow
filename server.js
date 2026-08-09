@@ -149,12 +149,19 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false, // Disable if it causes issues with external resources
 }));
 
-// CORS Configuration: Restrict to allowed origins only
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'https://mind-flow-two-dusky.vercel.app', // Production frontend (Vercel)
-];
+// CORS Configuration: Restrict to allowed origins only.
+// Configured via ALLOWED_ORIGINS (comma-separated) and VERCEL_PREVIEW_SCOPE.
+// See utils/corsOrigins.js for why previews match on the scope suffix.
+const { resolveOriginPolicy, createOriginChecker } = require('./utils/corsOrigins');
+const originPolicy = resolveOriginPolicy(process.env);
+
+if (isProduction && !process.env.ALLOWED_ORIGINS) {
+  console.warn('⚠️  ALLOWED_ORIGINS is not set - falling back to the built-in frontend origin.');
+  console.warn(`   Allowed: ${originPolicy.origins.join(', ')}`);
+}
+if (isProduction && !process.env.VERCEL_PREVIEW_SCOPE) {
+  console.warn('⚠️  VERCEL_PREVIEW_SCOPE is not set - Vercel preview deployments will be blocked.');
+}
 
 // Where Stripe sends the user back to after checkout or the billing portal.
 // Defaults to the dev server so local behaviour is unchanged; set APP_BASE_URL
@@ -166,18 +173,7 @@ if (isProduction && !process.env.APP_BASE_URL) {
 }
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: createOriginChecker(process.env),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
