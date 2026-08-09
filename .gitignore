@@ -32,3 +32,10 @@ Thumbs.db
 # Electron
 out/
 
+# Supabase CLI local state - machine-specific, and pooler-url carries the
+# database host and user.
+supabase/.temp/
+
+# Editor agent scratch output
+.cursor/
+
