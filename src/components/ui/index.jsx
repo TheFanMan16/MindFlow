@@ -15,7 +15,6 @@ export { Tabs } from './Tabs';
 export { Tooltip } from './Tooltip';
 export { EmptyState } from './EmptyState';
 export { Skeleton, SkeletonText } from './Skeleton';
-
-/* Deprecated primitives from the previous direction - Dashboard only,
-   removed when it restyles. See legacy.jsx. */
-export { Eyebrow, Rule, RevealHeadline, Panel, IconFrame, Numeral, MagneticButton } from './legacy';
+export { Popover, PopoverItem, PopoverSeparator } from './Popover';
+export { Switch } from './Switch';
+export { Breadcrumb } from './Breadcrumb';

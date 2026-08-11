@@ -23,10 +23,14 @@ export const Tooltip = ({ label, side = 'top', children, className = '' }) => {
     setOpen(false);
   }, []);
 
-  const pos =
-    side === 'bottom'
-      ? 'top-full mt-1.5 left-1/2 -translate-x-1/2'
-      : 'bottom-full mb-1.5 left-1/2 -translate-x-1/2';
+  const POS = {
+    top: 'bottom-full mb-1.5 left-1/2 -translate-x-1/2',
+    bottom: 'top-full mt-1.5 left-1/2 -translate-x-1/2',
+    // left/right exist for the icon-rail sidebar, where above/below clips.
+    right: 'left-full ml-1.5 top-1/2 -translate-y-1/2',
+    left: 'right-full mr-1.5 top-1/2 -translate-y-1/2',
+  };
+  const pos = POS[side] || POS.top;
 
   return (
     <span
@@ -41,7 +45,11 @@ export const Tooltip = ({ label, side = 'top', children, className = '' }) => {
         {open ? (
           <motion.span
             role="tooltip"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: side === 'top' ? 2 : -2 }}
+            initial={
+              reduce
+                ? { opacity: 0 }
+                : { opacity: 0, scale: 0.96, ...(side === 'left' || side === 'right' ? {} : { y: side === 'top' ? 2 : -2 }) }
+            }
             animate={
               reduce
                 ? { opacity: 1, transition: reduced }

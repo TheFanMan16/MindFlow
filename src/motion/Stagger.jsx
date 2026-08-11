@@ -1,44 +1,81 @@
-import React from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
-import { staggerContainer, listItem, rFade, rStagger } from './variants';
+import React, { useState, useRef, useEffect, useContext, createContext } from 'react';
+import { motion, useInView, useReducedMotion } from 'framer-motion';
+import { smooth } from './transitions';
 
 /**
  * Staggered reveal container. Children wrapped in <Stagger.Item> cascade in
  * at 60ms intervals.
  *
- * Two modes:
- * - mount (default): animates as soon as the component mounts. This is the
- *   REQUIRED mode for content-critical sections. An IntersectionObserver
- *   that never fires leaves initial="hidden" applied forever - opacity 0,
- *   silent, no error - which is a failure mode this codebase has actually
- *   shipped once. Content must never depend on an observer.
- * - inView: for below-the-fold DECORATIVE reveals only. Fires once, 80px
- *   before entry. The margin is in px because IntersectionObserver rejects
- *   percentage rootMargin against the viewport (the root cause of the bug
- *   above).
+ * Engineering posture: content revelation must be FAILURE-PROOF. This
+ * component has two independent guarantees:
+ *
+ * 1. No observer dependency for the trigger. inView mode arms on
+ *    (IntersectionObserver fired OR a fallback timer elapsed) - an observer
+ *    that never fires cost this codebase a blank page once, and the timer
+ *    floor makes that impossible. The px margin also matters:
+ *    IntersectionObserver rejects percentage rootMargin against the viewport.
+ *
+ * 2. No variant-propagation dependency for the reveal. Items animate
+ *    THEMSELVES from context state rather than inheriting a parent variant
+ *    flip - propagation is one more layer that can silently strand children
+ *    at opacity 0 (observed in headless Chromium). Each item owns its
+ *    opacity; the stagger is a per-item delay computed from mount order.
+ *
+ * Under reduced motion, items render as plain divs - fully visible, no
+ * animation machinery in the path at all.
  */
-export const Stagger = ({ children, inView = false, className = '', ...rest }) => {
-  const reduce = useReducedMotion();
-  const trigger = inView
-    ? { initial: 'hidden', whileInView: 'visible', viewport: { once: true, margin: '-80px' } }
-    : { initial: 'hidden', animate: 'visible' };
+
+const StaggerContext = createContext({ go: true, counter: { current: 0 }, baseDelay: 0.06 });
+
+export const Stagger = ({ children, inView = false, fallbackMs = 1200, className = '', ...rest }) => {
+  const ref = useRef(null);
+  const seen = useInView(ref, { once: true, margin: '-80px' });
+  const [go, setGo] = useState(!inView);
+  // Fresh mount-order counter every render pass; items capture their index
+  // once, on first render, so re-renders keep indices stable.
+  const counter = useRef(0);
+  counter.current = 0;
+
+  useEffect(() => {
+    if (!inView || go) return undefined;
+    if (seen) {
+      setGo(true);
+      return undefined;
+    }
+    const t = setTimeout(() => setGo(true), fallbackMs);
+    return () => clearTimeout(t);
+  }, [inView, seen, go, fallbackMs]);
 
   return (
-    <motion.div
-      variants={reduce ? rStagger : staggerContainer}
-      className={className}
-      {...trigger}
-      {...rest}
-    >
-      {children}
-    </motion.div>
+    <StaggerContext.Provider value={{ go, counter, baseDelay: 0.06 }}>
+      <div ref={ref} className={className} {...rest}>
+        {children}
+      </div>
+    </StaggerContext.Provider>
   );
 };
 
 const Item = ({ children, className = '', ...rest }) => {
+  const { go, counter, baseDelay } = useContext(StaggerContext);
   const reduce = useReducedMotion();
+  const [index] = useState(() => counter.current++);
+
+  if (reduce) {
+    return (
+      <div className={className} {...rest}>
+        {children}
+      </div>
+    );
+  }
+
   return (
-    <motion.div variants={reduce ? rFade : listItem} className={className} {...rest}>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={go ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+      transition={{ ...smooth, delay: go ? index * baseDelay : 0 }}
+      className={className}
+      {...rest}
+    >
       {children}
     </motion.div>
   );

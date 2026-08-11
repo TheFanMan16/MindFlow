@@ -47,17 +47,8 @@ const DurationInput = ({ label, value, min, max, onCommit }) => {
   };
 
   return (
-    <div>
-      <label
-        htmlFor={`duration-${label}`}
-        style={{
-          display: 'block',
-          fontSize: '14px',
-          fontWeight: '600',
-          color: 'rgba(255, 255, 255, 0.8)',
-          marginBottom: '8px',
-        }}
-      >
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={`duration-${label}`} className="font-mono text-micro uppercase text-secondary">
         {label}
       </label>
       <input
@@ -67,41 +58,19 @@ const DurationInput = ({ label, value, min, max, onCommit }) => {
         max={max}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={(e) => {
-          commit();
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-        }}
+        onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             commit();
           }
         }}
-        style={{
-          width: '100%',
-          padding: '12px 16px',
-          backgroundColor: 'rgba(255, 255, 255, 0.05)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '12px',
-          color: '#ffffff',
-          fontSize: '16px',
-          outline: 'none',
-          transition: 'all 0.2s ease',
-        }}
-        onFocus={(e) => {
-          e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-        }}
+        className="h-9 w-full rounded-input border border-soft bg-base px-3 font-mono text-body
+                   tabular-nums text-primary transition-colors duration-150
+                   placeholder:text-tertiary hover:border-strong
+                   focus:border-strong focus:outline-none focus:ring-2 focus:ring-accent-ring"
       />
       {notice && (
-        <div
-          role="alert"
-          style={{
-            marginTop: '6px',
-            fontSize: '12px',
-            color: '#fbbf24',
-          }}
-        >
+        <div role="alert" className="text-small text-warning">
           {notice}
         </div>
       )}

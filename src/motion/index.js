@@ -27,4 +27,5 @@ export { TextReveal } from './TextReveal';
 export { Magnetic } from './Magnetic';
 export { FlipCard } from './FlipCard';
 export { CountRing } from './CountRing';
+export { Ticker } from './Ticker';
 export { LayoutGroup, AnimatePresence, motion, useReducedMotion } from 'framer-motion';
