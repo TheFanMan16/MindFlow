@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -11,18 +11,24 @@ import {
   setReminderPreference,
   requestNotificationPermission,
 } from '../utils/notifications';
-import {
-  Clock,
-  Volume2,
-  Shield,
-  Bell,
-  Crown,
-  RefreshCw,
-  ExternalLink,
-  Trash2,
-  CheckCircle2,
-  AlertCircle
-} from 'lucide-react';
+import { Clock, RefreshCw, ExternalLink, Trash2, Crown } from 'lucide-react';
+import { Breadcrumb, Card, Field, Input, Switch, Button, SaveButton, Badge } from './ui';
+import { Stagger } from '../motion';
+
+/**
+ * Local section wrapper: a system Card with the mono micro section label.
+ * Danger sections get the red hairline and a red label.
+ */
+const SettingsSection = ({ label, danger = false, children, className = '' }) => (
+  <Card className={[danger ? 'border-danger-line' : '', 'p-5 md:p-6', className].join(' ')}>
+    <div
+      className={`mb-4 font-mono text-micro uppercase ${danger ? 'text-danger' : 'text-secondary'}`}
+    >
+      {label}
+    </div>
+    {children}
+  </Card>
+);
 
 const SettingsMode = () => {
   const navigate = useNavigate();
@@ -49,6 +55,11 @@ const SettingsMode = () => {
 
   // Cards-due reminders
   const [remindersEnabled, setRemindersEnabled] = useState(() => getReminderPreference());
+
+  // SaveButton lifecycle for the timer-durations save action
+  const [timerSaveState, setTimerSaveState] = useState('idle');
+  const timerSaveTimeoutRef = useRef(null);
+  useEffect(() => () => clearTimeout(timerSaveTimeoutRef.current), []);
 
   const handleToggleReminders = async () => {
     if (remindersEnabled) {
@@ -177,6 +188,15 @@ const SettingsMode = () => {
     toast.success('Timer settings saved!');
   };
 
+  // Drives the SaveButton state machine around the existing save handler.
+  const handleSaveTimerSettings = () => {
+    setTimerSaveState('saving');
+    saveTimerSettings();
+    setTimerSaveState('saved');
+    clearTimeout(timerSaveTimeoutRef.current);
+    timerSaveTimeoutRef.current = setTimeout(() => setTimerSaveState('idle'), 1500);
+  };
+
   // Save sound settings
   const saveSoundSettings = () => {
     localStorage.setItem('timer_tickTockSound', tickTockSound.toString());
@@ -284,253 +304,234 @@ const SettingsMode = () => {
   };
 
   return (
-    <div className="min-h-full w-full bg-[#0f1012] relative overflow-y-auto p-6 md:p-12 font-sans text-slate-200">
+    <div className="min-h-full w-full overflow-y-auto bg-base p-6 md:p-10">
+      <div className="mx-auto w-full max-w-2xl">
+        <Breadcrumb trail={['MindFlow', 'Settings']} className="mb-8" />
 
-      {/* Background Gradient */}
-      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#581c87] opacity-20 blur-[120px] rounded-full pointer-events-none" />
+        <h1 className="text-h1 text-primary">Settings</h1>
+        <p className="mt-1 mb-8 text-small text-secondary">
+          Manage your preferences and subscription
+        </p>
 
-      <div className="max-w-4xl mx-auto relative z-10">
-        <h1 className="text-4xl font-bold text-white mb-2">Settings</h1>
-        <p className="text-slate-400 mb-8">Manage your preferences and subscription</p>
-
-        {/* Account Section */}
-        <section className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <Crown className="text-[#a855f7]" size={24} />
-            <h2 className="text-xl font-semibold text-white">Account & Subscription</h2>
-          </div>
-
-          <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-6 md:p-8">
-            {actuallyHasPro ? (
-              // Pro View
-              <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold text-white">Pro Plan Active</h3>
-                    <span className="px-3 py-1 rounded-full bg-[#581c87]/30 border border-[#581c87] text-[#c084fc] text-xs font-bold uppercase tracking-wider">
-                      PRO
-                    </span>
-                  </div>
-                  <p className="text-slate-400 mb-4">
-                    You have full access to all AI features and unlimited study tools.
-                  </p>
-                  {subscriptionData?.current_period_end && (
-                    <p className="text-xs text-slate-500 flex items-center gap-2">
-                      <Clock size={12} />
-                      Next billing: {new Date(subscriptionData.current_period_end * 1000).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-3 w-full md:w-auto">
-                  <button
-                    onClick={handleOpenBillingPortal}
-                    className="px-6 py-3 bg-[#581c87] hover:bg-[#6b21a8] text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20"
-                  >
-                    <ExternalLink size={18} />
-                    Manage Subscription
-                  </button>
-                  <button
-                    onClick={handleSyncSubscription}
-                    disabled={isSyncing}
-                    className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} />
-                    {isSyncing ? "Syncing..." : "Refresh Status"}
-                  </button>
-                </div>
+        <Stagger className="flex flex-col gap-4">
+          {/* Timer durations */}
+          <Stagger.Item>
+            <SettingsSection label="Timer durations">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field label="Focus (min)">
+                  <Input
+                    type="number"
+                    value={focusDuration}
+                    onChange={(e) => setFocusDuration(parseInt(e.target.value) || 25)}
+                    className="font-mono"
+                  />
+                </Field>
+                <Field label="Short break (min)">
+                  <Input
+                    type="number"
+                    value={shortBreakDuration}
+                    onChange={(e) => setShortBreakDuration(parseInt(e.target.value) || 5)}
+                    className="font-mono"
+                  />
+                </Field>
+                <Field label="Long break (min)">
+                  <Input
+                    type="number"
+                    value={longBreakDuration}
+                    onChange={(e) => setLongBreakDuration(parseInt(e.target.value) || 15)}
+                    className="font-mono"
+                  />
+                </Field>
               </div>
-            ) : (
-              // Free View
-              <div className="bg-gradient-to-br from-[#1e1b4b] to-[#0f1012] border border-blue-900/30 rounded-xl p-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[60px] rounded-full pointer-events-none" />
+              <div className="mt-5 flex justify-end">
+                <SaveButton
+                  state={timerSaveState}
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleSaveTimerSettings}
+                >
+                  Save timers
+                </SaveButton>
+              </div>
+            </SettingsSection>
+          </Stagger.Item>
 
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-                  <div>
-                    <h3 className="text-xl font-bold text-white mb-2">Upgrade to Pro</h3>
-                    <p className="text-slate-400 max-w-lg">
+          {/* Sound */}
+          <Stagger.Item>
+            <SettingsSection label="Sound">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-body font-medium text-primary">Tick tock sound</div>
+                  <p className="mt-0.5 text-small text-secondary">
+                    Play ticking sound during focus
+                  </p>
+                </div>
+                <Switch
+                  checked={tickTockSound}
+                  onChange={() => {
+                    setTickTockSound(!tickTockSound);
+                    saveSoundSettings();
+                  }}
+                  label="Tick tock sound"
+                />
+              </div>
+
+              <div className="mt-6 border-t border-soft pt-5">
+                <div className="mb-2 flex items-center justify-between">
+                  <label
+                    htmlFor="settings-alarm-volume"
+                    className="font-mono text-micro uppercase text-secondary"
+                  >
+                    Alarm volume
+                  </label>
+                  <span className="font-mono text-small tabular-nums text-secondary">
+                    {alarmVolume}%
+                  </span>
+                </div>
+                <input
+                  id="settings-alarm-volume"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={alarmVolume}
+                  onChange={(e) => {
+                    setAlarmVolume(parseInt(e.target.value));
+                  }}
+                  onMouseUp={saveSoundSettings}
+                  onTouchEnd={saveSoundSettings}
+                  className="w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+                  style={{ accentColor: 'var(--accent)' }}
+                  aria-label="Alarm volume"
+                />
+                <p className="mt-3 text-small text-secondary">
+                  Adjust volume for session completion alarms and ticking sounds.
+                </p>
+              </div>
+            </SettingsSection>
+          </Stagger.Item>
+
+          {/* Notifications */}
+          <Stagger.Item>
+            <SettingsSection label="Notifications">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-body font-medium text-primary">Daily review reminder</div>
+                  <p className="mt-0.5 text-small text-secondary">
+                    One browser notification a day when flashcards are due — never more.
+                  </p>
+                </div>
+                <Switch
+                  checked={remindersEnabled}
+                  onChange={handleToggleReminders}
+                  label="Daily review reminder"
+                />
+              </div>
+            </SettingsSection>
+          </Stagger.Item>
+
+          {/* Billing */}
+          <Stagger.Item>
+            <SettingsSection label="Billing">
+              {actuallyHasPro ? (
+                <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2.5">
+                      <h3 className="text-h2 text-primary">Pro plan active</h3>
+                      <Badge variant="accent">PRO</Badge>
+                    </div>
+                    <p className="mt-1.5 text-small text-secondary">
+                      You have full access to all AI features and unlimited study tools.
+                    </p>
+                    {subscriptionData?.current_period_end && (
+                      <p className="mt-3 flex items-center gap-1.5 font-mono text-micro uppercase text-secondary">
+                        <Clock size={12} strokeWidth={1.5} aria-hidden="true" />
+                        Next billing:{' '}
+                        {new Date(subscriptionData.current_period_end * 1000).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex w-full shrink-0 flex-col gap-2 md:w-auto">
+                    <Button variant="secondary" size="sm" onClick={handleOpenBillingPortal}>
+                      <ExternalLink size={15} strokeWidth={1.5} aria-hidden="true" />
+                      Manage subscription
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSyncSubscription}
+                      disabled={isSyncing}
+                    >
+                      <RefreshCw
+                        size={15}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                        className={isSyncing ? 'animate-spin motion-reduce:animate-none' : ''}
+                      />
+                      {isSyncing ? 'Syncing...' : 'Refresh status'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <h3 className="text-h2 text-primary">Upgrade to Pro</h3>
+                    <p className="mt-1.5 max-w-lg text-small text-secondary">
                       Unlock unlimited AI flashcards, Feynman analysis, and smart study tools.
                     </p>
                   </div>
-                  <button
+                  <Button
+                    variant="primary"
+                    mono
+                    className="shrink-0 whitespace-nowrap"
                     onClick={handleSubscribe}
                     disabled={isSubscribing}
-                    className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isSubscribing ? (
                       <>
-                        <RefreshCw size={18} className="animate-spin" />
+                        <RefreshCw
+                          size={15}
+                          strokeWidth={1.5}
+                          aria-hidden="true"
+                          className="animate-spin motion-reduce:animate-none"
+                        />
                         Processing...
                       </>
                     ) : (
                       <>
-                        <Crown size={18} />
+                        <Crown size={15} strokeWidth={1.5} aria-hidden="true" />
                         Upgrade for $8.99/mo
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
-              </div>
-            )}
-          </div>
-        </section>
+              )}
+            </SettingsSection>
+          </Stagger.Item>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Timer Preferences */}
-          <section>
-            <div className="flex items-center gap-3 mb-4">
-              <Clock className="text-blue-400" size={24} />
-              <h2 className="text-xl font-semibold text-white">Timer Preferences</h2>
-            </div>
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-6">
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400">Focus Duration (min)</label>
-                  <input
-                    type="number"
-                    value={focusDuration}
-                    onChange={(e) => setFocusDuration(parseInt(e.target.value) || 25)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400">Short Break (min)</label>
-                  <input
-                    type="number"
-                    value={shortBreakDuration}
-                    onChange={(e) => setShortBreakDuration(parseInt(e.target.value) || 5)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400">Long Break (min)</label>
-                  <input
-                    type="number"
-                    value={longBreakDuration}
-                    onChange={(e) => setLongBreakDuration(parseInt(e.target.value) || 15)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  />
-                </div>
-                <button
-                  onClick={saveTimerSettings}
-                  className="w-full py-2.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-600/20 rounded-lg font-medium transition-all"
-                >
-                  Save Timer Settings
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Sound Settings */}
-          <section>
-            <div className="flex items-center gap-3 mb-4">
-              <Volume2 className="text-emerald-400" size={24} />
-              <h2 className="text-xl font-semibold text-white">Sound Settings</h2>
-            </div>
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-6 h-full flex flex-col justify-between">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-white font-medium">Tick Tock Sound</h3>
-                    <p className="text-xs text-slate-500">Play ticking sound during focus</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setTickTockSound(!tickTockSound);
-                      saveSoundSettings();
-                    }}
-                    className={`w-12 h-6 rounded-full relative transition-colors ${tickTockSound ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                  >
-                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${tickTockSound ? 'translate-x-6' : ''}`} />
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <label className="text-sm font-medium text-slate-400">Alarm Volume</label>
-                    <span className="text-sm text-slate-500">{alarmVolume}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={alarmVolume}
-                    onChange={(e) => {
-                      setAlarmVolume(parseInt(e.target.value));
-                    }}
-                    onMouseUp={saveSoundSettings}
-                    onTouchEnd={saveSoundSettings}
-                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-8 pt-6 border-t border-slate-800/50">
-                <div className="flex items-start gap-4 p-4 bg-emerald-950/20 border border-emerald-900/30 rounded-xl">
-                  <Volume2 size={20} className="text-emerald-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-slate-400">
-                    Adjust volume for session completion alarms and ticking sounds.
+          {/* Danger zone */}
+          <Stagger.Item>
+            <SettingsSection label="Danger zone" danger className="mt-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-body font-medium text-primary">Reset all data</div>
+                  <p className="mt-0.5 text-small text-secondary">
+                    Permanently delete all session history, local settings, and progress.
                   </p>
                 </div>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setShowResetModal(true)}
+                >
+                  <Trash2 size={15} strokeWidth={1.5} aria-hidden="true" />
+                  Reset data
+                </Button>
               </div>
-            </div>
-          </section>
-        </div>
-
-        {/* Notifications */}
-        <section className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <Bell className="text-purple-400" size={24} />
-            <h2 className="text-xl font-semibold text-white">Notifications</h2>
-          </div>
-          <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <div>
-                <h3 className="text-white font-medium mb-1">Daily review reminder</h3>
-                <p className="text-sm text-slate-500">
-                  One browser notification a day when flashcards are due — never more.
-                </p>
-              </div>
-              <button
-                onClick={handleToggleReminders}
-                role="switch"
-                aria-checked={remindersEnabled}
-                className={`px-6 py-2.5 rounded-xl font-medium transition-all border ${
-                  remindersEnabled
-                    ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
-                    : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {remindersEnabled ? 'On' : 'Off'}
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Data & Privacy */}
-        <section>
-          <div className="flex items-center gap-3 mb-4">
-            <Shield className="text-red-400" size={24} />
-            <h2 className="text-xl font-semibold text-white">Data & Privacy</h2>
-          </div>
-          <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <div>
-                <h3 className="text-white font-medium mb-1">Reset All Data</h3>
-                <p className="text-sm text-slate-500">
-                  Permanently delete all session history, local settings, and progress.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowResetModal(true)}
-                className="px-6 py-2.5 border border-red-500/20 hover:bg-red-500/10 text-red-500 rounded-xl font-medium transition-all flex items-center gap-2"
-              >
-                <Trash2 size={16} />
-                Reset Data
-              </button>
-            </div>
-          </div>
-        </section>
+            </SettingsSection>
+          </Stagger.Item>
+        </Stagger>
       </div>
 
       <ConfirmModal

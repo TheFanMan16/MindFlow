@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Camera, Check, X as XIcon } from 'lucide-react';
 import PDFUploader from './PDFUploader';
 import { generateJSONWithGemini, generateFlashcardSet } from '../utils/gemini';
 import { recordRecallAttempt, findOrCreateTopic, getLoopStreak } from '../utils/studyLoop';
@@ -9,10 +10,33 @@ import { useAuth } from '../context/AuthContext';
 import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
-import { validateAiInput } from '../utils/aiInput';
+import { validateAiInput, MIN_LENGTHS } from '../utils/aiInput';
 import { AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
 import AiLoadingIndicator from './AiLoadingIndicator';
 import UpgradeModal from './UpgradeModal';
+import {
+  Button,
+  Card,
+  Badge,
+  Tabs,
+  Textarea,
+  Field,
+  Progress,
+  StepRail,
+  Breadcrumb,
+} from './ui';
+import {
+  motion,
+  AnimatePresence,
+  useReducedMotion,
+  Stagger,
+  AnimatedNumber,
+  CountRing,
+  stepSlide,
+  shake,
+  snappy,
+  reduced,
+} from '../motion';
 
 const ANALYSIS_STATUS_MESSAGES = [
   'Reading your blurt…',
@@ -21,10 +45,35 @@ const ANALYSIS_STATUS_MESSAGES = [
   'Grading your recall…',
 ];
 
+// The step rail maps directly onto the existing phase state machine.
+const PHASE_STEPS = [
+  { id: 'source', label: 'Source' },
+  { id: 'blurt', label: 'Blurt' },
+  { id: 'analysis', label: 'Analysis' },
+];
+const PHASE_TO_STEP = { SETUP: 'source', WRITING: 'blurt', ANALYSIS: 'analysis' };
+const PHASE_ORDER = ['SETUP', 'WRITING', 'ANALYSIS'];
+
+// Score → status tone (same 80/50 thresholds the old UI used).
+const scoreTone = (score) => (score >= 80 ? 'success' : score >= 50 ? 'warning' : 'danger');
+const TONE_VARS = {
+  success: 'var(--success)',
+  warning: 'var(--warning)',
+  danger: 'var(--danger)',
+};
+
+// Reduced-motion step transition: opacity only, 150ms.
+const reducedStep = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: reduced },
+  exit: { opacity: 0, transition: reduced },
+};
+
 const BlurtingMode = () => {
   const { isPro, user, profile, refreshProfile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const reduce = useReducedMotion();
   // Arrived from a completed focus session? The attempt gets tagged to that
   // topic and misses can become a deck named after it.
   const [topicContext, setTopicContext] = useState(() => ({
@@ -54,6 +103,15 @@ const BlurtingMode = () => {
   const [expandedSection, setExpandedSection] = useState(null); // For accordion: 'performance', 'improvements', 'quiz'
   const textareaRef = useRef(null);
   const abortRef = useRef(null);
+
+  // Track step direction for the slide variants: forward slides left, back
+  // slides right. Computed from phase order, stored across renders.
+  const prevPhaseRef = useRef(phase);
+  const direction =
+    PHASE_ORDER.indexOf(phase) >= PHASE_ORDER.indexOf(prevPhaseRef.current) ? 1 : -1;
+  useEffect(() => {
+    prevPhaseRef.current = phase;
+  }, [phase]);
 
   // Define handleDone at the top so it's available for useEffect dependencies
   const handleDone = useCallback(() => {
@@ -180,7 +238,7 @@ const BlurtingMode = () => {
     abortRef.current = controller;
 
     try {
-      const systemPrompt = `Compare the Source Text to the Student's Attempt. Identify key concepts that are MISSING or MISUNDERSTOOD. Do not nitpick spelling. 
+      const systemPrompt = `Compare the Source Text to the Student's Attempt. Identify key concepts that are MISSING or MISUNDERSTOOD. Do not nitpick spelling.
 
 Return a JSON object with this exact structure:
 {
@@ -200,9 +258,9 @@ Return a JSON object with this exact structure:
 }
 
 Generate exactly 3 quiz questions based only on the concepts the student missed.`;
-      
+
       const prompt = `${systemPrompt}\n\nSource Text:\n${sourceText}\n\nStudent's Attempt:\n${userAttempt}\n\nReturn only valid JSON, no additional text or markdown formatting.`;
-      
+
       // Use Gemini API instead of localhost Ollama
       const parsedResponse = await generateJSONWithGemini(prompt, {
         temperature: 0.7,
@@ -218,8 +276,8 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       const score = typeof parsedResponse.score === 'number' ? parsedResponse.score : null;
       const grade = typeof parsedResponse.grade === 'string' ? parsedResponse.grade : null;
       const summary = typeof parsedResponse.summary === 'string' ? parsedResponse.summary : null;
-      const missingConcepts = Array.isArray(parsedResponse.missing_concepts) 
-        ? parsedResponse.missing_concepts 
+      const missingConcepts = Array.isArray(parsedResponse.missing_concepts)
+        ? parsedResponse.missing_concepts
         : [];
       const quiz = Array.isArray(parsedResponse.quiz) ? parsedResponse.quiz : [];
 
@@ -378,17 +436,17 @@ ${sourceText.slice(0, 6000)}`;
 
     // Split source into words while preserving whitespace
     const sourceWords = source.split(/(\s+)/);
-    
+
     return sourceWords.map((word, index) => {
       // Skip whitespace-only tokens
       if (/^\s+$/.test(word)) {
         return <span key={index}>{word}</span>;
       }
-      
+
       const cleanWord = word.toLowerCase().replace(/[^\w]/g, '');
       const isMatch = cleanWord && cleanWord.length > 0 && attemptWords.has(cleanWord);
-      const color = isMatch ? '#10b981' : '#ef4444'; // Green for match, Red for missing
-      
+      const color = isMatch ? 'var(--success)' : 'var(--danger)'; // Green for match, red for missing
+
       return (
         <span key={index} style={{ color, fontWeight: isMatch ? '400' : '500' }}>
           {word}
@@ -397,1018 +455,487 @@ ${sourceText.slice(0, 6000)}`;
     });
   };
 
+  // Derived, render-only values
+  const stepVariants = reduce ? reducedStep : stepSlide;
+  const sourceLength = sourceText.trim().length;
+  const sourceReady = sourceLength >= MIN_LENGTHS.sourceText;
+  const fractionRemaining = timeRemaining / (5 * 60);
+  const timerTone = fractionRemaining < 0.2 ? 'danger' : 'accent';
+  const attemptTrimmed = userAttempt.trim();
+  const wordCount = attemptTrimmed ? attemptTrimmed.split(/\s+/).length : 0;
+
   return (
-    <div style={{
-      padding: 'clamp(16px, 5vw, 48px)',
-      flex: 1,
-      overflowY: 'auto',
-      // The decorative blob below hangs 200px past the right edge; without
-      // this it drags a horizontal scrollbar onto the whole page.
-      overflowX: 'hidden',
-      position: 'relative',
-      minHeight: '100%',
-    }}>
+    <div
+      className="relative min-h-full flex-1 overflow-y-auto bg-base"
+      style={{ padding: 'clamp(16px, 5vw, 48px)' }}
+    >
       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
 
-      {/* Gradient blob background */}
-      <div style={{
-        position: 'absolute',
-        top: '-200px',
-        right: '-200px',
-        width: '600px',
-        height: '600px',
-        background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(236, 72, 153, 0.1) 50%, transparent 70%)',
-        borderRadius: '50%',
-        filter: 'blur(60px)',
-        pointerEvents: 'none',
-        zIndex: 0,
-      }} />
+      <div className="mx-auto w-full max-w-5xl">
+        <Breadcrumb
+          trail={['MindFlow', 'Active Recall']}
+          right={
+            topicContext.topicName ? (
+              <Badge feature="recall">Testing: {topicContext.topicName}</Badge>
+            ) : null
+          }
+        />
 
-      {/* Content */}
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        {phase === 'SETUP' && (
-          <div style={{
-            width: '95%',
-            maxWidth: '1600px',
-            margin: '0 auto',
-            paddingTop: '60px',
-          }}>
-            <div style={{
-              marginBottom: '32px',
-              textAlign: 'center',
-            }}>
-              <h1 style={{
-                fontSize: '42px',
-                fontWeight: '700',
-                marginBottom: '8px',
-                color: '#a855f7',
-                letterSpacing: '-0.02em',
-                textShadow: '0 0 10px rgba(168, 85, 247, 0.5), 0 0 20px rgba(168, 85, 247, 0.4), 0 0 30px rgba(168, 85, 247, 0.3)',
-              }}>
-                Active Recall
-              </h1>
-              {topicContext.topicName && (
-                <div style={{
-                  display: 'inline-block',
-                  backgroundColor: 'rgba(139, 92, 246, 0.15)',
-                  border: '1px solid rgba(139, 92, 246, 0.4)',
-                  borderRadius: '20px',
-                  padding: '6px 16px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#a78bfa',
-                  marginBottom: '8px',
-                }}>
-                  Testing: {topicContext.topicName}
+        <StepRail steps={PHASE_STEPS} active={PHASE_TO_STEP[phase]} className="mt-6" />
+
+        <AnimatePresence mode="wait" custom={direction}>
+          <motion.div
+            key={phase}
+            custom={direction}
+            variants={stepVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="mt-8"
+          >
+            {phase === 'SETUP' && (
+              <div className="flex flex-col gap-6">
+                <div>
+                  <h1 className="text-h1 text-primary">Active Recall</h1>
+                  <p className="mt-2 max-w-xl text-body text-secondary">
+                    Blurting is a powerful active recall technique. Read, write, then check what
+                    you missed.
+                  </p>
                 </div>
-              )}
-              <p style={{
-                fontSize: '16px',
-                color: 'rgba(255, 255, 255, 0.6)',
-              }}>
-                Blurting is a powerful active recall technique. Read, write, then check what you missed.
-              </p>
-            </div>
 
-            {/* Input Mode Toggle */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              marginBottom: '24px',
-              gap: '12px',
-            }}>
-              <button
-                onClick={() => setInputMode('pdf')}
-                style={{
-                  background: inputMode === 'pdf'
-                    ? 'rgba(168, 85, 247, 0.2)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                  border: inputMode === 'pdf'
-                    ? '1px solid rgba(168, 85, 247, 0.4)'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: inputMode === 'pdf' ? '#a855f7' : 'rgba(255, 255, 255, 0.7)',
-                  padding: '10px 20px',
-                  borderRadius: '24px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                }}
-              >
-                Upload PDF
-              </button>
-              <button
-                onClick={() => setInputMode('text')}
-                style={{
-                  background: inputMode === 'text'
-                    ? 'rgba(168, 85, 247, 0.2)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                  border: inputMode === 'text'
-                    ? '1px solid rgba(168, 85, 247, 0.4)'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: inputMode === 'text' ? '#a855f7' : 'rgba(255, 255, 255, 0.7)',
-                  padding: '10px 20px',
-                  borderRadius: '24px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                }}
-              >
-                Paste Text
-              </button>
-            </div>
-
-            {/* PDF Uploader or Text Input */}
-            {inputMode === 'pdf' ? (
-              <div style={{ marginBottom: '24px' }}>
-                <PDFUploader onTextExtracted={setSourceText} />
-              </div>
-            ) : (
-              <div style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '24px',
-                padding: '32px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                marginBottom: '24px',
-              }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  marginBottom: '12px',
-                }}>
-                  Paste your Source Material here
-                </label>
-                <textarea
-                  value={sourceText}
-                  onChange={(e) => setSourceText(e.target.value)}
-                  placeholder="Paste or type your study material here..."
-                  style={{
-                    width: '100%',
-                    minHeight: '300px',
-                    padding: '20px',
-                    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '16px',
-                    color: '#ffffff',
-                    fontSize: '15px',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                    outline: 'none',
-                  }}
+                <Tabs
+                  items={[
+                    { value: 'pdf', label: 'Upload PDF' },
+                    { value: 'text', label: 'Paste Text' },
+                  ]}
+                  value={inputMode}
+                  onChange={setInputMode}
+                  className="self-start"
                 />
+
+                {inputMode === 'pdf' ? (
+                  <PDFUploader onTextExtracted={setSourceText} />
+                ) : (
+                  <Card className="p-5">
+                    <Field label="Paste your Source Material here">
+                      <Textarea
+                        value={sourceText}
+                        onChange={(e) => setSourceText(e.target.value)}
+                        placeholder="Paste or type your study material here..."
+                        className="min-h-[300px]"
+                      />
+                    </Field>
+                  </Card>
+                )}
+
+                {/* Character counter: flips to success once the AI minimum is met */}
+                <div className="flex items-center justify-end">
+                  <span
+                    className={`font-mono text-micro uppercase tabular-nums ${
+                      sourceReady ? 'text-success' : 'text-secondary'
+                    }`}
+                    aria-live="polite"
+                  >
+                    {sourceLength.toLocaleString('en-US')} / {MIN_LENGTHS.sourceText} chars
+                    {sourceReady ? ' — ready' : ''}
+                  </span>
+                </div>
+
+                {/* Spring pop when the threshold crosses (key remount on sourceReady) */}
+                <motion.div
+                  key={sourceReady ? 'ready' : 'idle'}
+                  initial={reduce ? false : { scale: 0.96 }}
+                  animate={{ scale: 1 }}
+                  transition={snappy}
+                >
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    mono
+                    magnetic
+                    className="w-full"
+                    onClick={handleStartBlurting}
+                    disabled={!sourceText.trim()}
+                  >
+                    Start Blurting
+                  </Button>
+                </motion.div>
               </div>
             )}
 
-            <button
-              onClick={handleStartBlurting}
-              disabled={!sourceText.trim()}
-              style={{
-                background: sourceText.trim()
-                  ? 'linear-gradient(90deg, #a855f7, #ec4899)'
-                  : 'rgba(255, 255, 255, 0.1)',
-                color: '#ffffff',
-                border: 'none',
-                padding: '16px 32px',
-                borderRadius: '24px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: sourceText.trim() ? 'pointer' : 'not-allowed',
-                transition: 'all 0.3s ease',
-                width: '100%',
-                boxShadow: sourceText.trim()
-                  ? '0 4px 20px rgba(168, 85, 247, 0.3)'
-                  : 'none',
-                opacity: sourceText.trim() ? 1 : 0.5,
-              }}
-              onMouseEnter={(e) => {
-                if (sourceText.trim()) {
-                  e.currentTarget.style.boxShadow = '0 6px 30px rgba(168, 85, 247, 0.5)';
-                  e.currentTarget.style.transform = 'scale(1.02)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (sourceText.trim()) {
-                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.3)';
-                  e.currentTarget.style.transform = 'scale(1)';
-                }
-              }}
-            >
-              Start Blurting
-            </button>
-          </div>
-        )}
+            {phase === 'WRITING' && (
+              <div className="flex flex-col gap-4">
+                {/* The countdown, as a thin bar draining across the page */}
+                <Progress value={fractionRemaining} tone={timerTone} label="Time remaining" />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-small text-secondary">
+                    Write everything you remember without looking at the source
+                  </p>
+                  <span
+                    className={`font-mono text-micro tabular-nums ${
+                      timerTone === 'danger' ? 'text-danger' : 'text-secondary'
+                    }`}
+                  >
+                    {formatTime(timeRemaining)}
+                  </span>
+                </div>
 
-        {phase === 'WRITING' && (
-          <div style={{
-            width: '95%',
-            maxWidth: '1600px',
-            margin: '0 auto',
-            paddingTop: '40px',
-          }}>
-            {/* Timer */}
-            <div style={{
-              textAlign: 'center',
-              marginBottom: '40px',
-            }}>
-              <div style={{
-                fontSize: '64px',
-                fontWeight: '300',
-                color: timeRemaining < 60 ? '#ef4444' : '#a855f7',
-                letterSpacing: '-0.02em',
-                fontFeatureSettings: '"tnum"',
-                textShadow: `0 0 30px ${timeRemaining < 60 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(168, 85, 247, 0.5)'}`,
-              }}>
-                {formatTime(timeRemaining)}
-              </div>
-              <p style={{
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.5)',
-                marginTop: '8px',
-              }}>
-                Write everything you remember without looking at the source
-              </p>
-            </div>
-
-            {/* Writing Area */}
-            <div style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.03)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '24px',
-              padding: '32px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              marginBottom: '24px',
-            }}>
-              <textarea
-                ref={textareaRef}
-                value={userAttempt}
-                onChange={(e) => setUserAttempt(e.target.value)}
-                placeholder="Start writing everything you remember..."
-                style={{
-                  width: '100%',
-                  minHeight: '400px',
-                  padding: '20px',
-                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '16px',
-                  color: '#ffffff',
-                  fontSize: '15px',
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                  outline: 'none',
-                }}
-              />
-            </div>
-
-            <button
-              onClick={handleDone}
-              style={{
-                background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-                color: '#ffffff',
-                border: 'none',
-                padding: '16px 32px',
-                borderRadius: '24px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                width: '100%',
-                boxShadow: '0 4px 20px rgba(168, 85, 247, 0.3)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 6px 30px rgba(168, 85, 247, 0.5)';
-                e.currentTarget.style.transform = 'scale(1.02)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.3)';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              I'm Done
-            </button>
-          </div>
-        )}
-
-        {phase === 'ANALYSIS' && (
-          <div style={{
-            width: '95%',
-            maxWidth: '1600px',
-            margin: '0 auto',
-          }}>
-            <div style={{
-              marginBottom: '32px',
-              textAlign: 'center',
-            }}>
-              <h1 style={{
-                fontSize: '42px',
-                fontWeight: '700',
-                marginBottom: '8px',
-                color: '#a855f7',
-                letterSpacing: '-0.02em',
-                textShadow: '0 0 10px rgba(168, 85, 247, 0.5), 0 0 20px rgba(168, 85, 247, 0.4), 0 0 30px rgba(168, 85, 247, 0.3)',
-              }}>
-                Analysis
-              </h1>
-            </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: '32px',
-              gap: '16px',
-            }}>
-                {/* Recall Score Badge */}
-                {aiScore !== null && (
-                  <div style={{
-                    backgroundColor: aiScore >= 80 
-                      ? 'rgba(16, 185, 129, 0.2)' 
-                      : aiScore >= 50 
-                        ? 'rgba(245, 158, 11, 0.2)' 
-                        : 'rgba(239, 68, 68, 0.2)',
-                    backdropFilter: 'blur(10px)',
-                    border: `1px solid ${aiScore >= 80 
-                      ? 'rgba(16, 185, 129, 0.4)' 
-                      : aiScore >= 50 
-                        ? 'rgba(245, 158, 11, 0.4)' 
-                        : 'rgba(239, 68, 68, 0.4)'}`,
-                    borderRadius: '50px',
-                    padding: '12px 24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}>
-                    <span style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: 'rgba(255, 255, 255, 0.8)',
-                    }}>
-                      Recall:
-                    </span>
-                    <span style={{
-                      fontSize: '20px',
-                      fontWeight: '700',
-                      color: aiScore >= 80 
-                        ? '#10b981' 
-                        : aiScore >= 50 
-                          ? '#f59e0b' 
-                          : '#ef4444',
-                    }}>
-                      {aiScore}%
-                    </span>
-                  </div>
-                )}
-                <button
-                  onClick={handleReset}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#ffffff',
-                    padding: '12px 24px',
-                    borderRadius: '24px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                {/* Wrapper ref hands the inner textarea node to the existing
+                    focus effect (system Textarea does not forward refs). */}
+                <div
+                  ref={(node) => {
+                    textareaRef.current = node ? node.querySelector('textarea') : null;
                   }}
                 >
-                  Start Over
-                </button>
-              </div>
+                  <Textarea
+                    value={userAttempt}
+                    onChange={(e) => setUserAttempt(e.target.value)}
+                    placeholder="Start writing everything you remember..."
+                    aria-label="Your recall attempt"
+                    className="min-h-[60vh]"
+                  />
+                </div>
 
-            {/* Split Screen - stacks to one column on narrow screens */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))',
-              gap: '24px',
-              marginBottom: '32px',
-            }}>
-              {/* Source Side */}
-              <div style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '24px',
-                padding: '24px',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                fontFamily: 'monospace',
-                display: 'flex',
-                flexDirection: 'column',
-                height: '500px',
-              }}>
-                <div style={{
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#ef4444',
-                  marginBottom: '16px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  flexShrink: 0,
-                }}>
-                  Source Material
+                <div className="flex justify-end">
+                  <span className="font-mono text-micro uppercase tabular-nums text-secondary">
+                    {wordCount.toLocaleString('en-US')} words · {userAttempt.length.toLocaleString('en-US')} chars
+                  </span>
                 </div>
-                <div style={{
-                  fontSize: '14px',
-                  lineHeight: '1.8',
-                  color: '#ffffff',
-                  whiteSpace: 'pre-wrap',
-                  overflowY: 'auto',
-                  flex: 1,
-                  minHeight: 0,
-                }}>
-                  {highlightText(sourceText, userAttempt)}
-                </div>
-              </div>
 
-              {/* Attempt Side */}
-              <div style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '24px',
-                padding: '24px',
-                border: '1px solid rgba(16, 185, 129, 0.2)',
-                fontFamily: 'monospace',
-                display: 'flex',
-                flexDirection: 'column',
-                height: '500px',
-              }}>
-                <div style={{
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#10b981',
-                  marginBottom: '16px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  flexShrink: 0,
-                }}>
-                  Your Attempt
-                </div>
-                <div style={{
-                  fontSize: '14px',
-                  lineHeight: '1.8',
-                  color: '#ffffff',
-                  whiteSpace: 'pre-wrap',
-                  overflowY: 'auto',
-                  flex: 1,
-                  minHeight: 0,
-                }}>
-                  {userAttempt || '(Empty)'}
-                </div>
+                <Button variant="primary" size="lg" mono className="w-full" onClick={handleDone}>
+                  I'm Done
+                </Button>
               </div>
-            </div>
+            )}
 
-            {/* AI Analysis Section */}
-            <div style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.03)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '24px',
-              padding: '32px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-            }}>
-              {!aiFeedback && !isAnalyzing && (() => {
-                const usage = canUseAI(isPro, aiUsageCount);
-                const isLimitReached = !usage.canUse;
-                
-                return (
-                  <div>
-                    {analysisError && (
-                      <div style={{
-                        marginBottom: '16px',
-                        padding: '16px',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        borderRadius: '12px',
-                        textAlign: 'center',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        fontSize: '14px',
-                        lineHeight: '1.6',
-                      }}>
-                        {analysisError}
-                      </div>
+            {phase === 'ANALYSIS' && (
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h1 className="text-h1 text-primary">Analysis</h1>
+                  <div className="flex items-center gap-3">
+                    {aiScore !== null && (
+                      <Badge variant={scoreTone(aiScore)}>Recall: {aiScore}%</Badge>
                     )}
-                    <button
-                      onClick={handleAIAnalysis}
-                      disabled={isLimitReached}
-                      style={{
-                        background: isLimitReached 
-                          ? 'rgba(107, 114, 128, 0.5)' 
-                          : 'linear-gradient(90deg, #f59e0b, #ea580c)',
-                        color: '#ffffff',
-                        border: 'none',
-                        padding: '16px 32px',
-                        borderRadius: '24px',
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        cursor: isLimitReached ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.3s ease',
-                        width: '100%',
-                        boxShadow: isLimitReached 
-                          ? 'none' 
-                          : '0 4px 20px rgba(245, 158, 11, 0.3)',
-                        opacity: isLimitReached ? 0.6 : 1,
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isLimitReached) {
-                          e.currentTarget.style.boxShadow = '0 6px 30px rgba(245, 158, 11, 0.5)';
-                          e.currentTarget.style.transform = 'scale(1.02)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isLimitReached) {
-                          e.currentTarget.style.boxShadow = '0 4px 20px rgba(245, 158, 11, 0.3)';
-                          e.currentTarget.style.transform = 'scale(1)';
-                        }
-                      }}
-                    >
-                      {analysisError ? 'Try Again' : 'Analyze Understanding with AI'}
-                    </button>
-                    {isLimitReached && (
-                      <div style={{
-                        marginTop: '16px',
-                        padding: '16px',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        borderRadius: '12px',
-                        textAlign: 'center',
-                        color: '#ef4444',
-                        fontSize: '14px',
-                        fontWeight: '500',
-                      }}>
-                        Daily Limit Reached - Upgrade to Pro
-                      </div>
-                    )}
+                    <Button variant="secondary" size="sm" mono onClick={handleReset}>
+                      Start Over
+                    </Button>
                   </div>
-                );
-              })()}
+                </div>
 
-              {isAnalyzing && (
-                <AiLoadingIndicator
-                  messages={ANALYSIS_STATUS_MESSAGES}
-                  accent="#f59e0b"
-                  onCancel={() => abortRef.current?.abort()}
-                />
-              )}
-
-              {aiFeedback && !isAnalyzing && (
-                <div>
-                  {aiFeedback.length === 0 || aiScore === 100 ? (
-                    // Perfect Recall Celebration
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '32px',
-                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                      borderRadius: '16px',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
-                    }}>
-                      <div style={{
-                        fontSize: '48px',
-                        marginBottom: '16px',
-                      }}>
-                        🎉
-                      </div>
-                      <div style={{
-                        fontSize: '24px',
-                        fontWeight: '700',
-                        color: '#10b981',
-                        marginBottom: '8px',
-                      }}>
-                        Perfect Recall!
-                      </div>
-                      <div style={{
-                        fontSize: '16px',
-                        color: 'rgba(255, 255, 255, 0.7)',
-                      }}>
-                        You've captured all the key concepts from the source material.
-                      </div>
-                      <button
-                        onClick={() => handleShareRecap(100)}
-                        style={{
-                          marginTop: '20px',
-                          padding: '12px 24px',
-                          background: 'rgba(16, 185, 129, 0.15)',
-                          border: '1px solid rgba(16, 185, 129, 0.4)',
-                          borderRadius: '12px',
-                          color: '#10b981',
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        📸 Share your perfect recall
-                      </button>
+                {/* Split screen - stacks to one column on narrow screens */}
+                <div
+                  className="grid gap-5"
+                  style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))' }}
+                >
+                  <Card className="flex h-[500px] flex-col p-5">
+                    <div className="mb-3 flex shrink-0 items-center gap-2 font-mono text-micro uppercase text-secondary">
+                      <span
+                        className="h-1.5 w-1.5 rounded-pill"
+                        style={{ backgroundColor: 'var(--danger)' }}
+                        aria-hidden="true"
+                      />
+                      Source Material
                     </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-mono text-small leading-relaxed">
+                      {highlightText(sourceText, userAttempt)}
+                    </div>
+                  </Card>
+
+                  <Card className="flex h-[500px] flex-col p-5">
+                    <div className="mb-3 flex shrink-0 items-center gap-2 font-mono text-micro uppercase text-secondary">
+                      <span
+                        className="h-1.5 w-1.5 rounded-pill"
+                        style={{ backgroundColor: 'var(--success)' }}
+                        aria-hidden="true"
+                      />
+                      Your Attempt
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-mono text-small leading-relaxed text-primary">
+                      {userAttempt || '(Empty)'}
+                    </div>
+                  </Card>
+                </div>
+
+                {/* AI Analysis */}
+                {!aiFeedback && !isAnalyzing && (() => {
+                  const usage = canUseAI(isPro, aiUsageCount);
+                  const isLimitReached = !usage.canUse;
+
+                  return (
+                    <Card className="flex flex-col gap-4 p-6">
+                      {analysisError && (
+                        <motion.div
+                          key={analysisError}
+                          animate={reduce ? undefined : shake}
+                          className="rounded-input border border-danger-line bg-danger-wash px-4 py-3 text-center text-small leading-relaxed text-primary"
+                          role="alert"
+                        >
+                          {analysisError}
+                        </motion.div>
+                      )}
+                      <Button
+                        variant="primary"
+                        size="lg"
+                        mono
+                        className="w-full"
+                        onClick={handleAIAnalysis}
+                        disabled={isLimitReached}
+                      >
+                        {analysisError ? 'Try Again' : 'Analyze Understanding with AI'}
+                      </Button>
+                      {isLimitReached && (
+                        <div className="rounded-input border border-danger-line bg-danger-wash px-4 py-3 text-center text-small font-medium text-danger">
+                          Daily Limit Reached - Upgrade to Pro
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })()}
+
+                {isAnalyzing && (
+                  <Card className="p-6">
+                    <AiLoadingIndicator
+                      messages={ANALYSIS_STATUS_MESSAGES}
+                      accent="var(--tint-recall)"
+                      onCancel={() => abortRef.current?.abort()}
+                    />
+                  </Card>
+                )}
+
+                {aiFeedback && !isAnalyzing && (
+                  aiFeedback.length === 0 || aiScore === 100 ? (
+                    // Perfect Recall Celebration
+                    <Card className="flex flex-col items-center gap-4 p-8 text-center">
+                      <CountRing value={1} size={160} strokeWidth={6} tone="success">
+                        <div className="flex items-baseline gap-1">
+                          <AnimatedNumber value={100} countUp className="text-h1 text-primary" />
+                          <span className="font-mono text-micro text-secondary">%</span>
+                        </div>
+                      </CountRing>
+                      <div className="text-h2 text-success">Perfect Recall!</div>
+                      <p className="max-w-md text-body text-secondary">
+                        You've captured all the key concepts from the source material.
+                      </p>
+                      <Button variant="secondary" mono onClick={() => handleShareRecap(100)}>
+                        <Camera className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+                        Share your perfect recall
+                      </Button>
+                    </Card>
                   ) : (
                     <>
-                      {/* Report Card */}
+                      {/* Report Card: the screenshot moment */}
                       {aiGrade && aiScore !== null && (
-                        <div style={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                          backdropFilter: 'blur(10px)',
-                          borderRadius: '24px',
-                          padding: '32px',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          marginBottom: '24px',
-                        }}>
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: aiSummary ? '16px' : '0',
-                          }}>
-                            {/* Grade Display */}
-                            <div>
-                              <div style={{
-                                fontSize: '12px',
-                                fontWeight: '600',
-                                color: 'rgba(255, 255, 255, 0.5)',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.1em',
-                                marginBottom: '8px',
-                              }}>
-                                Grade
+                        <Card className="p-6">
+                          <div className="flex flex-wrap items-center justify-center gap-x-14 gap-y-6 py-4">
+                            <CountRing
+                              value={aiScore / 100}
+                              size={160}
+                              strokeWidth={6}
+                              tone={scoreTone(aiScore)}
+                            >
+                              <div className="flex items-baseline gap-1">
+                                <AnimatedNumber
+                                  value={aiScore}
+                                  countUp
+                                  className="text-h1 text-primary"
+                                />
+                                <span className="font-mono text-micro text-secondary">%</span>
                               </div>
-                              <div style={{
-                                fontSize: '72px',
-                                fontWeight: '700',
-                                color: aiScore >= 80 
-                                  ? '#10b981' 
-                                  : aiScore >= 50 
-                                    ? '#f59e0b' 
-                                    : '#ef4444',
-                                lineHeight: '1',
-                                textShadow: `0 0 30px ${aiScore >= 80 
-                                  ? 'rgba(16, 185, 129, 0.5)' 
-                                  : aiScore >= 50 
-                                    ? 'rgba(245, 158, 11, 0.5)' 
-                                    : 'rgba(239, 68, 68, 0.5)'}`,
-                              }}>
-                                {aiGrade}
-                              </div>
-                            </div>
+                            </CountRing>
 
-                            {/* Score Circular Progress */}
-                            <div style={{
-                              width: '120px',
-                              height: '120px',
-                              position: 'relative',
-                            }}>
-                              <svg width="120" height="120" style={{ transform: 'rotate(-90deg)' }}>
-                                <circle
-                                  cx="60"
-                                  cy="60"
-                                  r="50"
-                                  fill="none"
-                                  stroke="rgba(255, 255, 255, 0.1)"
-                                  strokeWidth="8"
-                                />
-                                <circle
-                                  cx="60"
-                                  cy="60"
-                                  r="50"
-                                  fill="none"
-                                  stroke={aiScore >= 80 
-                                    ? '#10b981' 
-                                    : aiScore >= 50 
-                                      ? '#f59e0b' 
-                                      : '#ef4444'}
-                                  strokeWidth="8"
-                                  strokeDasharray={`${2 * Math.PI * 50}`}
-                                  strokeDashoffset={`${2 * Math.PI * 50 * (1 - aiScore / 100)}`}
-                                  strokeLinecap="round"
-                                  style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-                                />
-                              </svg>
-                              <div style={{
-                                position: 'absolute',
-                                top: '50%',
-                                left: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                textAlign: 'center',
-                              }}>
-                                <div style={{
-                                  fontSize: '28px',
-                                  fontWeight: '700',
-                                  color: '#ffffff',
-                                }}>
-                                  {aiScore}
-                                </div>
-                                <div style={{
-                                  fontSize: '12px',
-                                  color: 'rgba(255, 255, 255, 0.5)',
-                                }}>
-                                  %
-                                </div>
-                              </div>
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="font-mono text-micro uppercase text-secondary">
+                                Grade
+                              </span>
+                              {/* Stamps in after the ring starts drawing */}
+                              <motion.span
+                                initial={reduce ? { opacity: 0 } : { scale: 1.3, opacity: 0 }}
+                                animate={reduce ? { opacity: 1 } : { scale: 1, opacity: 1 }}
+                                transition={reduce ? reduced : { ...snappy, delay: 0.35 }}
+                                className="font-mono text-display leading-none"
+                                style={{ color: TONE_VARS[scoreTone(aiScore)] }}
+                              >
+                                {aiGrade}
+                              </motion.span>
                             </div>
                           </div>
 
                           {aiSummary && (
-                            <div style={{
-                              fontSize: '16px',
-                              color: 'rgba(255, 255, 255, 0.7)',
-                              lineHeight: '1.6',
-                              marginTop: '16px',
-                              paddingTop: '16px',
-                              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                            }}>
+                            <p className="mt-4 border-t border-soft pt-4 text-body leading-relaxed text-secondary">
                               {aiSummary}
-                            </div>
+                            </p>
                           )}
-                          <button
-                            onClick={() => handleShareRecap()}
-                            style={{
-                              marginTop: '16px',
-                              padding: '10px 20px',
-                              background: 'rgba(139, 92, 246, 0.12)',
-                              border: '1px solid rgba(139, 92, 246, 0.35)',
-                              borderRadius: '12px',
-                              color: '#a78bfa',
-                              fontSize: '14px',
-                              fontWeight: '600',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            📸 Share recap
-                          </button>
-                        </div>
+
+                          <div className="mt-4">
+                            <Button variant="secondary" size="sm" mono onClick={() => handleShareRecap()}>
+                              <Camera className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+                              Share recap
+                            </Button>
+                          </div>
+                        </Card>
                       )}
 
                       {/* Missing Concepts */}
                       {aiFeedback && aiFeedback.length > 0 && (
-                        <div style={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                          backdropFilter: 'blur(10px)',
-                          borderRadius: '24px',
-                          padding: '32px',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          marginBottom: '24px',
-                        }}>
-                          <div style={{
-                            fontSize: '18px',
-                            fontWeight: '600',
-                            color: '#ffffff',
-                            marginBottom: '20px',
-                          }}>
-                            Missing Concepts
+                        <Card className="p-6">
+                          <div className="mb-4 flex items-center justify-between">
+                            <span className="font-mono text-micro uppercase text-secondary">
+                              Missing Concepts
+                            </span>
+                            <Badge variant="danger">{aiFeedback.length}</Badge>
                           </div>
-                          <ul style={{
-                            listStyle: 'none',
-                            padding: 0,
-                            margin: 0,
-                          }}>
+
+                          <Stagger className="flex flex-col gap-2.5">
                             {aiFeedback.map((item, index) => {
                               const conceptText = typeof item === 'string' ? item : item.concept;
-                              const explanation = typeof item === 'object' && item.explanation ? item.explanation : '';
+                              const explanation =
+                                typeof item === 'object' && item.explanation ? item.explanation : '';
                               return (
-                                <li
-                                  key={index}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: '16px',
-                                    marginBottom: '12px',
-                                    padding: '16px',
-                                    backgroundColor: 'rgba(239, 68, 68, 0.05)',
-                                    borderRadius: '12px',
-                                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                                  }}
-                                >
-                                  {/* Red X Icon */}
-                                  <svg
-                                    style={{
-                                      width: '20px',
-                                      height: '20px',
-                                      stroke: '#ef4444',
-                                      fill: 'none',
-                                      strokeWidth: '2',
-                                      flexShrink: 0,
-                                      marginTop: '2px',
-                                    }}
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                  <div style={{ flex: 1 }}>
-                                    <div style={{
-                                      fontSize: '15px',
-                                      fontWeight: '600',
-                                      color: '#ffffff',
-                                      marginBottom: explanation ? '4px' : '0',
-                                    }}>
-                                      {conceptText}
-                                    </div>
-                                    {explanation && (
-                                      <div style={{
-                                        fontSize: '14px',
-                                        color: 'rgba(255, 255, 255, 0.6)',
-                                        lineHeight: '1.5',
-                                      }}>
-                                        {explanation}
+                                <Stagger.Item key={index}>
+                                  <div className="flex items-start gap-3 rounded-input border border-soft bg-base px-4 py-3">
+                                    <XIcon
+                                      className="mt-0.5 h-4 w-4 shrink-0 text-danger"
+                                      strokeWidth={1.5}
+                                      aria-hidden="true"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-small font-medium text-primary">
+                                        {conceptText}
                                       </div>
-                                    )}
+                                      {explanation && (
+                                        <div className="mt-0.5 text-small leading-relaxed text-secondary">
+                                          {explanation}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Badge feature="flashcards" className="shrink-0">
+                                      → card
+                                    </Badge>
                                   </div>
-                                </li>
+                                </Stagger.Item>
                               );
                             })}
-                          </ul>
+                          </Stagger>
 
                           {/* Misses -> flashcards, one click */}
-                          <div style={{ marginTop: '20px' }}>
+                          <div className="mt-5">
                             {missDeck ? (
-                              <button
+                              <Button
+                                variant="secondary"
+                                size="lg"
+                                mono
+                                className="w-full"
                                 onClick={() => navigate('/flashcards')}
-                                style={{
-                                  width: '100%',
-                                  padding: '14px 24px',
-                                  background: 'rgba(34, 197, 94, 0.15)',
-                                  border: '1px solid rgba(34, 197, 94, 0.4)',
-                                  borderRadius: '12px',
-                                  color: '#22c55e',
-                                  fontSize: '15px',
-                                  fontWeight: '600',
-                                  cursor: 'pointer',
-                                }}
                               >
-                                ✓ {missDeck.cardCount} cards saved — open your flashcards
-                              </button>
+                                <Check className="h-4 w-4 text-success" strokeWidth={1.5} aria-hidden="true" />
+                                {missDeck.cardCount} cards saved — open your flashcards
+                              </Button>
                             ) : (
-                              <button
+                              <Button
+                                variant="primary"
+                                size="lg"
+                                mono
+                                className="w-full"
                                 onClick={handleTurnMissesIntoCards}
                                 disabled={isGeneratingMissCards}
-                                style={{
-                                  width: '100%',
-                                  padding: '14px 24px',
-                                  background: isGeneratingMissCards
-                                    ? 'rgba(34, 197, 94, 0.3)'
-                                    : 'linear-gradient(90deg, #22c55e, #10b981)',
-                                  border: 'none',
-                                  borderRadius: '12px',
-                                  color: '#ffffff',
-                                  fontSize: '15px',
-                                  fontWeight: '600',
-                                  cursor: isGeneratingMissCards ? 'wait' : 'pointer',
-                                  boxShadow: isGeneratingMissCards ? 'none' : '0 4px 20px rgba(34, 197, 94, 0.3)',
-                                  transition: 'all 0.3s ease',
-                                }}
                               >
                                 {isGeneratingMissCards
                                   ? 'Building cards from your misses…'
                                   : 'Turn misses into flashcards'}
-                              </button>
+                              </Button>
                             )}
                           </div>
-                        </div>
+                        </Card>
                       )}
 
                       {/* Instant Quiz */}
                       {aiQuiz && aiQuiz.length > 0 && (
-                        <div style={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                          backdropFilter: 'blur(10px)',
-                          borderRadius: '24px',
-                          padding: '32px',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                        }}>
-                          <div style={{
-                            fontSize: '18px',
-                            fontWeight: '600',
-                            color: '#ffffff',
-                            marginBottom: '24px',
-                          }}>
+                        <Card className="p-6">
+                          <div className="mb-5 font-mono text-micro uppercase text-secondary">
                             Knowledge Check
                           </div>
                           {aiQuiz.map((quizItem, questionIndex) => (
                             <div
                               key={questionIndex}
-                              style={{
-                                marginBottom: questionIndex < aiQuiz.length - 1 ? '32px' : '0',
-                                paddingBottom: questionIndex < aiQuiz.length - 1 ? '32px' : '0',
-                                borderBottom: questionIndex < aiQuiz.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
-                              }}
+                              className={
+                                questionIndex < aiQuiz.length - 1
+                                  ? 'mb-6 border-b border-soft pb-6'
+                                  : ''
+                              }
                             >
-                              <div style={{
-                                fontSize: '16px',
-                                fontWeight: '600',
-                                color: '#ffffff',
-                                marginBottom: '16px',
-                              }}>
-                                {questionIndex + 1}. {quizItem.question}
+                              <div className="mb-3 text-body font-medium text-primary">
+                                <span className="font-mono tabular-nums">{questionIndex + 1}.</span>{' '}
+                                {quizItem.question}
                               </div>
-                              <div style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '12px',
-                              }}>
+                              <div className="flex flex-col gap-2">
                                 {quizItem.options && quizItem.options.map((option, optionIndex) => {
                                   const isSelected = quizAnswers[questionIndex] === option;
                                   const isCorrect = option === quizItem.answer;
                                   const showResult = quizAnswers[questionIndex] !== undefined;
-                                  const backgroundColor = showResult
-                                    ? isCorrect
-                                      ? 'rgba(16, 185, 129, 0.2)'
-                                      : isSelected && !isCorrect
-                                        ? 'rgba(239, 68, 68, 0.2)'
-                                        : 'rgba(255, 255, 255, 0.03)'
-                                    : isSelected
-                                      ? 'rgba(168, 85, 247, 0.2)'
-                                      : 'rgba(255, 255, 255, 0.03)';
-                                  const borderColor = showResult
-                                    ? isCorrect
-                                      ? 'rgba(16, 185, 129, 0.4)'
-                                      : isSelected && !isCorrect
-                                        ? 'rgba(239, 68, 68, 0.4)'
-                                        : 'rgba(255, 255, 255, 0.1)'
-                                    : isSelected
-                                      ? 'rgba(168, 85, 247, 0.4)'
-                                      : 'rgba(255, 255, 255, 0.1)';
-                                  const textColor = showResult
-                                    ? isCorrect
-                                      ? '#10b981'
-                                      : isSelected && !isCorrect
-                                        ? '#ef4444'
-                                        : 'rgba(255, 255, 255, 0.7)'
-                                    : 'rgba(255, 255, 255, 0.9)';
+
+                                  let stateClasses =
+                                    'border-soft bg-base text-primary hover:border-strong hover:bg-elevated';
+                                  let stateStyle;
+                                  if (showResult) {
+                                    if (isCorrect) {
+                                      stateClasses = 'border-soft';
+                                      stateStyle = {
+                                        backgroundColor: 'var(--success-wash)',
+                                        color: 'var(--success)',
+                                      };
+                                    } else if (isSelected) {
+                                      stateClasses = 'border-danger-line';
+                                      stateStyle = {
+                                        backgroundColor: 'var(--danger-wash)',
+                                        color: 'var(--danger)',
+                                      };
+                                    } else {
+                                      stateClasses = 'border-soft bg-base text-secondary';
+                                    }
+                                  } else if (isSelected) {
+                                    stateClasses = 'border-accent-line bg-accent-wash text-primary';
+                                  }
 
                                   return (
                                     <button
                                       key={optionIndex}
-                                      onClick={() => handleQuizAnswer(questionIndex, option, quizItem.answer)}
+                                      type="button"
+                                      onClick={() =>
+                                        handleQuizAnswer(questionIndex, option, quizItem.answer)
+                                      }
                                       disabled={showResult}
-                                      style={{
-                                        backgroundColor,
-                                        border: `1px solid ${borderColor}`,
-                                        borderRadius: '12px',
-                                        padding: '14px 20px',
-                                        textAlign: 'left',
-                                        cursor: showResult ? 'default' : 'pointer',
-                                        transition: 'all 0.2s ease',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        color: textColor,
-                                        fontSize: '15px',
-                                        fontWeight: '500',
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        if (!showResult) {
-                                          e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.2)';
-                                          e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.4)';
-                                        }
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        if (!showResult) {
-                                          e.currentTarget.style.backgroundColor = isSelected ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.03)';
-                                          e.currentTarget.style.borderColor = isSelected ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255, 255, 255, 0.1)';
-                                        }
-                                      }}
+                                      style={stateStyle}
+                                      className={[
+                                        'flex items-center gap-3 rounded-input border px-4 py-3 text-left text-small font-medium',
+                                        'transition-colors duration-150',
+                                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
+                                        showResult ? 'cursor-default' : '',
+                                        stateClasses,
+                                      ].join(' ')}
                                     >
                                       {showResult && isCorrect && (
-                                        <svg
-                                          style={{
-                                            width: '20px',
-                                            height: '20px',
-                                            stroke: '#10b981',
-                                            fill: 'none',
-                                            strokeWidth: '2',
-                                            flexShrink: 0,
-                                          }}
-                                          viewBox="0 0 24 24"
-                                        >
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
+                                        <Check
+                                          className="h-4 w-4 shrink-0 text-success"
+                                          strokeWidth={1.5}
+                                          aria-hidden="true"
+                                        />
                                       )}
                                       {showResult && isSelected && !isCorrect && (
-                                        <svg
-                                          style={{
-                                            width: '20px',
-                                            height: '20px',
-                                            stroke: '#ef4444',
-                                            fill: 'none',
-                                            strokeWidth: '2',
-                                            flexShrink: 0,
-                                          }}
-                                          viewBox="0 0 24 24"
-                                        >
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                        <XIcon
+                                          className="h-4 w-4 shrink-0 text-danger"
+                                          strokeWidth={1.5}
+                                          aria-hidden="true"
+                                        />
                                       )}
                                       {!showResult && (
-                                        <div style={{
-                                          width: '20px',
-                                          height: '20px',
-                                          borderRadius: '4px',
-                                          border: '2px solid rgba(255, 255, 255, 0.3)',
-                                          flexShrink: 0,
-                                          backgroundColor: isSelected ? '#a855f7' : 'transparent',
-                                        }} />
+                                        <span
+                                          className={`h-4 w-4 shrink-0 rounded-[4px] border ${
+                                            isSelected
+                                              ? 'border-accent-line bg-accent'
+                                              : 'border-strong'
+                                          }`}
+                                          aria-hidden="true"
+                                        />
                                       )}
                                       <span>{option}</span>
                                     </button>
@@ -1417,19 +944,18 @@ ${sourceText.slice(0, 6000)}`;
                               </div>
                             </div>
                           ))}
-                        </div>
+                        </Card>
                       )}
                     </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+                  )
+                )}
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
 };
 
 export default BlurtingMode;
-

@@ -1,15 +1,16 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { saveGeneratedDeck } from '../utils/deckUtils';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, FileText, X, Pencil, Download, Bookmark } from 'lucide-react';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
 import { downloadAnkiCsv } from '../utils/ankiExport';
-import AiLoadingIndicator from './AiLoadingIndicator';
 import UpgradeModal from './UpgradeModal';
+import { Button, Card, Field, Input, Textarea, Modal, Badge, Tabs, Progress } from './ui';
+import { motion, useReducedMotion, Stagger, shake } from '../motion';
 
 const GENERATE_STATUS_MESSAGES = [
   'Reading your material…',
@@ -17,6 +18,94 @@ const GENERATE_STATUS_MESSAGES = [
   'Writing questions and answers…',
   'Assembling your deck…',
 ];
+
+// After this long we level with the user about cold starts instead of
+// letting an unexplained progress line erode trust. Mirrors the timing
+// contract of the previous AiLoadingIndicator exactly.
+const COLD_START_NOTICE_MS = 8000;
+const ROTATE_INTERVAL_MS = 3000;
+
+/**
+ * Local generation-progress block: thin Progress line that advances per
+ * stage, rotating mono status copy, the honest 8s cold-start notice, and a
+ * Cancel button wired to the AbortController.
+ */
+const GenerationStatus = ({ messages, onCancel }) => {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [showColdStartNotice, setShowColdStartNotice] = useState(false);
+
+  useEffect(() => {
+    const rotate = setInterval(
+      () => setMessageIndex((i) => i + 1),
+      ROTATE_INTERVAL_MS
+    );
+    const coldStart = setTimeout(
+      () => setShowColdStartNotice(true),
+      COLD_START_NOTICE_MS
+    );
+    return () => {
+      clearInterval(rotate);
+      clearTimeout(coldStart);
+    };
+  }, []);
+
+  const message = messages[messageIndex % messages.length];
+  // Decorative pacing only - the backend reports no real progress, so the
+  // line climbs per rotation and parks at 90% until the response lands.
+  const progress = Math.min(0.18 + messageIndex * 0.22, 0.9);
+
+  return (
+    <div className="flex w-full max-w-sm flex-col items-center gap-4 px-4 py-8 text-center">
+      <Progress value={progress} label="Generating deck" className="w-full" />
+      <div aria-live="polite" className="font-mono text-micro uppercase text-secondary">
+        {message}
+      </div>
+      {showColdStartNotice && (
+        <p className="max-w-sm text-small text-secondary">
+          First request of the day can take up to a minute — we're waking the
+          AI up. Hang tight.
+        </p>
+      )}
+      {onCancel && (
+        <Button variant="secondary" size="sm" mono onClick={onCancel}>
+          Cancel
+        </Button>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Local error block: danger card, softened to secondary text for cold-start
+ * timeouts, with an optional Retry action. Keyed shake on new error text.
+ */
+const ErrorNotice = ({ error, timedOut = false, onRetry }) => {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      key={error}
+      animate={reduce ? undefined : shake}
+      className="flex w-full flex-col items-start gap-3 rounded-card border border-danger-line bg-danger-wash px-4 py-3 text-left"
+    >
+      <p className={`text-small ${timedOut ? 'text-secondary' : 'text-danger'}`}>{error}</p>
+      {timedOut && onRetry && (
+        <Button variant="secondary" size="sm" mono onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </motion.div>
+  );
+};
+
+// Multi-line clamps: Tailwind's line-clamp availability is version-dependent,
+// so these stay as inline style objects (no colors involved).
+const clamp = (lines) => ({
+  display: '-webkit-box',
+  WebkitLineClamp: lines,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+  wordBreak: 'break-word',
+});
 
 const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   const { user } = useAuth();
@@ -130,7 +219,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
 
       // Show success toast
       toast.success(`Deck Generated Successfully! Created ${validCards.length} flashcards.`);
-      
+
       // Don't clear file yet - show preview first
     } catch (err) {
       if (err instanceof AiCancelledError) {
@@ -161,7 +250,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragActive(false);
-    
+
     const uploadedFile = e.dataTransfer.files?.[0];
     if (uploadedFile) {
       handleUpload(uploadedFile);
@@ -235,14 +324,14 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       if (response.status === 403) {
         const errorData = await response.json().catch(() => ({ error: 'Limit Reached' }));
         const errorMessage = errorData.error || 'Limit Reached';
-        
+
         if (errorMessage.includes('Free limit reached') || errorMessage.includes('Upgrade to Pro')) {
           toast.error('You have used your 3 free credits. Upgrade for unlimited study.', {
             duration: 5000,
             style: {
-              background: '#1f2937',
-              color: '#fff',
-              border: '1px solid #ef4444',
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--danger-line)',
             },
             icon: '🔒',
           });
@@ -251,7 +340,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
           toast.error(errorMessage || 'Daily AI Limit Reached (5/5). Upgrade to Pro for unlimited.');
           setError(errorMessage || 'Daily AI Limit Reached');
         }
-        
+
         setIsLoading(false);
         return;
       }
@@ -287,7 +376,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
 
       // Show success toast
       toast.success(`Deck Generated Successfully! Created ${validCards.length} flashcards.`);
-      
+
     } catch (err) {
       if (err instanceof AiCancelledError) {
         return;
@@ -340,7 +429,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
 
       if (result.success) {
         toast.success(`Deck saved successfully! ${result.cardCount} flashcards added to your library.`);
-        
+
         // Clear state
         setGeneratedCards(null);
         setFile(null);
@@ -396,7 +485,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   // Save edits to a card
   const saveEdit = useCallback((index) => {
     if (!editingCardData) return;
-    
+
     setGeneratedCards(prevCards => {
       const updatedCards = [...prevCards];
       updatedCards[index] = {
@@ -406,7 +495,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       };
       return updatedCards;
     });
-    
+
     setEditingCardIndex(null);
     setEditingCardData(null);
   }, [editingCardData]);
@@ -440,520 +529,167 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   // Show preview section if cards are generated
   if (generatedCards && generatedCards.length > 0) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        position: 'relative',
-        paddingBottom: '100px', // Space for sticky footer
-      }}>
+      <div className="relative flex h-full flex-col">
         {/* Preview Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '16px 20px',
-          backgroundColor: 'rgba(34, 197, 94, 0.1)',
-          border: '1px solid rgba(34, 197, 94, 0.3)',
-          borderRadius: '16px',
-          marginBottom: '24px',
-        }}>
-          <div>
-            <div style={{
-              fontSize: '18px',
-              fontWeight: '600',
-              color: '#ffffff',
-              marginBottom: '4px',
-            }}>
-              ✅ {generatedCards.length} Flashcards Generated
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex items-center gap-2.5">
+              <Badge variant="success">Generated</Badge>
+              <span className="text-body font-medium text-primary">
+                <span className="font-mono">{generatedCards.length}</span> flashcards ready
+              </span>
             </div>
-            <div style={{
-              fontSize: '14px',
-              color: 'rgba(255, 255, 255, 0.6)',
-            }}>
-              Click each card to reveal the answer (Active Recall Study Method)
-            </div>
+            <p className="text-small text-secondary">
+              Review and edit each card before saving to your library.
+            </p>
           </div>
-          <button
-            onClick={clearFile}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '8px',
-              color: 'rgba(255, 255, 255, 0.7)',
-              fontSize: '14px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-            }}
-          >
-            Start Over
-          </button>
-        </div>
+          <Button variant="ghost" size="sm" mono onClick={clearFile}>
+            Start over
+          </Button>
+        </Card>
 
-        {/* Drafting Table Grid - All Cards */}
-        <div style={{
-          backgroundColor: 'rgba(17, 24, 39, 0.5)', // bg-gray-900/50
-          padding: '24px',
-          borderRadius: '16px', // rounded-2xl
-          marginBottom: '100px', // Space for sticky footer
-        }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '16px',
-          }}>
-            {generatedCards.map((card, index) => {
-              const isEditing = editingCardIndex === index;
-              const cardData = isEditing ? editingCardData : card;
-              
-              return (
-                <div
-                  key={index}
-                  style={{
-                    backgroundColor: '#1f2937', // bg-gray-800
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    padding: '16px',
-                    position: 'relative',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isEditing) {
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isEditing) {
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    }
-                  }}
-                >
+        {/* Card Preview Grid */}
+        <Stagger className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 pb-6">
+          {generatedCards.map((card, index) => {
+            const isEditing = editingCardIndex === index;
+
+            return (
+              <Stagger.Item key={index}>
+                <Card className="relative h-full p-4">
                   {/* Pencil Edit Icon */}
                   {!isEditing && (
                     <button
+                      type="button"
+                      aria-label={`Edit card ${index + 1}`}
                       onClick={(e) => startEditing(index, e)}
-                      style={{
-                        position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '6px',
-                        border: 'none',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        color: 'rgba(255, 255, 255, 0.6)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s ease',
-                        zIndex: 10,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                        e.currentTarget.style.color = '#ffffff';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                        e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
-                      }}
+                      className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-input border border-transparent text-secondary transition-colors duration-150 hover:border-soft hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
                     >
-                      <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                      </svg>
+                      <Pencil size={14} strokeWidth={1.5} />
                     </button>
                   )}
 
                   {isEditing ? (
                     // Edit Mode: Show textareas
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                    }}>
-                      <div>
-                        <label style={{
-                          display: 'block',
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: 'rgba(255, 255, 255, 0.7)',
-                          marginBottom: '6px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                        }}>
-                          Question
-                        </label>
-                        <textarea
+                    <div className="flex flex-col gap-3">
+                      <Field label="Question">
+                        <Textarea
+                          rows={3}
                           value={editingCardData?.front || ''}
                           onChange={(e) => setEditingCardData(prev => ({ ...prev, front: e.target.value }))}
-                          style={{
-                            width: '100%',
-                            minHeight: '80px',
-                            padding: '10px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: '8px',
-                            color: '#ffffff',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            fontFamily: 'inherit',
-                            resize: 'vertical',
-                            outline: 'none',
-                          }}
                           placeholder="Question..."
                         />
-                      </div>
-                      <div>
-                        <label style={{
-                          display: 'block',
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: 'rgba(255, 255, 255, 0.7)',
-                          marginBottom: '6px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                        }}>
-                          Answer
-                        </label>
-                        <textarea
+                      </Field>
+                      <Field label="Answer">
+                        <Textarea
+                          rows={3}
                           value={editingCardData?.back || ''}
                           onChange={(e) => setEditingCardData(prev => ({ ...prev, back: e.target.value }))}
-                          style={{
-                            width: '100%',
-                            minHeight: '80px',
-                            padding: '10px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: '8px',
-                            color: '#ffffff',
-                            fontSize: '14px',
-                            fontFamily: 'inherit',
-                            resize: 'vertical',
-                            outline: 'none',
-                          }}
                           placeholder="Answer..."
                         />
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        gap: '8px',
-                        justifyContent: 'flex-end',
-                      }}>
-                        <button
-                          onClick={cancelEdit}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: '6px',
-                            color: 'rgba(255, 255, 255, 0.7)',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                          }}
-                        >
+                      </Field>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={cancelEdit}>
                           Cancel
-                        </button>
-                        <button
-                          onClick={() => saveEdit(index)}
-                          style={{
-                            padding: '6px 12px',
-                            background: 'linear-gradient(90deg, #22c55e, #10b981)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            color: '#ffffff',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                          }}
-                        >
+                        </Button>
+                        <Button variant="primary" size="sm" mono onClick={() => saveEdit(index)}>
                           Save
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : (
                     // View Mode: Show card content
                     <>
                       {/* Question (Front) */}
-                      <div style={{
-                        marginBottom: '12px',
-                      }}>
-                        <div style={{
-                          fontSize: '14px',
-                          fontWeight: '700',
-                          color: '#ffffff',
-                          lineHeight: '1.5',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          wordBreak: 'break-word',
-                        }}>
+                      <div className="mb-3 pr-8">
+                        <div aria-hidden="true" className="mb-1 font-mono text-micro uppercase text-tertiary">
+                          {String(index + 1).padStart(2, '0')}
+                        </div>
+                        <div className="text-small font-medium leading-5 text-primary" style={clamp(3)}>
                           {card.front || card.question}
                         </div>
                       </div>
 
                       {/* Answer (Back) */}
-                      <div style={{
-                        paddingTop: '12px',
-                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                      }}>
-                        <div style={{
-                          fontSize: '13px',
-                          fontWeight: '400',
-                          color: 'rgba(255, 255, 255, 0.6)',
-                          lineHeight: '1.5',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 4,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          wordBreak: 'break-word',
-                        }}>
+                      <div className="border-t border-soft pt-3">
+                        <div className="text-small leading-5 text-secondary" style={clamp(4)}>
                           {card.back || card.answer}
                         </div>
                       </div>
                     </>
                   )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                </Card>
+              </Stagger.Item>
+            );
+          })}
+        </Stagger>
 
         {/* Sticky Action Bar Footer */}
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: 'rgba(17, 24, 39, 0.95)', // bg-gray-900 with opacity
-          backdropFilter: 'blur(10px)',
-          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-          padding: '20px 24px',
-          display: 'flex',
-          gap: '16px',
-          justifyContent: 'center',
-          zIndex: 100,
-          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.3)',
-        }}>
-          <button
-            onClick={handleExportToAnki}
-            disabled={isSaving}
-            style={{
-              padding: '14px 28px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              color: 'rgba(255, 255, 255, 0.8)',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: isSaving ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              opacity: isSaving ? 0.5 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-            onMouseEnter={(e) => {
-              if (!isSaving) {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isSaving) {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-              }
-            }}
-          >
-            <svg style={{ width: '20px', height: '20px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            Export to Anki
-          </button>
-          <button
-            onClick={handleShowSaveModal}
-            disabled={isSaving || editingCardIndex !== null}
-            style={{
-              padding: '14px 32px',
-              background: 'linear-gradient(90deg, #22c55e, #10b981)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '12px',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: (isSaving || editingCardIndex !== null) ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              opacity: (isSaving || editingCardIndex !== null) ? 0.5 : 1,
-              boxShadow: '0 4px 20px rgba(34, 197, 94, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-            onMouseEnter={(e) => {
-              if (!isSaving && editingCardIndex === null) {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.boxShadow = '0 6px 25px rgba(34, 197, 94, 0.4)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isSaving && editingCardIndex === null) {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 197, 94, 0.3)';
-              }
-            }}
-          >
-            <svg style={{ width: '20px', height: '20px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-            </svg>
-            Save to Library
-          </button>
+        <div className="sticky bottom-0 z-10 mt-auto border-t border-soft bg-base py-4">
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button
+              variant="secondary"
+              size="lg"
+              mono
+              onClick={handleExportToAnki}
+              disabled={isSaving}
+            >
+              <Download size={16} strokeWidth={1.5} />
+              Export to Anki
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              mono
+              magnetic
+              onClick={handleShowSaveModal}
+              disabled={isSaving || editingCardIndex !== null}
+            >
+              <Bookmark size={16} strokeWidth={1.5} />
+              Save to Library
+            </Button>
+          </div>
         </div>
 
-        {/* Fade-in animation style */}
-        <style>
-          {`
-            @keyframes fadeIn {
-              from {
-                opacity: 0;
-                transform: translateY(10px);
-              }
-              to {
-                opacity: 1;
-                transform: translateY(0);
-              }
-            }
-          `}
-        </style>
-
         {/* Save Modal */}
-        {showSaveModal && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              backdropFilter: 'blur(4px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowSaveModal(false);
-              }
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: 'rgba(31, 41, 55, 0.95)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '16px',
-                padding: '32px',
-                maxWidth: '500px',
-                width: '90%',
+        <Modal
+          open={showSaveModal}
+          onClose={() => setShowSaveModal(false)}
+          title="Save deck to library"
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setShowSaveModal(false)}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                mono
+                onClick={handleSaveToLibrary}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          }
+        >
+          <Field label="Deck name" hint="Leave blank for a default name.">
+            <Input
+              type="text"
+              value={deckTitle}
+              onChange={(e) => setDeckTitle(e.target.value)}
+              placeholder="e.g., Biology Chapter 5"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !isSaving) {
+                  handleSaveToLibrary();
+                }
               }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 style={{
-                fontSize: '24px',
-                fontWeight: '700',
-                color: '#ffffff',
-                marginBottom: '16px',
-              }}>
-                Save Deck to Library
-              </h2>
-              <p style={{
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.6)',
-                marginBottom: '24px',
-              }}>
-                Give your deck a name (or leave blank for default)
-              </p>
-              <input
-                type="text"
-                value={deckTitle}
-                onChange={(e) => setDeckTitle(e.target.value)}
-                placeholder="e.g., Biology Chapter 5"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  color: '#ffffff',
-                  fontSize: '16px',
-                  marginBottom: '24px',
-                  outline: 'none',
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !isSaving) {
-                    handleSaveToLibrary();
-                  }
-                }}
-                autoFocus
-              />
-              <div style={{
-                display: 'flex',
-                gap: '12px',
-                justifyContent: 'flex-end',
-              }}>
-                <button
-                  onClick={() => setShowSaveModal(false)}
-                  disabled={isSaving}
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '8px',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: isSaving ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveToLibrary}
-                  disabled={isSaving}
-                  style={{
-                    padding: '10px 20px',
-                    background: 'linear-gradient(90deg, #22c55e, #10b981)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: isSaving ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s ease',
-                    opacity: isSaving ? 0.5 : 1,
-                  }}
-                >
-                  {isSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+              autoFocus
+            />
+          </Field>
+        </Modal>
       </div>
     );
   }
@@ -961,495 +697,169 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   // Show file card if file is selected
   if (file && !isLoading) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-      }}>
+      <div className="flex flex-col gap-3">
         {upgradeModal}
-        <div style={{
-          backgroundColor: 'rgba(34, 197, 94, 0.1)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '16px',
-          padding: '16px 20px',
-          border: '1px solid rgba(34, 197, 94, 0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-        }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(34, 197, 94, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <svg
-              style={{
-                width: '24px',
-                height: '24px',
-                stroke: '#22c55e',
-                fill: 'none',
-                strokeWidth: '2',
-              }}
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-            </svg>
+        <Card className="flex items-center gap-4 px-5 py-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input bg-accent-wash">
+            <FileText size={20} strokeWidth={1.5} className="text-accent" />
           </div>
-          <div style={{
-            flex: 1,
-            minWidth: 0,
-          }}>
-            <div style={{
-              fontSize: '16px',
-              fontWeight: '600',
-              color: '#ffffff',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-body font-medium text-primary">
               {file.name}
             </div>
-            <div style={{
-              fontSize: '12px',
-              color: 'rgba(255, 255, 255, 0.5)',
-              marginTop: '2px',
-            }}>
+            <div className="mt-0.5 font-mono text-micro uppercase text-secondary">
               {(file.size / 1024).toFixed(1)} KB
             </div>
           </div>
           <button
+            type="button"
+            aria-label="Remove file"
             onClick={clearFile}
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-            }}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input border border-soft text-secondary transition-colors duration-150 hover:border-danger-line hover:bg-danger-wash hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
           >
-            <svg
-              style={{
-                width: '18px',
-                height: '18px',
-                stroke: 'rgba(255, 255, 255, 0.7)',
-                fill: 'none',
-                strokeWidth: '2',
-              }}
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X size={16} strokeWidth={1.5} />
           </button>
-        </div>
+        </Card>
         {error && (
-          <div style={{
-            padding: '12px 16px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '8px',
-            fontSize: '14px',
-            color: '#ef4444',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}>
-            <span style={{ color: timedOut ? 'rgba(255, 255, 255, 0.8)' : '#ef4444' }}>
-              {error}
-            </span>
-            {timedOut && (
-              <button
-                onClick={() => handleUpload(file)}
-                style={{
-                  alignSelf: 'flex-start',
-                  padding: '8px 20px',
-                  background: 'linear-gradient(90deg, #22c55e, #10b981)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                }}
-              >
-                Try Again
-              </button>
-            )}
-          </div>
+          <ErrorNotice
+            error={error}
+            timedOut={timedOut}
+            onRetry={() => handleUpload(file)}
+          />
         )}
       </div>
     );
   }
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '24px',
-    }}>
+    <div className="flex flex-col gap-6">
       {upgradeModal}
       {/* Tab Switcher */}
-      <div style={{
-        display: 'flex',
-        gap: '12px',
-        justifyContent: 'center',
-        marginBottom: '8px',
-      }}>
-        <button
-          onClick={() => {
-            setActiveTab('upload');
+      <div className="flex justify-center">
+        <Tabs
+          items={[
+            { value: 'upload', label: 'Upload file' },
+            { value: 'paste', label: 'Paste text' },
+          ]}
+          value={activeTab}
+          onChange={(tab) => {
+            setActiveTab(tab);
             setError(null);
           }}
-          style={{
-            background: activeTab === 'upload'
-              ? 'rgba(0, 255, 148, 0.1)'
-              : 'rgba(255, 255, 255, 0.05)',
-            border: activeTab === 'upload'
-              ? '1px solid rgba(0, 255, 148, 0.3)'
-              : '1px solid rgba(255, 255, 255, 0.1)',
-            color: activeTab === 'upload' ? '#00FF94' : 'rgba(255, 255, 255, 0.7)',
-            padding: '10px 20px',
-            borderRadius: '12px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-          }}
-          onMouseEnter={(e) => {
-            if (activeTab !== 'upload') {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== 'upload') {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-            }
-          }}
-        >
-          Upload File
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab('paste');
-            setError(null);
-          }}
-          style={{
-            background: activeTab === 'paste'
-              ? 'rgba(0, 255, 148, 0.1)'
-              : 'rgba(255, 255, 255, 0.05)',
-            border: activeTab === 'paste'
-              ? '1px solid rgba(0, 255, 148, 0.3)'
-              : '1px solid rgba(255, 255, 255, 0.1)',
-            color: activeTab === 'paste' ? '#00FF94' : 'rgba(255, 255, 255, 0.7)',
-            padding: '10px 20px',
-            borderRadius: '12px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-          }}
-          onMouseEnter={(e) => {
-            if (activeTab !== 'paste') {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== 'paste') {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-            }
-          }}
-        >
-          Paste Text
-        </button>
+        />
       </div>
 
       {/* Tab Content */}
       {activeTab === 'upload' ? (
         <div
+          role="button"
+          tabIndex={isLoading ? -1 : 0}
+          aria-label="Upload a PDF"
+          aria-disabled={isLoading || undefined}
           onDrop={handleDrop}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onClick={() => !isLoading && fileInputRef.current?.click()}
-          style={{
-            backgroundColor: isDragActive 
-              ? 'rgba(0, 255, 148, 0.1)' 
-              : 'rgba(255, 255, 255, 0.05)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '16px',
-            padding: '48px 32px',
-            border: isDragActive
-              ? '2px dashed rgba(0, 255, 148, 0.5)'
-              : '2px dashed rgba(255, 255, 255, 0.1)',
-            cursor: isLoading ? 'not-allowed' : 'pointer',
-            transition: 'all 0.3s ease',
-            textAlign: 'center',
-            minHeight: '200px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: isLoading ? 0.6 : 1,
-            boxShadow: isDragActive 
-              ? '0 0 30px rgba(0, 255, 148, 0.2)' 
-              : 'none',
-          }}
-          onMouseEnter={(e) => {
-            if (!isLoading && !isDragActive) {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+          onKeyDown={(e) => {
+            if (!isLoading && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              fileInputRef.current?.click();
             }
           }}
-          onMouseLeave={(e) => {
-            if (!isLoading && !isDragActive) {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-            }
-          }}
+          className={[
+            'flex min-h-[200px] flex-col items-center justify-center rounded-card border border-dashed px-8 py-12 text-center',
+            'transition-colors duration-150',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
+            isDragActive
+              ? 'border-accent-line bg-accent-wash'
+              : 'border-soft bg-subtle hover:border-strong hover:bg-elevated',
+            isLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+          ].join(' ')}
         >
           <input
             ref={fileInputRef}
             type="file"
             accept="application/pdf"
             onChange={handleFileInput}
-            style={{ display: 'none' }}
+            className="hidden"
             disabled={isLoading}
           />
-          
+
           {isLoading ? (
-            <AiLoadingIndicator
+            <GenerationStatus
               messages={GENERATE_STATUS_MESSAGES}
-              accent="#00FF94"
               onCancel={cancelGeneration}
             />
           ) : (
             <>
-              <svg
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  stroke: isDragActive ? '#00FF94' : 'rgba(255, 255, 255, 0.5)',
-                  fill: 'none',
-                  strokeWidth: '1.5',
-                  marginBottom: '20px',
-                  transform: isDragActive ? 'scale(1.1)' : 'scale(1)',
-                  transition: 'all 0.3s ease',
-                }}
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-              </svg>
-              <div style={{
-                fontSize: '18px',
-                fontWeight: '600',
-                color: isDragActive ? '#00FF94' : '#ffffff',
-                marginBottom: '8px',
-                transition: 'color 0.3s ease',
-              }}>
-                {isDragActive ? 'Drop your PDF here' : 'Drag & Drop your lecture PDF (or click to browse)'}
+              <FileText
+                size={40}
+                strokeWidth={1.5}
+                aria-hidden="true"
+                className={`mb-5 transition-colors duration-150 ${isDragActive ? 'text-accent' : 'text-secondary'}`}
+              />
+              <div className={`mb-2 text-body font-medium transition-colors duration-150 ${isDragActive ? 'text-accent' : 'text-primary'}`}>
+                {isDragActive ? 'Drop your PDF here' : 'Drag & drop your lecture PDF (or click to browse)'}
               </div>
-              <div style={{
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.5)',
-              }}>
-                Max file size: 5MB
+              <div className="text-small text-secondary">
+                Max file size: <span className="font-mono">5MB</span>
               </div>
             </>
           )}
 
           {error && (
-            <div style={{
-              marginTop: '16px',
-              padding: '12px 16px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '8px',
-              fontSize: '14px',
-              color: '#ef4444',
-              maxWidth: '400px',
-            }}>
-              {error}
+            <div className="mt-4 w-full max-w-sm">
+              <ErrorNotice error={error} />
             </div>
           )}
         </div>
       ) : (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}>
-          <div style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '16px',
-            padding: '24px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-          }}>
-            <label style={{
-              display: 'block',
-              fontSize: '14px',
-              fontWeight: '500',
-              color: 'rgba(255, 255, 255, 0.7)',
-              marginBottom: '12px',
-            }}>
-              Paste your notes or summary here...
-            </label>
-            <textarea
-              value={pastedText}
-              onChange={(e) => setPastedText(e.target.value)}
-              placeholder="Paste your notes or summary here..."
-              style={{
-                width: '100%',
-                minHeight: '300px',
-                padding: '20px',
-                backgroundColor: 'rgba(10, 10, 10, 0.5)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '12px',
-                color: '#ffffff',
-                fontSize: '15px',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                resize: 'vertical',
-                outline: 'none',
-                transition: 'border-color 0.2s ease',
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-              }}
-            />
-          </div>
-          
+        <div className="flex flex-col gap-4">
+          <Card className="p-5">
+            <Field label="Notes or summary">
+              <Textarea
+                rows={12}
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                placeholder="Paste your notes or summary here..."
+                className="min-h-[300px]"
+              />
+            </Field>
+          </Card>
+
           {isLoading && (
-            <div style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              borderRadius: '16px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-            }}>
-              <AiLoadingIndicator
+            <Card className="flex justify-center">
+              <GenerationStatus
                 messages={GENERATE_STATUS_MESSAGES}
-                accent="#00FF94"
                 onCancel={cancelGeneration}
               />
-            </div>
+            </Card>
           )}
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            mono
+            className="w-full"
             onClick={handleGenerateFromText}
             disabled={isLoading || !pastedText.trim()}
-            style={{
-              width: '100%',
-              padding: '12px 24px',
-              backgroundColor: (isLoading || !pastedText.trim()) ? 'rgba(22, 163, 74, 0.5)' : '#16a34a',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '12px',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: (isLoading || !pastedText.trim()) ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease',
-              opacity: (isLoading || !pastedText.trim()) ? 0.5 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-            }}
-            onMouseEnter={(e) => {
-              if (!isLoading && pastedText.trim()) {
-                e.currentTarget.style.backgroundColor = '#15803d';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isLoading && pastedText.trim()) {
-                e.currentTarget.style.backgroundColor = '#16a34a';
-              }
-            }}
           >
             {isLoading ? (
-              <>
-                <div style={{
-                  width: '18px',
-                  height: '18px',
-                  border: '2px solid rgba(255, 255, 255, 0.3)',
-                  borderTopColor: '#ffffff',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                }} />
-                <style>
-                  {`
-                    @keyframes spin {
-                      to { transform: rotate(360deg); }
-                    }
-                  `}
-                </style>
-                Generating...
-              </>
+              'Generating...'
             ) : (
               <>
-                <Sparkles size={18} />
-                Generate Deck
+                <Sparkles size={16} strokeWidth={1.5} />
+                Generate deck
               </>
             )}
-          </button>
+          </Button>
 
           {error && (
-            <div style={{
-              padding: '12px 16px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '8px',
-              fontSize: '14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-            }}>
-              <span style={{ color: timedOut ? 'rgba(255, 255, 255, 0.8)' : '#ef4444' }}>
-                {error}
-              </span>
-              {timedOut && (
-                <button
-                  onClick={handleGenerateFromText}
-                  style={{
-                    alignSelf: 'flex-start',
-                    padding: '8px 20px',
-                    background: 'linear-gradient(90deg, #22c55e, #10b981)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Try Again
-                </button>
-              )}
-            </div>
+            <ErrorNotice
+              error={error}
+              timedOut={timedOut}
+              onRetry={handleGenerateFromText}
+            />
           )}
         </div>
       )}
@@ -1458,4 +868,3 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
 };
 
 export default PDFToFlashcardUploader;
-

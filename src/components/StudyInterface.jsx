@@ -4,16 +4,48 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { updateCardProgress } from '../utils/spacedRepetition';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, BookOpen } from 'lucide-react';
+import { Button, Card, Badge, StatTile, Progress, Switch, EmptyState } from './ui';
+import {
+  motion,
+  AnimatePresence,
+  useReducedMotion,
+  Stagger,
+  FlipCard,
+  CountRing,
+  smooth,
+  reduced,
+} from '../motion';
+
+/**
+ * Local kbd-style chip for the shortcut hint row. Mono micro type on the
+ * subtle surface - matches the system's "ghost control" treatment.
+ */
+const KeyHint = ({ children }) => (
+  <kbd className="rounded-input border border-soft bg-subtle px-1.5 py-0.5 font-mono text-micro uppercase text-secondary">
+    {children}
+  </kbd>
+);
+
+/**
+ * Local card-face surface for the FlipCard. A full-bleed system Card that
+ * centers its content; both faces of the flashcard render through it.
+ */
+const CardFace = ({ children }) => (
+  <Card className="flex h-full w-full flex-col items-center justify-center overflow-y-auto p-10 text-center">
+    {children}
+  </Card>
+);
 
 const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  
+  const reduce = useReducedMotion();
+
   // Get deckId from props or URL params
   const deckId = propDeckId || searchParams.get('deck');
-  
+
   const [flashcards, setFlashcards] = useState([]);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -47,20 +79,23 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const gestureRecognizerRef = useRef(null);
   const streamRef = useRef(null);
   const animationFrameRef = useRef(null);
-  
+
   // LOGIC REFS (These survive re-renders) - CRUCIAL for unbreakable cooldown
   const lastActionTime = useRef(0);
   const lastGestureRef = useRef("");
   const gestureCountRef = useRef(0);
-  
+
   // Animation state for navigation / grading (Flip-then-Rate)
   const [isAnimating, setIsAnimating] = useState(false);   // Lock input while animating
   const [isTransitioning, setIsTransitioning] = useState(false); // Used to lock visibility during swaps
   const [animationClass, setAnimationClass] = useState(''); // Directional slide animation class
   const [ghostCardClass, setGhostCardClass] = useState(''); // Ghost card animation class
   const [exitDirection, setExitDirection] = useState(null); // 'left' | 'right' | null
-  const [masteryProgress, setMasteryProgress] = useState(0); // Animated progress ring (0-100)
-  const [sessionCompleteScale, setSessionCompleteScale] = useState(0.9); // Entry animation scale
+
+  // Grading animation machinery (framer-motion layer)
+  const [cardSeq, setCardSeq] = useState(0);   // Bumped per grade so AnimatePresence remounts the card
+  const exitDirRef = useRef(1);                // -1 exits left (again/hard), +1 exits right (good/easy)
+  const gradeLockRef = useRef(false);          // Guards double-grades while a card is exiting
 
   // Fetch flashcards for the deck
   useEffect(() => {
@@ -149,7 +184,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const handleMarkGood = useCallback(() => {
     // Guard: prevent rapid clicking during animation
     if (exitDirection || sessionComplete) return;
-    
+
     // Guard: check bounds
     if (currentCardIndex >= flashcards.length - 1) {
       setSessionComplete(true);
@@ -164,29 +199,30 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
     }
 
     // Step A: Set exit direction and start animation
+    exitDirRef.current = 1;
     setExitDirection('right');
     setAnimationClass('slide-out-right');
     setGhostCardClass('ghost-slide-in');
     setIsAnimating(true);
-    
-    // Step B: Animation happens via CSS (0.4s ease-in-out)
+
+    // Step B: Animation happens via spring physics (0.4s window)
     // Step C: After animation completes, swap cards
     setTimeout(() => {
       setCurrentCardIndex(prev => prev + 1);
       setIsFlipped(false); // Reset flip state
-      
+
       // Reset states immediately - ghost becomes active
       setExitDirection(null);
       setAnimationClass('');
       setGhostCardClass('');
       setIsAnimating(false);
-    }, 400); // Match CSS transition duration
+    }, 400); // Match animation window duration
   }, [exitDirection, sessionComplete, currentCardIndex, flashcards, supabase]);
 
   const handleMarkBad = useCallback(() => {
     // Guard: prevent rapid clicking during animation
     if (exitDirection || sessionComplete) return;
-    
+
     // Guard: check bounds
     if (currentCardIndex >= flashcards.length - 1) {
       setSessionComplete(true);
@@ -208,36 +244,32 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
       return updated;
     });
 
-    // Show toast notification
+    // Show toast notification (styling handled by the global themed toaster)
     toast.success('Re-queued for review', {
       duration: 2000,
       position: 'bottom-center',
-      style: {
-        background: 'rgba(0, 0, 0, 0.8)',
-        color: '#ffffff',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-      },
     });
 
     // Step A: Set exit direction and start animation
+    exitDirRef.current = -1;
     setExitDirection('left');
     setAnimationClass('slide-out-left');
     setGhostCardClass('ghost-slide-in');
     setIsAnimating(true);
-    
-    // Step B: Animation happens via CSS (0.4s ease-in-out)
+
+    // Step B: Animation happens via spring physics (0.4s window)
     // Step C: After animation completes, swap cards
     setTimeout(() => {
       // After moving to back, the next card is at the same index
       setCurrentCardIndex(prev => prev + 1);
       setIsFlipped(false); // Reset flip state
-      
+
       // Reset states immediately - ghost becomes active
       setExitDirection(null);
       setAnimationClass('');
       setGhostCardClass('');
       setIsAnimating(false);
-    }, 400); // Match CSS transition duration
+    }, 400); // Match animation window duration
   }, [exitDirection, sessionComplete, currentCardIndex, flashcards, supabase]);
 
   // Session complete action handlers
@@ -245,8 +277,6 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
     setCurrentCardIndex(0);
     setIsFlipped(false);
     setSessionComplete(false);
-    setMasteryProgress(0);
-    setSessionCompleteScale(0.9);
     setStudySessionData({
       totalCards: flashcards.length,
       reviewed: 0,
@@ -269,21 +299,25 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   // Maps UI grade names to rating numbers: again=1, hard=2, good=3, easy=4
   const handleGrade = useCallback(async (grade) => {
     if (!flashcards.length || currentCardIndex >= flashcards.length) return;
+    // Guard: no double-grades while the previous card is still exiting
+    if (gradeLockRef.current || sessionComplete) return;
 
     const currentCard = flashcards[currentCardIndex];
-    
+
     const ratingMap = {
       again: 1,
       hard: 2,
       good: 3,
       easy: 4,
     };
-    
+
     const rating = ratingMap[grade];
     if (!rating) {
       toast.error('Invalid grade. Please try again.');
       return;
     }
+
+    gradeLockRef.current = true;
 
     // Update SRS progress in Supabase
     const currentBox = currentCard.box || 1;
@@ -291,6 +325,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
     if (!result.success) {
       toast.error(result.error || 'Failed to update card');
+      gradeLockRef.current = false;
       return;
     }
 
@@ -339,9 +374,15 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
       : flashcards.length - 1; // card removed for good/easy
 
     if (nextFlashcardsLength <= 0) {
+      gradeLockRef.current = false;
       setSessionComplete(true);
       return;
     }
+
+    // Exit physics direction: grades 1-2 throw left, 3-4 throw right
+    exitDirRef.current = rating <= 2 ? -1 : 1;
+    // Bump the card sequence so AnimatePresence remounts (index may not change)
+    setCardSeq(prev => prev + 1);
 
     // Move to the logical "next" card in the queue (same index, since current was removed/moved)
     const nextIndex = Math.min(currentCardIndex, nextFlashcardsLength - 1);
@@ -349,30 +390,13 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
     // Reset flip / animation state for clean next render
     setIsFlipped(false);
-    setAnimationState('IDLE');
     setIsAnimating(false);
 
-    if (!isTransitioning) {
-      setCardScale(0.5);
-      const popInDuration = 166;
-      const popInStartTime = Date.now();
-      
-      const popIn = () => {
-        const elapsed = Date.now() - popInStartTime;
-        const progress = Math.min(elapsed / popInDuration, 1);
-        const scale = 0.5 + (1.0 - 0.5) * progress;
-        setCardScale(scale);
-        
-        if (progress < 1) {
-          requestAnimationFrame(popIn);
-        } else {
-          setCardScale(1);
-        }
-      };
-      
-      requestAnimationFrame(popIn);
-    }
-  }, [flashcards, currentCardIndex, isTransitioning, supabase]);
+    // Release the input lock once the exit spring has settled
+    setTimeout(() => {
+      gradeLockRef.current = false;
+    }, 500);
+  }, [flashcards, currentCardIndex, sessionComplete, examDate, supabase]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -405,18 +429,28 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             handleMarkBad();
           }
           break;
+        case '1': // Grade: Again
+        case '2': // Grade: Hard
+        case '3': // Grade: Good
+        case '4': // Grade: Easy
+          e.preventDefault();
+          if (!sessionComplete && isFlipped) {
+            const gradeMap = { 1: 'again', 2: 'hard', 3: 'good', 4: 'easy' };
+            handleGrade(gradeMap[e.key]);
+          }
+          break;
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isFlipped, currentCardIndex, flashcards.length, sessionComplete, handleFlip, handleMarkGood, handleMarkBad, handleKeepStudying, handleBackToDashboard]);
+  }, [isFlipped, currentCardIndex, flashcards.length, sessionComplete, handleFlip, handleMarkGood, handleMarkBad, handleKeepStudying, handleBackToDashboard, handleGrade]);
 
   // Hand smoothing function (kept for future use in camera-driven navigation if needed)
   const smoothPosition = useCallback((rawX, rawY) => {
     return { x: rawX, y: rawY };
   }, []);
-  
+
   // Simple linear interpolation helper for future animations
   const lerp = useCallback((start, end, factor) => {
     return start + (end - start) * factor;
@@ -462,7 +496,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
   const handleGestureLogic = useCallback((category) => {
     const now = Date.now();
-    
+
     // Check timestamp-based cooldown (1.5 seconds for gestures)
     if (now - lastActionTime.current < 1500) {
       return;
@@ -503,15 +537,15 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const triggerAction = useCallback((label, action) => {
     // Execute the action
     action();
-    
+
     // Set timestamp (source of truth for cooldown)
     lastActionTime.current = Date.now();
-    
+
     // Update visuals
     setGestureLabel(label);
     setIsCooldownVisual(true);
     setDebugStatus("Cooldown 🔒");
-    
+
     // Reset counter
     gestureCountRef.current = 0;
   }, []);
@@ -586,7 +620,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
     // Show hints when gestures are enabled
     setShowGestureHints(true);
-    
+
     // Auto-hide after 4 seconds
     const timer = setTimeout(() => {
       setShowGestureHints(false);
@@ -675,20 +709,10 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   // Early returns - MUST come after all hooks
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        width: '100%',
-        background: 'transparent',
-        color: '#ffffff',
-      }}>
-        <div style={{
-          fontSize: '18px',
-          color: 'rgba(255, 255, 255, 0.7)',
-        }}>
-          Loading flashcards...
+      <div className="flex h-screen w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="font-mono text-micro uppercase text-secondary">Loading flashcards</div>
+          <Progress value={0.3} label="Loading" className="w-40" />
         </div>
       </div>
     );
@@ -696,53 +720,18 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
   if (!deckId || flashcards.length === 0) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        width: '100%',
-        padding: '24px',
-        background: 'transparent',
-        textAlign: 'center',
-      }}>
-        <div style={{
-          fontSize: '48px',
-          marginBottom: '24px',
-        }}>
-          📚
-        </div>
-        <h2 style={{
-          fontSize: '24px',
-          fontWeight: '700',
-          color: '#ffffff',
-          marginBottom: '12px',
-        }}>
-          No Flashcards Found
-        </h2>
-        <p style={{
-          fontSize: '16px',
-          color: 'rgba(255, 255, 255, 0.6)',
-          marginBottom: '32px',
-        }}>
-          This deck doesn't have any flashcards yet.
-        </p>
-        <button
-          onClick={() => navigate('/dashboard')}
-          style={{
-            background: 'linear-gradient(135deg, #22c55e, #10b981)',
-            color: '#ffffff',
-            border: 'none',
-            padding: '12px 24px',
-            borderRadius: '12px',
-            fontSize: '16px',
-            fontWeight: '600',
-            cursor: 'pointer',
-          }}
-        >
-          Back to Dashboard
-        </button>
+      <div className="flex h-screen w-full flex-col items-center justify-center p-6">
+        <EmptyState
+          icon={<BookOpen size={20} strokeWidth={1.5} />}
+          title="No flashcards found"
+          description="This deck doesn't have any flashcards yet."
+          action={
+            <Button variant="primary" onClick={() => navigate('/dashboard')}>
+              Back to Dashboard
+            </Button>
+          }
+          className="w-full max-w-md"
+        />
       </div>
     );
   }
@@ -750,294 +739,74 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   if (sessionComplete) {
     // Calculate mastery percentage
     const total = studySessionData.totalCards || 1;
-    const mastery = total > 0 
+    const mastery = total > 0
       ? Math.round(((studySessionData.good + studySessionData.easy) / total) * 100)
       : 0;
-
-    // Calculate circumference for progress ring (radius = 80, so circumference = 2 * π * 80 ≈ 502.65)
-    const radius = 80;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (masteryProgress / 100) * circumference;
+    const accuracy = studySessionData.reviewed > 0
+      ? Math.round(((studySessionData.good + studySessionData.easy) / studySessionData.reviewed) * 100)
+      : 0;
+    // Next-due preview from session grades: again/hard come back soon,
+    // good/easy are scheduled further out by the SRS.
+    const dueSoon = studySessionData.again + studySessionData.hard;
+    const scheduledAhead = studySessionData.good + studySessionData.easy;
 
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        width: '100%',
-        padding: '24px',
-        background: 'transparent',
-        position: 'relative',
-      }}>
-        {/* Glassmorphism Card Container */}
-        <div style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.4)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '24px',
-          padding: '64px',
-          maxWidth: '600px',
-          width: '100%',
-          transform: `scale(${sessionCompleteScale})`,
-          transition: 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
-          textAlign: 'center',
-        }}>
-          {/* Gradient Title */}
-          <h2 style={{
-            fontSize: '36px',
-            fontWeight: '700',
-            background: 'linear-gradient(to right, #60a5fa, #34d399)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            marginBottom: '48px',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-          }}>
-            Session Complete!
-          </h2>
+      <div className="relative flex h-screen w-full items-center justify-center overflow-hidden p-6">
+        <Card className="w-full max-w-xl p-8 sm:p-10">
+          <Stagger>
+            <Stagger.Item>
+              <div className="font-mono text-micro uppercase text-secondary">Session complete</div>
+              <h2 className="mt-2 text-h1 text-primary">Deck reviewed.</h2>
+            </Stagger.Item>
 
-          {/* Circular Progress Ring */}
-          <div style={{
-            position: 'relative',
-            width: '200px',
-            height: '200px',
-            margin: '0 auto 32px',
-          }}>
-            <svg width="200" height="200" style={{ transform: 'rotate(-90deg)' }}>
-              {/* Background circle */}
-              <circle
-                cx="100"
-                cy="100"
-                r={radius}
-                fill="none"
-                stroke="rgba(255, 255, 255, 0.1)"
-                strokeWidth="12"
-              />
-              {/* Progress circle */}
-              <circle
-                cx="100"
-                cy="100"
-                r={radius}
-                fill="none"
-                stroke="url(#gradient)"
-                strokeWidth="12"
-                strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                style={{
-                  transition: 'stroke-dashoffset 0.1s linear',
-                }}
-              />
-              <defs>
-                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#60a5fa" />
-                  <stop offset="100%" stopColor="#34d399" />
-                </linearGradient>
-              </defs>
-            </svg>
-            {/* Center text */}
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              textAlign: 'center',
-            }}>
-              <div style={{
-                fontSize: '48px',
-                fontWeight: '700',
-                color: '#ffffff',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                {Math.round(masteryProgress)}%
+            <Stagger.Item className="mt-8 flex justify-center">
+              <CountRing value={mastery / 100} size={168} strokeWidth={8} tone="accent">
+                <div className="text-center">
+                  <div className="font-mono text-h1 text-primary">{mastery}%</div>
+                  <div className="mt-1 font-mono text-micro uppercase text-secondary">Mastery</div>
+                </div>
+              </CountRing>
+            </Stagger.Item>
+
+            <Stagger.Item className="mt-8 grid grid-cols-2 gap-3">
+              <StatTile label="Cards reviewed" value={studySessionData.reviewed} countUp />
+              <StatTile label="Accuracy" value={accuracy} unit="%" countUp />
+            </Stagger.Item>
+
+            <Stagger.Item className="mt-3 rounded-card border border-soft bg-subtle p-4">
+              <div className="font-mono text-micro uppercase text-secondary">Next due</div>
+              <div className="mt-2 flex items-center justify-between text-small text-secondary">
+                <span>Returning soon</span>
+                <span className="font-mono text-primary">{dueSoon}</span>
               </div>
-              <div style={{
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.6)',
-                marginTop: '4px',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                Session Mastery
+              <div className="mt-1 flex items-center justify-between text-small text-secondary">
+                <span>Scheduled ahead</span>
+                <span className="font-mono text-primary">{scheduledAhead}</span>
               </div>
-            </div>
-          </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <Badge variant="danger">Again {studySessionData.again}</Badge>
+                <Badge variant="warning">Hard {studySessionData.hard}</Badge>
+                <Badge variant="accent">Good {studySessionData.good}</Badge>
+                <Badge variant="success">Easy {studySessionData.easy}</Badge>
+              </div>
+            </Stagger.Item>
 
-          {/* Breakdown Row - Pills */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '12px',
-            marginBottom: '48px',
-            flexWrap: 'wrap',
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-            }}>
-              <span style={{ fontSize: '16px' }}>🔴</span>
-              <span style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: '#ef4444',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                Again: {studySessionData.again}
-              </span>
-            </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(249, 115, 22, 0.1)',
-              border: '1px solid rgba(249, 115, 22, 0.3)',
-            }}>
-              <span style={{ fontSize: '16px' }}>🟠</span>
-              <span style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: '#f97316',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                Hard: {studySessionData.hard}
-              </span>
-            </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-            }}>
-              <span style={{ fontSize: '16px' }}>🔵</span>
-              <span style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: '#3b82f6',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                Good: {studySessionData.good}
-              </span>
-            </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(34, 197, 94, 0.1)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
-            }}>
-              <span style={{ fontSize: '16px' }}>🟢</span>
-              <span style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: '#22c55e',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                Easy: {studySessionData.easy}
-              </span>
-            </div>
-          </div>
+            <Stagger.Item className="mt-8 flex items-center justify-between gap-3">
+              <Button variant="secondary" onClick={handleBackToDashboard}>
+                Back to Dashboard
+              </Button>
+              <Button variant="primary" magnetic onClick={handleKeepStudying}>
+                Keep Studying
+              </Button>
+            </Stagger.Item>
 
-          {/* Action Buttons */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: '16px',
-            marginBottom: '24px',
-          }}>
-            {/* Back to Dashboard - Left */}
-            <button
-              onClick={handleBackToDashboard}
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                color: 'rgba(255, 255, 255, 0.9)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                padding: '14px 28px',
-                borderRadius: '12px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-              }}
-            >
-              Back to Dashboard
-            </button>
-
-            {/* Keep Studying - Right with Pulse */}
-            <button
-              onClick={handleKeepStudying}
-              style={{
-                background: 'linear-gradient(135deg, #22c55e, #10b981)',
-                color: '#ffffff',
-                border: 'none',
-                padding: '14px 28px',
-                borderRadius: '12px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              Keep Studying
-            </button>
-          </div>
-
-          {/* Gesture Hint */}
-          {isGestureMode && (
-            <div style={{
-              marginTop: '16px',
-              fontSize: '12px',
-              color: 'rgba(0, 255, 148, 0.7)',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-            }}>
-              Gestures Active: 👍 Keep Studying • 👎 Back
-            </div>
-          )}
-        </div>
-
-        {/* Pulse Animation Keyframes */}
-        <style>{`
-          @keyframes pulse {
-            0%, 100% {
-              opacity: 1;
-              box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
-            }
-            50% {
-              opacity: 0.95;
-              box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
-            }
-          }
-        `}</style>
+            {isGestureMode && (
+              <Stagger.Item className="mt-4 text-center font-mono text-micro uppercase text-secondary">
+                Gestures active: 👍 keep studying · 👎 back
+              </Stagger.Item>
+            )}
+          </Stagger>
+        </Card>
       </div>
     );
   }
@@ -1045,598 +814,238 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   // Ensure currentCardIndex is within bounds
   const safeCardIndex = Math.min(currentCardIndex, flashcards.length - 1);
   const currentCard = flashcards[safeCardIndex];
-  const nextCard = flashcards.length > safeCardIndex + 1 ? flashcards[safeCardIndex + 1] : null;
-  
+  const remainingAfterCurrent = flashcards.length - safeCardIndex - 1;
+
   // Calculate progress, clamped to 100% maximum
   // Use currentIndex / total formula to prevent overflow
   const progress = Math.min((safeCardIndex / flashcards.length) * 100, 100);
-  
+
   // Calculate display index, clamped to never exceed total
   const displayIndex = Math.min(safeCardIndex + 1, flashcards.length);
 
+  // Framer targets for the active card. Under reduced motion everything
+  // degrades to opacity-only.
+  const cardTransition = reduce ? reduced : smooth;
+  const enterTarget = reduce ? { opacity: 0 } : { opacity: 0, y: 28, scale: 0.97 };
+  const centerTarget = reduce
+    ? { opacity: 1 }
+    : { opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 };
+  // Pre-slide target while handleMarkGood/handleMarkBad run their 400ms swap window
+  const slideTarget = reduce
+    ? { opacity: 0 }
+    : animationClass === 'slide-out-left'
+      ? { opacity: 0, x: -320, rotate: -8 }
+      : { opacity: 0, x: 320, rotate: 8 };
+  const exitVariants = {
+    exit: (dir) =>
+      reduce
+        ? { opacity: 0, transition: reduced }
+        : { opacity: 0, x: dir < 0 ? -320 : 320, rotate: dir < 0 ? -8 : 8, transition: smooth },
+  };
+
   return (
-    <div style={{
-      height: '100vh',
-      width: '100%',
-      padding: '0',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'transparent', // No background - let the app background show through
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      {/* Back to Library Button - Top Left */}
-      <button
-        onClick={() => {
-          if (onExit) {
-            onExit();
-          } else {
-            navigate('/flashcards');
-          }
-        }}
-        style={{
-          position: 'absolute',
-          top: '24px',
-          left: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '10px 20px',
-          borderRadius: '9999px', // rounded-full
-          background: 'rgba(255, 255, 255, 0.05)', // bg-white/5
-          backdropFilter: 'blur(12px)', // backdrop-blur-md
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)', // border-white/10
-          color: 'rgba(255, 255, 255, 0.8)',
-          fontSize: '14px',
-          fontWeight: '500',
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease',
-          zIndex: 50,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = '#00FF94';
-          e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-        }}
-      >
-        <ArrowLeft size={18} style={{ stroke: 'currentColor', fill: 'none' }} />
-        Back to Library
-      </button>
+    <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden">
+      {/* Session position bar - very top */}
+      <div className="absolute inset-x-0 top-0 z-20">
+        <Progress value={progress / 100} label="Session progress" />
+      </div>
 
-      {/* Gesture Hints Overlay */}
-      {showGestureHints && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 50,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(4px)',
-            WebkitBackdropFilter: 'blur(4px)',
-            transition: 'opacity 0.5s ease-in-out',
-            pointerEvents: 'none',
+      {/* Header row: back, counter, gesture toggle */}
+      <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-3 p-5">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            if (onExit) {
+              onExit();
+            } else {
+              navigate('/flashcards');
+            }
           }}
         >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '24px',
-              padding: '48px',
-              borderRadius: '20px',
-              backgroundColor: 'rgba(10, 10, 10, 0.9)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
-          >
-            <div style={{
-              fontSize: '32px',
-              fontWeight: '700',
-              color: '#ffffff',
-              marginBottom: '8px',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-            }}>
-              Gesture Controls
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              alignItems: 'flex-start',
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                fontSize: '18px',
-                color: 'rgba(255, 255, 255, 0.9)',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                <span style={{ fontSize: '24px' }}>🖐️</span>
-                <span>Open Palm: Flip Card</span>
-              </div>
-              
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                fontSize: '18px',
-                color: 'rgba(255, 255, 255, 0.9)',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                <span style={{ fontSize: '24px' }}>👍</span>
-                <span>Thumbs Up: I Know It (Right)</span>
-              </div>
-              
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                fontSize: '18px',
-                color: 'rgba(255, 255, 255, 0.9)',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                <span style={{ fontSize: '24px' }}>👎</span>
-                <span>Thumbs Down: Review Later (Left)</span>
-              </div>
-            </div>
-            
-            <div style={{
-              marginTop: '16px',
-              fontSize: '14px',
-              color: 'rgba(0, 255, 148, 0.8)',
-              fontWeight: '500',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-            }}>
-              Gestures Active
-            </div>
-          </div>
+          <ArrowLeft size={16} strokeWidth={1.5} />
+          Back to Library
+        </Button>
+
+        <div className="pointer-events-none font-mono text-micro uppercase text-secondary">
+          Card <span className="text-primary">{displayIndex}</span>
+          <span className="mx-1 text-tertiary">/</span>
+          <span className="text-primary">{flashcards.length}</span>
         </div>
-      )}
 
-      {/* Enable Gestures Toggle - Top Right */}
-      <div
-        onClick={() => setIsGestureMode(!isGestureMode)}
-        style={{
-          position: 'absolute',
-          top: '24px',
-          right: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          zIndex: 50,
-          cursor: 'pointer',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          background: 'rgba(255, 255, 255, 0.05)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          transition: 'all 0.3s ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-        }}
-      >
-        <span
-          style={{
-            fontSize: '14px',
-            fontWeight: '500',
-            color: 'rgba(255, 255, 255, 0.8)',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-          }}
-        >
-          Enable Gestures
-        </span>
-        <div
-          style={{
-            position: 'relative',
-            width: '48px',
-            height: '24px',
-            borderRadius: '12px',
-            background: isGestureMode ? 'rgba(0, 255, 148, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-            border: `1px solid ${isGestureMode ? 'rgba(0, 255, 148, 0.5)' : 'rgba(255, 255, 255, 0.2)'}`,
-            transition: 'all 0.3s ease',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: '2px',
-              left: isGestureMode ? '26px' : '2px',
-              width: '18px',
-              height: '18px',
-              borderRadius: '50%',
-              background: isGestureMode ? '#00FF94' : 'rgba(255, 255, 255, 0.6)',
-              transition: 'all 0.3s ease',
-              boxShadow: isGestureMode ? '0 0 8px rgba(0, 255, 148, 0.5)' : 'none',
-            }}
+        <div className="flex items-center gap-2.5">
+          <span className="text-small text-secondary">Enable Gestures</span>
+          <Switch
+            checked={isGestureMode}
+            onChange={() => setIsGestureMode(!isGestureMode)}
+            label="Enable gestures"
           />
         </div>
       </div>
 
-      {/* Ambient Background Glow - Neutral */}
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: '1000px',
-        height: '800px',
-        background: 'radial-gradient(circle at center, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 50%, transparent 80%)',
-        pointerEvents: 'none',
-        zIndex: 0,
-      }} />
-
-      {/* Progress Bar */}
-      {/* Floating card counter pill - top center */}
-      <div style={{
-        position: 'absolute',
-        top: '16px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        padding: '6px 12px',
-        borderRadius: '9999px',
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        color: 'rgba(255, 255, 255, 0.8)',
-        fontSize: '11px',
-        fontWeight: '500',
-        letterSpacing: '0.15em',
-        textTransform: 'uppercase',
-        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-        zIndex: 40,
-        pointerEvents: 'none',
-      }}>
-        Card {displayIndex} of {flashcards.length}
-      </div>
-
-      {/* No grading zones in Flip-then-Rate mode */}
-
-      {/* Stacked Deck Container */}
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '672px',
-          height: '384px',
-          marginBottom: '20px',
-          padding: '0 24px',
-          position: 'relative',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        {/* Ghost Card (Bottom Layer) - Only show if there's a next card */}
-        {nextCard && (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              maxWidth: '672px',
-              perspective: '1000px',
-              position: 'absolute',
-              zIndex: 0,
-              transform: (() => {
-                // Default ghost position: scale-95, translate-y-2
-                let scale = 0.95;
-                let translateY = 2;
-                
-                // When animating in, scale up to 1.0 and move to center
-                if (ghostCardClass === 'ghost-slide-in') {
-                  scale = 1.0;
-                  translateY = 0;
-                }
-                
-                return `scale(${scale}) translateY(${translateY}px)`;
-              })(),
-              opacity: (() => {
-                // Default: opacity-50, when animating: opacity-100
-                if (ghostCardClass === 'ghost-slide-in') return 1;
-                return 0.5;
-              })(),
-              transition: 'all 0.4s ease-in-out',
-              pointerEvents: 'none',
-            }}
+      {/* Gesture Hints Overlay */}
+      <AnimatePresence>
+        {showGestureHints && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={reduce ? reduced : smooth}
+            className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60"
           >
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                position: 'relative',
-                transformStyle: 'preserve-3d',
-                backgroundColor: 'rgba(10, 10, 10, 0.6)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                borderRadius: '20px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '48px',
-                boxShadow: '0 20px 50px -12px rgba(0, 0, 0, 0.5)',
-              }}
-            >
-              <div style={{
-                fontSize: '28px',
-                fontWeight: '700',
-                color: 'rgba(255, 255, 255, 0.5)',
-                textAlign: 'center',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                {nextCard?.front || nextCard?.question || ''}
+            <div className="flex flex-col items-center gap-5 rounded-modal border border-soft bg-elevated p-8 shadow-modal">
+              <div className="text-h2 text-primary">Gesture Controls</div>
+              <div className="flex flex-col items-start gap-3">
+                <div className="flex items-center gap-3 text-body text-secondary">
+                  <span aria-hidden="true">🖐️</span>
+                  <span>Open Palm: Flip Card</span>
+                </div>
+                <div className="flex items-center gap-3 text-body text-secondary">
+                  <span aria-hidden="true">👍</span>
+                  <span>Thumbs Up: I Know It (Right)</span>
+                </div>
+                <div className="flex items-center gap-3 text-body text-secondary">
+                  <span aria-hidden="true">👎</span>
+                  <span>Thumbs Down: Review Later (Left)</span>
+                </div>
               </div>
+              <div className="font-mono text-micro uppercase text-accent">Gestures Active</div>
             </div>
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* Active Card (Top Layer) - scale-100, z-10 */}
-        <div
-          key={currentCardIndex}
-          onClick={handleFlip}
-          style={{
-            width: '100%',
-            height: '100%',
-            maxWidth: '672px',
-            perspective: '1000px',
-            cursor: isAnimating ? 'grabbing' : 'pointer',
-            position: 'absolute',
-            zIndex: 10,
-            transform: (() => {
-              // Compute animation transform based on animationClass
-              if (animationClass === 'slide-out-left') {
-                return 'translateX(-120vw) rotate(-15deg)';
-              } else if (animationClass === 'slide-out-right') {
-                return 'translateX(120vw) rotate(15deg)';
-              }
-              // Default: no transform (card at center)
-              return 'translateX(0) rotate(0deg)';
-            })(),
-            transition: animationClass 
-              ? 'all 0.4s ease-in-out' 
-              : (isAnimating ? 'none' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease-in-out'),
-            opacity: (animationClass === 'slide-out-left' || animationClass === 'slide-out-right') ? 0 : 1,
-          }}
+      {/* Stacked deck: shared-layout target for the library grid's deck card */}
+      <div className="relative z-10 w-full max-w-2xl px-6">
+        <motion.div
+          layoutId={reduce ? undefined : `deck-${deckId}`}
+          transition={cardTransition}
+          className="relative h-96 w-full"
         >
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            position: 'relative',
-            transformStyle: 'preserve-3d',
-            transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-          }}
-        >
-          {/* Front of Card */}
-          <div
-            style={{
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              backgroundColor: 'rgba(10, 10, 10, 0.6)', // Deep glass - bg-[#0A0A0A]/60
-              backdropFilter: 'blur(24px)', // backdrop-blur-xl
-              WebkitBackdropFilter: 'blur(24px)',
-              borderRadius: '20px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '48px',
-              boxShadow: '0 20px 50px -12px rgba(0, 0, 0, 0.5)',
-              transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-            }}
-          >
-            <div style={{
-              fontSize: '28px',
-              fontWeight: '700', // Bold for high readability
-              color: '#ffffff', // High contrast white text - no glow, sharp and crisp
-              textAlign: 'center',
-              lineHeight: '1.6',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              textRendering: 'optimizeLegibility', // Ensure crisp text rendering
-              WebkitFontSmoothing: 'antialiased',
-              MozOsxFontSmoothing: 'grayscale',
-              opacity: 1,
-              transition: 'opacity 0.2s ease',
-            }}>
-              {currentCard?.front || currentCard?.question || 'No question available'}
-            </div>
-          </div>
-
-          {/* Back of Card */}
-          <div
-            style={{
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              backgroundColor: 'rgba(10, 10, 10, 0.6)', // Deep glass - bg-[#0A0A0A]/60
-              backdropFilter: 'blur(24px)', // backdrop-blur-xl
-              WebkitBackdropFilter: 'blur(24px)',
-              borderRadius: '20px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '48px',
-              boxShadow: '0 20px 50px -12px rgba(0, 0, 0, 0.5)',
-              transform: 'rotateY(180deg)',
-              transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-            }}
-          >
-            <div style={{
-              fontSize: '28px',
-              fontWeight: '700', // Bold for high readability
-              color: '#ffffff', // High contrast white text - no glow, sharp and crisp
-              textAlign: 'center',
-              lineHeight: '1.6',
-              marginBottom: '24px',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              textRendering: 'optimizeLegibility', // Ensure crisp text rendering
-              WebkitFontSmoothing: 'antialiased',
-              MozOsxFontSmoothing: 'grayscale',
-              opacity: 1,
-              transition: 'opacity 0.2s ease',
-            }}>
-              {currentCard?.back || currentCard?.answer || 'No answer available'}
-            </div>
-            {currentCard?.explanation && (
-              <div style={{
-                fontSize: '16px',
-                color: 'rgba(255, 255, 255, 0.85)', // Higher contrast for better readability
-                textAlign: 'center',
-                lineHeight: '1.6',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                marginTop: '16px',
-                paddingTop: '16px',
-                borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                textRendering: 'optimizeLegibility',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale',
-              }}>
-                {currentCard.explanation}
-              </div>
+          {/* Static ghost stack behind the active card */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+            {remainingAfterCurrent >= 2 && (
+              <Card
+                className="absolute inset-0"
+                style={{ transform: 'translateY(20px) scale(0.94)', opacity: 0.25 }}
+              />
+            )}
+            {remainingAfterCurrent >= 1 && (
+              <Card
+                className="absolute inset-0"
+                style={{ transform: 'translateY(10px) scale(0.97)', opacity: 0.5 }}
+              />
             )}
           </div>
-        </div>
-      </div>
-      </div>
-      {/* End Stacked Deck Container */}
 
-      {/* Action Buttons removed: SRS grading is now done via spatial drop zones */}
+          {/* Active card */}
+          <AnimatePresence initial={false} custom={exitDirRef.current}>
+            <motion.div
+              key={`${safeCardIndex}-${cardSeq}`}
+              custom={exitDirRef.current}
+              initial={enterTarget}
+              animate={animationClass ? slideTarget : centerTarget}
+              variants={exitVariants}
+              exit="exit"
+              transition={cardTransition}
+              className="absolute inset-0 z-10 rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+              role="button"
+              tabIndex={0}
+              aria-label="Flashcard. Click or press Space to flip"
+            >
+              <FlipCard
+                className="h-full w-full cursor-pointer"
+                flipped={isFlipped}
+                onFlip={handleFlip}
+                front={
+                  <CardFace>
+                    <div className="text-h2 text-primary">
+                      {currentCard?.front || currentCard?.question || 'No question available'}
+                    </div>
+                  </CardFace>
+                }
+                back={
+                  <CardFace>
+                    <div className="text-h2 text-primary">
+                      {currentCard?.back || currentCard?.answer || 'No answer available'}
+                    </div>
+                    {currentCard?.explanation && (
+                      <div className="mt-4 w-full border-t border-soft pt-4 text-small text-secondary">
+                        {currentCard.explanation}
+                      </div>
+                    )}
+                  </CardFace>
+                }
+              />
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
+      </div>
 
-      {/* Keyboard Shortcuts Hint */}
-      {!isFlipped && (
-        <div style={{
-          marginTop: '24px',
-          fontSize: '12px',
-          color: 'rgba(255, 255, 255, 0.4)',
-          textAlign: 'center',
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-        }}>
-          Press <kbd style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '11px',
-          }}>Space</kbd> to flip • <kbd style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '11px',
-          }}>→</kbd> to skip
-        </div>
-      )}
-      {isFlipped && (
-        <div style={{
-          marginTop: '24px',
-          fontSize: '12px',
-          color: 'rgba(255, 255, 255, 0.4)',
-          textAlign: 'center',
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-        }}>
-          Press <kbd style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '11px',
-          }}>1</kbd> <kbd style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '11px',
-          }}>2</kbd> <kbd style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '11px',
-          }}>3</kbd> <kbd style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '11px',
-          }}>4</kbd> to grade
-        </div>
-      )}
+      {/* Grade buttons: 1-4 (Again / Hard / Good / Easy) */}
+      <div className="relative z-10 mt-8 flex items-center gap-2">
+        <Button
+          variant="secondary"
+          disabled={!isFlipped}
+          onClick={() => handleGrade('again')}
+          aria-label="Grade 1: Again"
+        >
+          <span aria-hidden="true" className="font-mono text-micro text-tertiary">1</span>
+          Again
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!isFlipped}
+          onClick={() => handleGrade('hard')}
+          aria-label="Grade 2: Hard"
+        >
+          <span aria-hidden="true" className="font-mono text-micro text-tertiary">2</span>
+          Hard
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!isFlipped}
+          onClick={() => handleGrade('good')}
+          aria-label="Grade 3: Good"
+        >
+          <span aria-hidden="true" className="font-mono text-micro text-tertiary">3</span>
+          Good
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!isFlipped}
+          onClick={() => handleGrade('easy')}
+          aria-label="Grade 4: Easy"
+        >
+          <span aria-hidden="true" className="font-mono text-micro text-tertiary">4</span>
+          Easy
+        </Button>
+      </div>
+
+      {/* Keyboard hint row */}
+      <div className="relative z-10 mt-4 flex items-center gap-2 font-mono text-micro uppercase text-secondary">
+        <KeyHint>space</KeyHint>
+        <span>flip</span>
+        <span aria-hidden="true" className="text-tertiary">·</span>
+        <KeyHint>1-4</KeyHint>
+        <span>grade</span>
+      </div>
 
       {/* Webcam HUD - Bottom Right (only when gesture mode is enabled) */}
       {isGestureMode && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            width: '300px',
-            height: '225px',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            backgroundColor: '#000',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            zIndex: 100,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-          }}
-        >
+        <div className="absolute bottom-6 right-6 z-50 h-[225px] w-[300px] overflow-hidden rounded-card border border-soft bg-black shadow-modal">
           {/* Debug Overlay */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '10px',
-              left: '10px',
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-              color: isCooldownVisual ? '#ff6b6b' : '#e0e0e0',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontSize: '11px',
-              fontFamily: 'monospace',
-              zIndex: 10,
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
-          >
-            <div>Status: {debugStatus}</div>
-            <div>Detected: {debugGesture}</div>
-            <div>Confidence: {debugScore}%</div>
+          <div className="absolute left-2.5 top-2.5 z-10 rounded-input border border-soft px-3 py-2 font-mono text-micro bg-black/60">
+            <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>Status: {debugStatus}</div>
+            <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>Detected: {debugGesture}</div>
+            <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>
+              Confidence: <span className="font-mono">{debugScore}%</span>
+            </div>
           </div>
 
-          {/* Emoji Overlay */}
+          {/* Gesture Label Overlay */}
           {gestureLabel && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '10px',
-                right: '10px',
-                backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                color: 'white',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                fontSize: '32px',
-                zIndex: 10,
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}
-            >
+            <div className="absolute bottom-2.5 right-2.5 z-10 rounded-input px-4 py-3 text-h2 text-primary bg-black/60">
               {gestureLabel}
             </div>
           )}
@@ -1644,17 +1053,8 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           {/* Cooldown Indicator */}
           {isCooldownVisual && (
             <div
-              style={{
-                position: 'absolute',
-                top: '10px',
-                right: '10px',
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: '#ff6b6b',
-                zIndex: 10,
-                boxShadow: '0 0 8px rgba(255, 107, 107, 0.6)',
-              }}
+              className="absolute right-2.5 top-2.5 z-10 h-3 w-3 rounded-pill"
+              style={{ backgroundColor: 'var(--danger)' }}
             />
           )}
 
@@ -1663,55 +1063,19 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             ref={videoRef}
             autoPlay
             playsInline
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              transform: 'scaleX(-1)',
-            }}
+            className="h-full w-full object-cover"
+            style={{ transform: 'scaleX(-1)' }}
           />
 
           {/* Loading/Error Overlay */}
           {isLoadingGesture && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                color: '#ffffff',
-                fontSize: '14px',
-                zIndex: 20,
-              }}
-            >
+            <div className="absolute inset-0 z-20 flex items-center justify-center text-small text-secondary bg-black/60">
               Initializing camera...
             </div>
           )}
 
           {gestureError && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                color: '#ff6b6b',
-                fontSize: '12px',
-                padding: '16px',
-                textAlign: 'center',
-                zIndex: 20,
-              }}
-            >
+            <div className="absolute inset-0 z-20 flex items-center justify-center p-4 text-center text-small text-danger bg-black/60">
               {gestureError}
             </div>
           )}
@@ -1722,5 +1086,3 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 };
 
 export default StudyInterface;
-
-

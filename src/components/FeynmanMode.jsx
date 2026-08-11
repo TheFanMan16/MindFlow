@@ -1,13 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
+import { Lightbulb, Copy, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { validateAiInput } from '../utils/aiInput';
 import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
-import AiLoadingIndicator from './AiLoadingIndicator';
 import UpgradeModal from './UpgradeModal';
+import {
+  Breadcrumb,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Input,
+  SkeletonText,
+  Textarea,
+} from './ui';
+import {
+  motion,
+  AnimatePresence,
+  useReducedMotion,
+  Stagger,
+  AnimatedNumber,
+  CountRing,
+  entrance,
+} from '../motion';
 
 const ANALYZE_STATUS_MESSAGES = [
   'Reading your explanation…',
@@ -15,6 +34,65 @@ const ANALYZE_STATUS_MESSAGES = [
   'Scoring clarity and depth…',
   'Writing your feedback…',
 ];
+
+const STATUS_ROTATE_MS = 1800;
+
+/** Score color semantics preserved from the original: >=80 green, >=60 amber, else red. */
+const scoreTone = (score) => (score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger');
+const scoreTextClass = (score) =>
+  score >= 80 ? 'text-success' : score >= 60 ? 'text-warning' : 'text-danger';
+
+/**
+ * Local primitive: a flagged term with a hairline warning underline that
+ * draws in left-to-right on entrance. Static underline under reduced motion.
+ */
+const JargonTerm = ({ children }) => {
+  const reduce = useReducedMotion();
+  return (
+    <span className="relative inline-block">
+      {children}
+      {reduce ? (
+        <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-warning" />
+      ) : (
+        <motion.span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-px origin-left bg-warning"
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={entrance}
+        />
+      )}
+    </span>
+  );
+};
+
+/** Local primitive: the rotating analysis status line. Opacity-only crossfade, instant under reduce. */
+const RotatingStatus = ({ message }) => {
+  const reduce = useReducedMotion();
+  if (reduce) {
+    return (
+      <p aria-live="polite" className="font-mono text-micro uppercase text-secondary">
+        {message}
+      </p>
+    );
+  }
+  return (
+    <div aria-live="polite" className="relative h-4 overflow-hidden">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.p
+          key={message}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={entrance}
+          className="absolute inset-0 font-mono text-micro uppercase text-secondary"
+        >
+          {message}
+        </motion.p>
+      </AnimatePresence>
+    </div>
+  );
+};
 
 const FeynmanMode = () => {
   const { user, profile, isPro } = useAuth();
@@ -26,6 +104,7 @@ const FeynmanMode = () => {
   const [aiUsageCount, setAiUsageCount] = useState(0);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState(null);
+  const [statusIndex, setStatusIndex] = useState(0);
   const abortRef = useRef(null);
 
   // Fetch AI usage count from profile
@@ -35,14 +114,14 @@ const FeynmanMode = () => {
         setAiUsageCount(0);
         return;
       }
-      
+
       try {
         const { data } = await supabase
           .from('profiles')
           .select('ai_usage_count')
           .eq('id', user.id)
           .single();
-        
+
         if (data) {
           setAiUsageCount(data.ai_usage_count || 0);
         }
@@ -54,6 +133,16 @@ const FeynmanMode = () => {
 
     fetchUsage();
   }, [user?.id]);
+
+  // Rotate the analyzing status line every ~1.8s; cleared on completion/unmount.
+  useEffect(() => {
+    if (!isAnalyzing) return undefined;
+    setStatusIndex(0);
+    const id = setInterval(() => {
+      setStatusIndex((i) => (i + 1) % ANALYZE_STATUS_MESSAGES.length);
+    }, STATUS_ROTATE_MS);
+    return () => clearInterval(id);
+  }, [isAnalyzing]);
 
   // Analyze explanation using backend API
   const analyzeExplanation = async () => {
@@ -148,437 +237,205 @@ const FeynmanMode = () => {
     abortRef.current?.abort();
   };
 
+  const copySimplification = async () => {
+    if (!feedback?.simplification) return;
+    try {
+      await navigator.clipboard.writeText(feedback.simplification);
+      toast.success('Simpler version copied');
+    } catch (error) {
+      toast.error('Could not copy to clipboard');
+    }
+  };
+
+  const submitDisabled = isAnalyzing || !concept.trim() || !explanation.trim();
+
   return (
     <>
-    <UpgradeModal
-      isOpen={showUpgradeModal}
-      onClose={() => setShowUpgradeModal(false)}
-      message={upgradeMessage}
-    />
-    <div style={{
-      padding: 'clamp(16px, 5vw, 48px)',
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundColor: '#030712',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        width: '95%',
-        maxWidth: '1600px',
-        margin: '0 auto',
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-      }}>
-        {/* Header */}
-        <div style={{
-          marginBottom: '32px',
-          textAlign: 'center',
-        }}>
-          <h1 style={{
-            fontSize: '42px',
-            fontWeight: '700',
-            marginBottom: '8px',
-            color: '#f59e0b',
-            letterSpacing: '-0.02em',
-            textShadow: '0 0 10px rgba(245, 158, 11, 0.5), 0 0 20px rgba(245, 158, 11, 0.4), 0 0 30px rgba(245, 158, 11, 0.3)',
-          }}>
-            Feynman Method
-          </h1>
-          <p style={{
-            fontSize: '16px',
-            color: 'rgba(255, 255, 255, 0.6)',
-            marginBottom: '12px',
-          }}>
-            Explain concepts in simple terms. Get feedback on clarity and jargon.
-          </p>
-          {/* Usage Badge - Only show for free users */}
-          {!isPro && (
-            <div style={{
-              display: 'inline-block',
-              backgroundColor: 'rgba(59, 130, 246, 0.2)',
-              border: '1px solid rgba(59, 130, 246, 0.4)',
-              borderRadius: '20px',
-              padding: '6px 16px',
-              fontSize: '14px',
-              fontWeight: '600',
-              color: '#60a5fa',
-            }}>
-              Daily Credits: {aiUsageCount}/5
-            </div>
-          )}
-        </div>
-
-        {/* Split Screen Layout */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(400px, 100%), 1fr))',
-          gap: '32px',
-          flex: 1,
-          minHeight: 0,
-        }}>
-        {/* Left: Editor */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'rgba(255, 255, 255, 0.03)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '24px',
-          padding: '32px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          minHeight: '70vh',
-        }}>
-          <div style={{
-            marginBottom: '20px',
-          }}>
-            <label style={{
-              display: 'block',
-              fontSize: '14px',
-              fontWeight: '500',
-              color: 'rgba(255, 255, 255, 0.7)',
-              marginBottom: '8px',
-            }}>
-              Target Concept
-            </label>
-            <input
-              type="text"
-              value={concept}
-              onChange={(e) => setConcept(e.target.value)}
-              placeholder="e.g., TCP vs UDP, Photosynthesis, Quantum Entanglement..."
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '12px',
-                color: '#ffffff',
-                fontSize: '16px',
-                fontFamily: 'inherit',
-                outline: 'none',
-                marginBottom: '20px',
-              }}
-            />
-          </div>
-
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '20px',
-          }}>
-            <h2 style={{
-              fontSize: '20px',
-              fontWeight: '600',
-              color: '#ffffff',
-            }}>
-              Your Explanation
-            </h2>
-            <button
-              onClick={analyzeExplanation}
-              disabled={isAnalyzing || !concept.trim() || !explanation.trim()}
-              style={{
-                background: isAnalyzing || !concept.trim() || !explanation.trim()
-                  ? 'rgba(255, 255, 255, 0.1)'
-                  : 'linear-gradient(90deg, #f59e0b, #ea580c)',
-                color: '#ffffff',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '12px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: isAnalyzing || !concept.trim() || !explanation.trim() ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                opacity: isAnalyzing || !concept.trim() || !explanation.trim() ? 0.5 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (!isAnalyzing && concept.trim() && explanation.trim()) {
-                  e.currentTarget.style.transform = 'scale(1.02)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              {isAnalyzing ? 'Analyzing...' : 'Analyze'}
-            </button>
-          </div>
-
-          <textarea
-            value={explanation}
-            onChange={(e) => setExplanation(e.target.value)}
-            placeholder="Explain a concept as if you're teaching it to someone new. Try to avoid jargon and use simple language..."
-            style={{
-              flex: 1,
-              width: '100%',
-              height: '100%',
-              minHeight: '500px',
-              padding: '20px',
-              backgroundColor: 'rgba(0, 0, 0, 0.3)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '16px',
-              color: '#ffffff',
-              fontSize: '16px',
-              fontFamily: 'inherit',
-              resize: 'none',
-              outline: 'none',
-              lineHeight: '1.6',
-            }}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        message={upgradeMessage}
+      />
+      <div className="flex flex-1 flex-col overflow-y-auto bg-base px-4 py-6 sm:px-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
+          <Breadcrumb
+            trail={['MindFlow', 'Feynman']}
+            right={
+              !isPro ? (
+                <span className="font-mono text-micro uppercase text-secondary">
+                  Daily credits{' '}
+                  <span className="tabular-nums text-primary">{aiUsageCount}/5</span>
+                </span>
+              ) : undefined
+            }
           />
-        </div>
 
-        {/* Right: Feedback Panel */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'rgba(255, 255, 255, 0.03)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '24px',
-          padding: '32px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          minHeight: '70vh',
-        }}>
-          <h2 style={{
-            fontSize: '20px',
-            fontWeight: '600',
-            color: '#ffffff',
-            marginBottom: '24px',
-          }}>
-            Feedback
-          </h2>
+          <header className="mb-8 mt-6">
+            <h1 className="text-h1 text-primary">Feynman Method</h1>
+            <p className="mt-1 text-body text-secondary">
+              Explain concepts in simple terms. Get feedback on clarity and jargon.
+            </p>
+          </header>
 
-          {isAnalyzing ? (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <AiLoadingIndicator
-                messages={ANALYZE_STATUS_MESSAGES}
-                accent="#f59e0b"
-                onCancel={cancelAnalysis}
-              />
-            </div>
-          ) : analysisError ? (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '16px',
-              textAlign: 'center',
-              padding: '0 16px',
-            }}>
-              <div style={{
-                color: 'rgba(255, 255, 255, 0.7)',
-                fontSize: '15px',
-                maxWidth: '360px',
-                lineHeight: '1.6',
-              }}>
-                {analysisError}
+          <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Left: editor */}
+            <Card className="flex flex-col p-6">
+              <Field label="Target Concept">
+                <Input
+                  value={concept}
+                  onChange={(e) => setConcept(e.target.value)}
+                  placeholder="e.g., TCP vs UDP, Photosynthesis, Quantum Entanglement..."
+                />
+              </Field>
+
+              <Field label="Your Explanation" className="mt-5 flex-1">
+                <Textarea
+                  value={explanation}
+                  onChange={(e) => setExplanation(e.target.value)}
+                  placeholder="Explain a concept as if you're teaching it to someone new. Try to avoid jargon and use simple language..."
+                  className="min-h-[280px] flex-1 resize-none leading-relaxed"
+                />
+              </Field>
+
+              <div className="mt-5 flex justify-end">
+                <Button
+                  mono
+                  variant="primary"
+                  onClick={analyzeExplanation}
+                  disabled={submitDisabled}
+                >
+                  {isAnalyzing ? 'Analyzing...' : 'Analyze'}
+                </Button>
               </div>
-              <button
-                onClick={analyzeExplanation}
-                style={{
-                  background: 'linear-gradient(90deg, #f59e0b, #ea580c)',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '10px 24px',
-                  borderRadius: '12px',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                }}
-              >
-                Try Again
-              </button>
-            </div>
-          ) : !feedback ? (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'rgba(255, 255, 255, 0.4)',
-              fontSize: '16px',
-              textAlign: 'center',
-            }}>
-              Click "Analyze" to get feedback on your explanation
-            </div>
-          ) : (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px',
-            }}>
-              {/* Score Badge */}
-              <div style={{
-                padding: '24px',
-                backgroundColor: feedback.score >= 80 
-                  ? 'rgba(34, 197, 94, 0.1)' 
-                  : feedback.score >= 60
-                  ? 'rgba(251, 191, 36, 0.1)'
-                  : 'rgba(239, 68, 68, 0.1)',
-                borderRadius: '16px',
-                border: `1px solid ${feedback.score >= 80 
-                  ? 'rgba(34, 197, 94, 0.3)' 
-                  : feedback.score >= 60
-                  ? 'rgba(251, 191, 36, 0.3)'
-                  : 'rgba(239, 68, 68, 0.3)'}`,
-                textAlign: 'center',
-              }}>
-                <div style={{
-                  fontSize: '14px',
-                  color: 'rgba(255, 255, 255, 0.6)',
-                  marginBottom: '12px',
-                  fontWeight: '500',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}>
-                  Overall Score
-                </div>
-                <div style={{
-                  fontSize: '64px',
-                  fontWeight: '700',
-                  color: feedback.score >= 80 
-                    ? '#22c55e' 
-                    : feedback.score >= 60
-                    ? '#fbbf24'
-                    : '#ef4444',
-                  marginBottom: '12px',
-                  textShadow: `0 0 20px ${feedback.score >= 80 
-                    ? 'rgba(34, 197, 94, 0.5)' 
-                    : feedback.score >= 60
-                    ? 'rgba(251, 191, 36, 0.5)'
-                    : 'rgba(239, 68, 68, 0.5)'}`,
-                }}>
-                  {feedback.score}
-                </div>
-                <div style={{
-                  fontSize: '14px',
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  lineHeight: '1.5',
-                }}>
-                  {feedback.feedback}
-                </div>
+            </Card>
+
+            {/* Right: feedback */}
+            <Card className="flex min-h-[420px] flex-col p-6">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <h2 className="text-h2 text-primary">Feedback</h2>
+                {isAnalyzing ? (
+                  <Button variant="ghost" size="sm" mono onClick={cancelAnalysis}>
+                    Cancel
+                  </Button>
+                ) : null}
               </div>
 
-              {/* Missing Concepts */}
-              {feedback.missing_concepts && feedback.missing_concepts.length > 0 && (
-                <div>
-                  <div style={{
-                    fontSize: '18px',
-                    fontWeight: '600',
-                    color: '#ffffff',
-                    marginBottom: '16px',
-                  }}>
-                    What You Missed
-                  </div>
-                  <div style={{
-                    padding: '20px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                    }}>
-                      {feedback.missing_concepts.map((concept, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '12px',
-                            padding: '12px',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            borderRadius: '8px',
-                            border: '1px solid rgba(239, 68, 68, 0.2)',
-                          }}
-                        >
-                          <div style={{
-                            fontSize: '20px',
-                            color: '#ef4444',
-                            marginTop: '2px',
-                          }}>
-                            ✗
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{
-                              fontSize: '15px',
-                              fontWeight: '600',
-                              color: '#ffffff',
-                              marginBottom: '4px',
-                            }}>
-                              {typeof concept === 'string' ? concept : concept.concept || concept}
-                            </div>
-                            {typeof concept === 'object' && concept.explanation && (
-                              <div style={{
-                                fontSize: '14px',
-                                color: 'rgba(255, 255, 255, 0.7)',
-                                lineHeight: '1.5',
-                              }}>
-                                {concept.explanation}
-                              </div>
-                            )}
-                          </div>
+              {isAnalyzing ? (
+                <div className="flex flex-1 flex-col gap-6">
+                  <RotatingStatus message={ANALYZE_STATUS_MESSAGES[statusIndex]} />
+                  <SkeletonText lines={3} />
+                  <SkeletonText lines={4} />
+                  <SkeletonText lines={3} />
+                </div>
+              ) : analysisError ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 text-center">
+                  <p className="max-w-[40ch] text-body text-secondary">{analysisError}</p>
+                  <Button variant="secondary" mono onClick={analyzeExplanation}>
+                    Try Again
+                  </Button>
+                </div>
+              ) : !feedback ? (
+                <div className="flex flex-1 items-center justify-center">
+                  <EmptyState
+                    className="w-full"
+                    icon={<Lightbulb size={18} strokeWidth={1.5} aria-hidden="true" />}
+                    title="No feedback yet"
+                    description={'Click "Analyze" to get feedback on your explanation'}
+                  />
+                </div>
+              ) : (
+                <Stagger className="flex flex-col gap-6">
+                  {/* Score */}
+                  <Stagger.Item>
+                    <div className="flex flex-wrap items-center gap-6 rounded-card border border-soft bg-base p-5">
+                      <CountRing
+                        value={Math.max(0, Math.min(1, feedback.score / 100))}
+                        size={104}
+                        strokeWidth={6}
+                        tone={scoreTone(feedback.score)}
+                      >
+                        <AnimatedNumber
+                          value={feedback.score}
+                          countUp
+                          className={`text-h2 ${scoreTextClass(feedback.score)}`}
+                        />
+                      </CountRing>
+                      <div className="min-w-[12rem] flex-1">
+                        <div className="font-mono text-micro uppercase text-secondary">
+                          Overall Score
                         </div>
-                      ))}
+                        <p className="mt-2 text-body text-primary">{feedback.feedback}</p>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              )}
+                  </Stagger.Item>
 
-              {/* Simplification */}
-              {feedback.simplification && (
-                <div>
-                  <div style={{
-                    fontSize: '18px',
-                    fontWeight: '600',
-                    color: '#ffffff',
-                    marginBottom: '16px',
-                  }}>
-                    Simpler Version
-                  </div>
-                  <div style={{
-                    padding: '24px',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(59, 130, 246, 0.3)',
-                    position: 'relative',
-                  }}>
-                    <div style={{
-                      position: 'absolute',
-                      top: '16px',
-                      right: '16px',
-                      fontSize: '24px',
-                    }}>
-                      💡
-                    </div>
-                    <div style={{
-                      fontSize: '15px',
-                      color: 'rgba(255, 255, 255, 0.9)',
-                      lineHeight: '1.7',
-                      paddingRight: '40px',
-                    }}>
-                      {feedback.simplification}
-                    </div>
-                  </div>
-                </div>
+                  {/* Missing concepts */}
+                  {feedback.missing_concepts && feedback.missing_concepts.length > 0 && (
+                    <Stagger.Item>
+                      <div className="mb-3 font-mono text-micro uppercase text-secondary">
+                        What You Missed
+                      </div>
+                      <ul className="flex list-none flex-col gap-2">
+                        {feedback.missing_concepts.map((item, index) => (
+                          <li
+                            key={index}
+                            className="flex items-start gap-3 rounded-input border border-soft bg-base p-3"
+                          >
+                            <X
+                              size={16}
+                              strokeWidth={1.5}
+                              className="mt-0.5 shrink-0 text-danger"
+                              aria-hidden="true"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-small font-medium text-primary">
+                                <JargonTerm>
+                                  {typeof item === 'string' ? item : item.concept || item}
+                                </JargonTerm>
+                              </div>
+                              {typeof item === 'object' && item.explanation && (
+                                <p className="mt-1 text-small text-secondary">
+                                  {item.explanation}
+                                </p>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </Stagger.Item>
+                  )}
+
+                  {/* Simpler version */}
+                  {feedback.simplification && (
+                    <Stagger.Item>
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <span className="font-mono text-micro uppercase text-secondary">
+                          Simpler Version
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label="Copy simpler version to clipboard"
+                          onClick={copySimplification}
+                        >
+                          <Copy size={14} strokeWidth={1.5} aria-hidden="true" />
+                        </Button>
+                      </div>
+                      <div className="rounded-card border border-soft bg-base p-5">
+                        <p className="text-body leading-relaxed text-primary">
+                          {feedback.simplification}
+                        </p>
+                      </div>
+                    </Stagger.Item>
+                  )}
+                </Stagger>
               )}
-            </div>
-          )}
-        </div>
+            </Card>
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 };
 
 export default FeynmanMode;
-

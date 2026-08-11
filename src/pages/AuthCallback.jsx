@@ -22,7 +22,7 @@ const AuthCallback = () => {
       if (event === 'SIGNED_IN' && session) {
         console.log('AuthCallback - Session established, navigating to dashboard');
         if (timeout) clearTimeout(timeout);
-        
+
         // Navigate to dashboard
         navigate('/dashboard', { replace: true });
       } else if (event === 'SIGNED_OUT') {
@@ -37,7 +37,7 @@ const AuthCallback = () => {
     const checkSession = async () => {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
         if (!mounted) return;
 
         if (sessionError) {
@@ -92,64 +92,33 @@ const AuthCallback = () => {
   }, [navigate]);
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        background: 'linear-gradient(to bottom right, #111827, #000000, #581c87)',
-        color: '#ffffff',
-      }}
-    >
+    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-base p-6">
       {error ? (
         <div
-          style={{
-            textAlign: 'center',
-            padding: '24px',
-            borderRadius: '12px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            maxWidth: '400px',
-          }}
+          role="alert"
+          className="w-full max-w-[400px] rounded-card border border-danger-line bg-danger-wash p-6 text-center"
         >
-          <p style={{ fontSize: '16px', marginBottom: '8px', color: '#fca5a5' }}>
-            {error}
-          </p>
-          <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
+          <p className="text-small text-danger">{error}</p>
+          <p className="mt-2 font-mono text-micro uppercase text-secondary">
             Redirecting to login...
           </p>
         </div>
       ) : (
-        <div style={{ textAlign: 'center' }}>
-          <div
-            style={{
-              width: '48px',
-              height: '48px',
-              border: '4px solid rgba(147, 51, 234, 0.3)',
-              borderTopColor: '#9333ea',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-              margin: '0 auto 16px',
-            }}
+        <div className="flex flex-col items-center text-center">
+          <span
+            aria-hidden="true"
+            className="h-8 w-8 animate-spin rounded-pill border-2 border-strong border-t-transparent motion-reduce:animate-none"
           />
-          <p style={{ fontSize: '18px', fontWeight: '600' }}>Completing sign in...</p>
-          <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '8px' }}>
+          <p className="mt-4 font-mono text-micro uppercase text-secondary">
+            Completing sign in...
+          </p>
+          <p className="mt-2 text-small text-secondary">
             Please wait while we authenticate you.
           </p>
         </div>
       )}
-
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 };
 
 export default AuthCallback;
-

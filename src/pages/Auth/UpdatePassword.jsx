@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { CheckCircle2, Lightbulb } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import toast from 'react-hot-toast';
+import { Button, Card, Field, Input } from '../../components/ui';
+import { motion, useReducedMotion, Stagger, shake } from '../../motion';
+
+/** Flat wordmark: accent lucide bulb + name. No glow, no gradient. */
+const Wordmark = () => (
+  <span className="inline-flex items-center gap-1.5">
+    <Lightbulb size={16} strokeWidth={1.5} className="text-accent" aria-hidden="true" />
+    <span className="text-small font-semibold text-primary">MindFlow</span>
+  </span>
+);
 
 const UpdatePassword = () => {
   const navigate = useNavigate();
@@ -12,6 +23,14 @@ const UpdatePassword = () => {
   const [isRecoveryState, setIsRecoveryState] = useState(false);
   const [success, setSuccess] = useState(false);
   const [isValidating, setIsValidating] = useState(true);
+  const reduce = useReducedMotion();
+
+  // Visual-only: counts error occurrences so the card re-shakes on each new
+  // error. Does not participate in any recovery/session logic.
+  const [shakeCount, setShakeCount] = useState(0);
+  useEffect(() => {
+    if (error) setShakeCount((c) => c + 1);
+  }, [error]);
 
   // Parse URL hash for recovery tokens or errors
   const parseUrlHash = (hash) => {
@@ -26,14 +45,14 @@ const UpdatePassword = () => {
     // 2. #/update-password?access_token=...&type=recovery (with route)
     // 3. #?access_token=...&type=recovery (with query start)
     let hashParams = '';
-    
+
     if (hash.includes('?')) {
       // Format: #/update-password?access_token=... OR #?access_token=...
       hashParams = hash.substring(hash.indexOf('?') + 1);
     } else if (hash.startsWith('#') && hash.length > 1) {
       // Format: #access_token=... (no route, just params)
       hashParams = hash.substring(1);
-      
+
       // If it doesn't start with a known param, might be a route like #/update-password
       // Check if it looks like query params (contains =)
       if (!hashParams.includes('=')) {
@@ -48,7 +67,7 @@ const UpdatePassword = () => {
 
     try {
       const params = new URLSearchParams(hashParams);
-      
+
       // Check for errors FIRST (before checking for tokens)
       const errorParam = params.get('error');
       const errorDescription = params.get('error_description');
@@ -65,13 +84,13 @@ const UpdatePassword = () => {
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token');
       const type = params.get('type');
-      
-      console.log('Found params:', { 
-        hasAccessToken: !!accessToken, 
-        hasRefreshToken: !!refreshToken, 
-        type: type 
+
+      console.log('Found params:', {
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        type: type
       });
-      
+
       if (accessToken && refreshToken && type === 'recovery') {
         console.log('✅ Valid recovery tokens found in URL');
         return {
@@ -120,7 +139,7 @@ const UpdatePassword = () => {
     const checkSessionOnMount = async () => {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
         if (sessionError) {
           console.error('❌ Error checking session on mount:', sessionError);
           if (mounted) {
@@ -143,9 +162,9 @@ const UpdatePassword = () => {
           // by checking the access_token type or recovery flag
           const userMetadata = session.user?.user_metadata || {};
           const appMetadata = session.user?.app_metadata || {};
-          
+
           // Check for recovery indicators in metadata
-          const isRecoveryMetadata = 
+          const isRecoveryMetadata =
             userMetadata.recovery === true ||
             appMetadata.recovery === true ||
             session.user?.recovery_sent_at !== undefined;
@@ -170,7 +189,7 @@ const UpdatePassword = () => {
           // No session - check URL hash for tokens that we can use to create a session
           const hash = window.location.hash;
           const urlData = parseUrlHash(hash);
-          
+
           if (urlData && urlData.type === 'recovery') {
             console.log('✅ Recovery tokens found in URL - will be handled by main useEffect');
             // Recovery tokens found - the main useEffect will handle setting the session
@@ -267,7 +286,7 @@ const UpdatePassword = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('🔄 UpdatePassword: Auth state changed:', event, session ? 'Session exists' : 'No session');
-      
+
       if (mounted) {
         // Specifically look for PASSWORD_RECOVERY event (this is the key!)
         if (event === 'PASSWORD_RECOVERY') {
@@ -275,7 +294,7 @@ const UpdatePassword = () => {
           setIsRecoveryState(true);
           setError(null);
           setIsValidating(false);
-          
+
           // Clear all timeouts
           if (validationTimeout) {
             clearTimeout(validationTimeout);
@@ -287,7 +306,7 @@ const UpdatePassword = () => {
           // If signed in, check URL hash again for recovery context
           const currentHash = window.location.hash;
           const currentUrlData = parseUrlHash(currentHash);
-          
+
           if (currentUrlData && currentUrlData.type === 'recovery') {
             console.log('✅ Signed in with recovery tokens in URL - PASSWORD_RECOVERY event should fire next...');
             // The PASSWORD_RECOVERY event should fire after SIGNED_IN
@@ -307,12 +326,12 @@ const UpdatePassword = () => {
             }
           } else {
             // Regular sign-in - check if URL has any error parameters
-            const hashParams = new URLSearchParams(currentHash.includes('?') 
-              ? currentHash.substring(currentHash.indexOf('?') + 1) 
+            const hashParams = new URLSearchParams(currentHash.includes('?')
+              ? currentHash.substring(currentHash.indexOf('?') + 1)
               : currentHash.substring(1));
             const urlError = hashParams.get('error');
             const urlErrorDesc = hashParams.get('error_description');
-            
+
             if (urlError) {
               console.error('❌ Error parameter in URL:', urlError, urlErrorDesc);
               if (mounted) {
@@ -368,7 +387,7 @@ const UpdatePassword = () => {
   // Handle password update
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
-    
+
     setError(null);
     setSuccess(false);
 
@@ -422,340 +441,128 @@ const UpdatePassword = () => {
   };
 
   return (
-    <>
-      {/* Dark Neon Theme Styles (matching Login) */}
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        
-        .login-animated-bg {
-          background: linear-gradient(to bottom right, #111827, #000000, #581c87);
-          position: relative;
-        }
-        
-        .login-glass-card {
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(147, 51, 234, 0.2);
-          box-shadow: 0 0 60px -15px rgba(147, 51, 234, 0.5),
-                      0 0 100px -30px rgba(147, 51, 234, 0.3),
-                      0 4px 30px rgba(0, 0, 0, 0.8);
-        }
-        
-        .login-gradient-text {
-          background: linear-gradient(135deg, #ffffff 0%, #9ca3af 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-        
-        .login-input {
-          background: rgba(15, 23, 42, 0.8) !important;
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
-          transition: all 0.3s ease !important;
-          color: #ffffff !important;
-        }
-        
-        .login-input::placeholder {
-          color: rgba(255, 255, 255, 0.4) !important;
-        }
-        
-        .login-input:focus {
-          border-color: rgba(168, 85, 247, 0.5) !important;
-          box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1), 0 0 20px rgba(168, 85, 247, 0.3) !important;
-          outline: none !important;
-          background: rgba(15, 23, 42, 0.9) !important;
-        }
-        
-        .login-input:hover:not(:disabled) {
-          border-color: rgba(255, 255, 255, 0.15) !important;
-        }
-      `}</style>
-      
-      <div 
-        className="login-animated-bg"
-        style={{
-          width: '100%',
-          height: '100vh',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: '24px',
-          position: 'relative',
-          overflow: 'hidden',
-          backgroundColor: '#0f1012',
-        }}
+    <div className="flex min-h-screen w-full items-center justify-center bg-base p-6">
+      <motion.div
+        key={shakeCount}
+        animate={reduce ? undefined : shakeCount ? shake : undefined}
+        className="w-full max-w-[400px]"
       >
-        {/* Subtle purple gradient overlay at corners */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: 'radial-gradient(ellipse at top left, rgba(147, 51, 234, 0.15) 0%, transparent 50%)',
-          pointerEvents: 'none',
-        }} />
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          right: 0,
-          width: '100%',
-          height: '100%',
-          background: 'radial-gradient(ellipse at bottom right, rgba(147, 51, 234, 0.15) 0%, transparent 50%)',
-          pointerEvents: 'none',
-        }} />
-        
-        <div 
-          className="login-glass-card"
-          style={{
-            borderRadius: '24px',
-            padding: '48px',
-            width: '100%',
-            maxWidth: '400px',
-            position: 'relative',
-            zIndex: 10,
-          }}
-        >
-          <h1 
-            className="login-gradient-text"
-            style={{
-              fontSize: '32px',
-              fontWeight: '700',
-              marginBottom: '8px',
-              textAlign: 'center',
-            }}
-          >
-            Reset Password
-          </h1>
-          <p style={{
-            fontSize: '16px',
-            color: 'rgba(255, 255, 255, 0.6)',
-            marginBottom: '32px',
-            textAlign: 'center',
-          }}>
-            Enter your new password below
-          </p>
+        <Card className="p-8">
+          <div className="mb-8 flex flex-col items-center gap-4 text-center">
+            <Wordmark />
+            <div>
+              <h1 className="text-h2 text-primary">Reset Password</h1>
+              <p className="mt-1 text-small text-secondary">Enter your new password below</p>
+            </div>
+          </div>
 
           {error && (
-            <div style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '12px',
-              padding: '12px 16px',
-              marginBottom: '24px',
-              color: '#fca5a5',
-              fontSize: '14px',
-            }}>
+            <div
+              role="alert"
+              className="mb-4 rounded-card border border-danger-line bg-danger-wash px-4 py-3 text-small text-danger"
+            >
               {error}
             </div>
           )}
 
           {success && (
-            <div style={{
-              backgroundColor: 'rgba(34, 197, 94, 0.1)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
-              borderRadius: '12px',
-              padding: '20px',
-              marginBottom: '24px',
-              color: '#86efac',
-              fontSize: '14px',
-              textAlign: 'center',
-            }}>
-              <p style={{ marginBottom: '16px', fontWeight: '600', fontSize: '16px' }}>
-                ✅ Password Updated Successfully!
-              </p>
-              <p style={{ marginBottom: '16px', color: 'rgba(255, 255, 255, 0.7)', fontSize: '14px' }}>
+            <div className="mb-4 rounded-card border border-soft bg-success-wash p-5 text-center">
+              <CheckCircle2
+                size={20}
+                strokeWidth={1.5}
+                className="mx-auto mb-3 text-success"
+                aria-hidden="true"
+              />
+              <p className="text-body font-medium text-primary">Password updated successfully</p>
+              <p className="mt-2 text-small text-secondary">
                 Your password has been updated. You can now sign in with your new password.
               </p>
               <Link
                 to="/"
-                style={{
-                  display: 'inline-block',
-                  padding: '10px 20px',
-                  backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                  border: '1px solid rgba(34, 197, 94, 0.4)',
-                  borderRadius: '8px',
-                  color: '#86efac',
-                  textDecoration: 'none',
-                  fontWeight: '500',
-                  fontSize: '14px',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.3)';
-                  e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.5)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.2)';
-                  e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
-                }}
+                className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-input border border-soft px-4 text-small font-medium text-primary transition-colors duration-150 hover:border-strong hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
               >
-                Go to Login →
+                Go to Login
               </Link>
             </div>
           )}
 
           {!success && isValidating && !isRecoveryState && !error && (
-            <div style={{
-              textAlign: 'center',
-              padding: '32px 24px',
-              color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: '14px',
-            }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                border: '4px solid rgba(255, 255, 255, 0.1)',
-                borderTop: '4px solid #a855f7',
-                borderRadius: '50%',
-                margin: '0 auto 16px',
-                animation: 'spin 1s linear infinite',
-              }} />
-              <p>Validating password reset link...</p>
-              <p style={{ 
-                marginTop: '12px', 
-                fontSize: '12px', 
-                color: 'rgba(255, 255, 255, 0.4)' 
-              }}>
+            <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
+              <span
+                aria-hidden="true"
+                className="mb-1 h-8 w-8 animate-spin rounded-pill border-2 border-strong border-t-transparent motion-reduce:animate-none"
+              />
+              <p className="text-small text-secondary">Validating password reset link...</p>
+              <p className="font-mono text-micro uppercase text-secondary">
                 Checking for recovery tokens in URL...
               </p>
             </div>
           )}
 
           {!success && isRecoveryState && (
-            <form onSubmit={handleUpdatePassword} style={{ marginBottom: '24px' }}>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{
-                display: 'block',
-                fontSize: '14px',
-                fontWeight: '500',
-                color: 'rgba(255, 255, 255, 0.7)',
-                marginBottom: '8px',
-              }}>
-                New Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                className="login-input"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  color: '#ffffff',
-                  fontSize: '15px',
-                  opacity: isLoading ? 0.6 : 1,
-                }}
-                placeholder="Enter new password"
-                minLength={6}
-              />
-              <div style={{
-                fontSize: '12px',
-                color: 'rgba(255, 255, 255, 0.4)',
-                marginTop: '6px',
-              }}>
-                Must be at least 6 characters
-              </div>
-            </div>
+            <form onSubmit={handleUpdatePassword}>
+              <Stagger className="flex flex-col gap-4">
+                <Stagger.Item>
+                  <Field label="New Password" hint="Must be at least 6 characters">
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={isLoading}
+                      placeholder="Enter new password"
+                      minLength={6}
+                    />
+                  </Field>
+                </Stagger.Item>
 
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{
-                display: 'block',
-                fontSize: '14px',
-                fontWeight: '500',
-                color: 'rgba(255, 255, 255, 0.7)',
-                marginBottom: '8px',
-              }}>
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                className="login-input"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  color: '#ffffff',
-                  fontSize: '15px',
-                  opacity: isLoading ? 0.6 : 1,
-                  borderColor: confirmPassword && password !== confirmPassword 
-                    ? 'rgba(239, 68, 68, 0.5)' 
-                    : 'rgba(255, 255, 255, 0.1)',
-                }}
-                placeholder="Confirm new password"
-                minLength={6}
-              />
-              {confirmPassword && password !== confirmPassword && (
-                <p style={{
-                  fontSize: '12px',
-                  color: 'rgba(239, 68, 68, 0.8)',
-                  marginTop: '4px',
-                }}>
-                  Passwords do not match
-                </p>
-              )}
-            </div>
+                <Stagger.Item>
+                  <Field
+                    label="Confirm New Password"
+                    error={
+                      confirmPassword && password !== confirmPassword
+                        ? 'Passwords do not match'
+                        : undefined
+                    }
+                  >
+                    <Input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      disabled={isLoading}
+                      placeholder="Confirm new password"
+                      minLength={6}
+                    />
+                  </Field>
+                </Stagger.Item>
 
-            <button
-              type="submit"
-              disabled={isLoading || password !== confirmPassword || password.length < 6}
-              style={{
-                width: '100%',
-                background: (isLoading || password !== confirmPassword || password.length < 6)
-                  ? 'rgba(255, 255, 255, 0.1)'
-                  : 'linear-gradient(90deg, #a855f7, #ec4899)',
-                color: '#ffffff',
-                border: 'none',
-                padding: '14px 24px',
-                borderRadius: '12px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: (isLoading || password !== confirmPassword || password.length < 6) ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                opacity: (isLoading || password !== confirmPassword || password.length < 6) ? 0.6 : 1,
-                marginBottom: '16px',
-              }}
-            >
-              {isLoading ? 'Saving...' : 'Save New Password'}
-            </button>
-          </form>
+                <Stagger.Item>
+                  <Button
+                    type="submit"
+                    mono
+                    size="lg"
+                    className="w-full"
+                    disabled={isLoading || password !== confirmPassword || password.length < 6}
+                  >
+                    {isLoading ? 'Saving...' : 'Save New Password'}
+                  </Button>
+                </Stagger.Item>
+              </Stagger>
+            </form>
           )}
 
           {!success && isRecoveryState && (
-            <div style={{
-              textAlign: 'center',
-            }}>
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'rgba(255, 255, 255, 0.6)',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
+            <div className="mt-4 text-center">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
                 Back to Login
-              </button>
+              </Button>
             </div>
           )}
-        </div>
-      </div>
-    </>
+        </Card>
+      </motion.div>
+    </div>
   );
 };
 
 export default UpdatePassword;
-

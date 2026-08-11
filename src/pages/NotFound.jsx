@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Button } from '../components/ui';
 
 /**
  * Shown for any URL the router does not recognise.
@@ -13,73 +14,20 @@ const NotFound = () => {
   const location = useLocation();
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
-        width: '100%',
-        padding: '48px',
-        textAlign: 'center',
-        gap: '16px',
-      }}
-    >
-      <h1
-        style={{
-          fontSize: '64px',
-          fontWeight: '700',
-          color: '#00FF94',
-          margin: 0,
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-        }}
-      >
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-base p-12 text-center">
+      <h1 className="select-none font-mono text-[10rem] font-medium leading-none text-tertiary opacity-20">
         404
       </h1>
 
-      <h2
-        style={{
-          fontSize: '22px',
-          fontWeight: '600',
-          color: '#ffffff',
-          margin: 0,
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-        }}
-      >
-        This page doesn't exist
-      </h2>
+      <h2 className="text-h2 text-primary">This page doesn't exist</h2>
 
-      <p
-        style={{
-          fontSize: '14px',
-          color: 'rgba(255, 255, 255, 0.5)',
-          margin: 0,
-          fontFamily: 'monospace',
-          wordBreak: 'break-all',
-          maxWidth: '480px',
-        }}
-      >
+      <p className="max-w-[480px] break-all font-mono text-small text-secondary">
         {location.pathname}
       </p>
 
-      <button
-        onClick={() => navigate('/dashboard')}
-        style={{
-          marginTop: '16px',
-          background: '#00FF94',
-          color: '#000000',
-          border: 'none',
-          padding: '14px 28px',
-          borderRadius: '12px',
-          fontSize: '15px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-        }}
-      >
+      <Button mono size="lg" className="mt-4" onClick={() => navigate('/dashboard')}>
         Back to Dashboard
-      </button>
+      </Button>
     </div>
   );
 };

@@ -1,12 +1,57 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ActivityCalendar } from 'react-activity-calendar';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
+
+/**
+ * react-activity-calendar needs concrete color strings, so the 5-step scale
+ * is resolved from the design tokens at runtime: level 0 is the computed
+ * --border-soft value (an empty cell reads as a faint outline-tone block on
+ * the card surface), levels 1-4 are the computed --accent at 28% / 52% /
+ * 76% / 100% alpha. No color literals live in this file; if the tokens
+ * cannot be read or parsed (e.g. jsdom), it falls back to color-mix()
+ * expressions over var(--accent) so nothing ever renders unthemed.
+ */
+const readToken = (name) => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return '';
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+};
+
+const parseToRgb = (value) => {
+  if (!value) return null;
+  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    const n = parseInt(h, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  const rgb = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgb) {
+    return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]) };
+  }
+  return null;
+};
+
+const useHeatmapScale = () =>
+  useMemo(() => {
+    const accentRgb = parseToRgb(readToken('--accent'));
+    const borderSoft = readToken('--border-soft');
+
+    const empty = borderSoft || 'color-mix(in srgb, var(--text-primary) 7%, transparent)';
+    const steps = [0.28, 0.52, 0.76, 1];
+    const accentSteps = accentRgb
+      ? steps.map((a) => `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, ${a})`)
+      : steps.map((a) => `color-mix(in srgb, var(--accent) ${Math.round(a * 100)}%, transparent)`);
+
+    return [empty, ...accentSteps];
+  }, []);
 
 const ProgressHeatmap = () => {
   const { user } = useAuth();
   const [activityData, setActivityData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const scale = useHeatmapScale();
 
   useEffect(() => {
     const fetchActivityData = async () => {
@@ -46,13 +91,13 @@ const ProgressHeatmap = () => {
         // Generate data for the last 365 days
         const today = new Date();
         const calendarData = [];
-        
+
         for (let i = 364; i >= 0; i--) {
           const date = new Date(today);
           date.setDate(date.getDate() - i);
           const dateString = date.toISOString().split('T')[0];
           const minutes = activityMap.get(dateString) || 0;
-          
+
           // Calculate level based on minutes (0-4 scale)
           // Level 0: 0 minutes
           // Level 1: 1-15 minutes
@@ -86,15 +131,7 @@ const ProgressHeatmap = () => {
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '12px',
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: '10px',
-        textAlign: 'center',
-      }}>
+      <div className="flex items-center justify-center p-3 text-center text-small text-secondary">
         Loading activity...
       </div>
     );
@@ -102,35 +139,22 @@ const ProgressHeatmap = () => {
 
   if (!activityData || activityData.length === 0) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '12px',
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: '10px',
-        textAlign: 'center',
-        lineHeight: '1.4',
-      }}>
+      <div className="flex items-center justify-center p-3 text-center text-small text-secondary">
         No activity data yet. Start a timer to see your progress!
       </div>
     );
   }
 
-  // Custom theme to match MindFlow dark theme
   const theme = {
-    light: ['#1e293b', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe'], // Dark to light blue
-    dark: ['#1e293b', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe'], // Same for dark mode
+    light: scale,
+    dark: scale,
   };
 
   return (
-    <div style={{
-      width: '100%',
-      padding: '12px',
-      backgroundColor: 'rgba(0, 0, 0, 0.2)',
-      borderRadius: '8px',
-      marginTop: '8px',
-    }}>
+    <div
+      className="mt-2 w-full overflow-x-auto rounded-input border border-soft p-3 font-mono"
+      style={{ color: 'var(--text-secondary)' }}
+    >
       <ActivityCalendar
         data={activityData}
         theme={theme}
@@ -157,4 +181,3 @@ const ProgressHeatmap = () => {
 };
 
 export default ProgressHeatmap;
-

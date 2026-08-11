@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useTimer } from '../context/TimerContext';
 
 const MiniTimer = () => {
@@ -37,78 +38,21 @@ const MiniTimer = () => {
     }
   };
 
-  return (
+  // The app shell renders inside a transform context, which would trap
+  // position:fixed - so the pill portals to document.body like other overlays.
+  return createPortal(
     <div
-      style={{
-        position: 'fixed',
-        top: '20px',
-        right: '20px',
-        zIndex: 1000,
-        backgroundColor: 'rgba(15, 23, 42, 0.9)', // slate-900 with opacity
-        backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        borderRadius: '12px',
-        padding: '12px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
-      }}
+      className="fixed flex items-center gap-3 rounded-pill border border-soft bg-elevated py-2 pl-4 pr-3 shadow-modal"
+      style={{ top: '20px', right: '20px', zIndex: 1000 }}
     >
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-        }}
-      >
-        <div
-          style={{
-            fontSize: '11px',
-            color: 'rgba(255, 255, 255, 0.6)',
-            fontWeight: '500',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          {getModeLabel()}
-        </div>
-        <div
-          style={{
-            fontSize: '18px',
-            fontWeight: '700',
-            color: '#ffffff',
-            fontVariantNumeric: 'tabular-nums',
-            fontFamily: 'monospace',
-          }}
-        >
-          {getDisplayTime()}
-        </div>
+      <div className="flex flex-col gap-0.5">
+        <div className="font-mono text-micro uppercase text-secondary">{getModeLabel()}</div>
+        <div className="font-mono text-body tabular-nums text-primary">{getDisplayTime()}</div>
       </div>
-      <div
-        style={{
-          width: '8px',
-          height: '8px',
-          borderRadius: '50%',
-          backgroundColor: '#22c55e', // green-500
-          animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        }}
-      />
-      <style>
-        {`
-          @keyframes pulse {
-            0%, 100% {
-              opacity: 1;
-            }
-            50% {
-              opacity: 0.5;
-            }
-          }
-        `}
-      </style>
-    </div>
+      <span className="h-2 w-2 rounded-pill bg-success" aria-hidden="true" />
+    </div>,
+    document.body
   );
 };
 
 export default MiniTimer;
-

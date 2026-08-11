@@ -5,16 +5,58 @@ import { useAuth } from '../context/AuthContext';
 import PDFToFlashcardUploader from './PDFToFlashcardUploader';
 import StudyInterface from './StudyInterface';
 import { toast } from 'react-hot-toast';
-import { Zap, Play, Layers, Folder, FolderPlus, ChevronLeft, X, Check, Trash2, Move, Brain, Hand, Upload } from 'lucide-react';
+import {
+  Layers,
+  Folder,
+  FolderPlus,
+  ChevronLeft,
+  X,
+  Check,
+  Trash2,
+  Move,
+  Upload,
+  Pencil,
+  MoreVertical,
+  FileUp,
+} from 'lucide-react';
 import FolderGroup from './FolderGroup';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from '../motion';
+import { smooth, reduced } from '../motion/transitions';
 import { downloadAnkiCsv, parseAnkiText } from '../utils/ankiExport';
 import { saveGeneratedDeck } from '../utils/deckUtils';
 import { getDueCountsByDeck } from '../utils/studyLoop';
+import {
+  Breadcrumb,
+  Button,
+  Card,
+  Badge,
+  Modal,
+  Tabs,
+  Field,
+  Input,
+  Textarea,
+  EmptyState,
+  PopoverItem,
+  PopoverSeparator,
+} from './ui';
 
+/**
+ * FlashcardDashboard - the deck library, rebuilt on the design system.
+ *
+ * Visual layer only: every query (deck fetch, per-deck card counts, due
+ * counts), the Supabase <-> localStorage 'mindflow-library' merge, folder
+ * flows, selection mode, rename/move/delete, and Anki import/export carry
+ * over verbatim from the previous build.
+ *
+ * The signature moment: each deck card is a motion.div with
+ * layoutId={'deck-' + deck.id}. StudyInterface's container carries the
+ * matching layoutId, and both subtrees render inside one <LayoutGroup>, so
+ * opening a deck layoutId-expands the card into the study view.
+ */
 const FlashcardDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const reduce = useReducedMotion();
   const [view, setView] = useState('dashboard'); // 'dashboard' | 'create' | 'study'
   const [selectedDeckId, setSelectedDeckId] = useState(null);
   const [decks, setDecks] = useState([]);
@@ -32,6 +74,10 @@ const FlashcardDashboard = () => {
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Multi-select mode
   const [selectedItemIds, setSelectedItemIds] = useState(new Set()); // Selected items
   const [pendingDeckFolderId, setPendingDeckFolderId] = useState(null); // Store folder context when creating deck
+  // New Deck modal (Upload PDF / Paste text / Import Anki) - routes into the
+  // existing view machinery, it does not replace it.
+  const [showNewDeckModal, setShowNewDeckModal] = useState(false);
+  const [newDeckTab, setNewDeckTab] = useState('pdf');
   // Initialize items from localStorage or empty array
   // Migrate old nested structure to flat structure with parentId
   const [items, setItems] = useState(() => {
@@ -139,7 +185,7 @@ const FlashcardDashboard = () => {
 
       try {
         setDecksLoading(true);
-        
+
         // Fetch all decks for the current user
         const { data: decksData, error: decksError } = await supabase
           .from('decks')
@@ -151,7 +197,7 @@ const FlashcardDashboard = () => {
           console.error('Error fetching decks:', decksError);
         } else {
           const fetchedDecks = decksData || [];
-          
+
           // Fetch card counts for each deck
           const decksWithCounts = await Promise.all(
             fetchedDecks.map(async (deck) => {
@@ -159,18 +205,18 @@ const FlashcardDashboard = () => {
                 .from('flashcards')
                 .select('*', { count: 'exact', head: true })
                 .eq('deck_id', deck.id);
-              
+
               if (countError) {
                 console.error(`Error counting cards for deck ${deck.id}:`, countError);
               }
-              
+
               return {
                 ...deck,
                 card_count: count ?? 0
               };
             })
           );
-          
+
           setDecks(decksWithCounts);
 
           // Due badges for every deck in one query. Failure here returns an
@@ -184,7 +230,7 @@ const FlashcardDashboard = () => {
             const deckIdsFromSupabase = new Set(decksWithCounts.map(d => d.id));
             const existingDeckItems = prevItems.filter(item => item.type === 'deck');
             const existingDeckIds = new Set(existingDeckItems.map(item => item.id));
-            
+
             // Update existing deck items with latest titles
             const updatedItems = prevItems.map(item => {
               if (item.type === 'deck' && deckIdsFromSupabase.has(item.id)) {
@@ -196,7 +242,7 @@ const FlashcardDashboard = () => {
               }
               return item;
             });
-            
+
             // Add new decks from Supabase
             const newDeckItems = decksWithCounts
               .filter(deck => !existingDeckIds.has(deck.id))
@@ -206,12 +252,12 @@ const FlashcardDashboard = () => {
                 title: deck.title || 'Untitled Deck',
                 parentId: null, // New decks start at root
               }));
-            
+
             // Remove deck items that no longer exist in Supabase
             const filteredItems = updatedItems.filter(item =>
               item.type !== 'deck' || deckIdsFromSupabase.has(item.id)
             );
-            
+
             return [...filteredItems, ...newDeckItems];
           });
         }
@@ -227,741 +273,6 @@ const FlashcardDashboard = () => {
     }
   }, [user, view, deckRefresh]);
 
-  // BackToLibraryButton Component
-  const BackToLibraryButton = ({ onClick }) => {
-    return (
-      <button
-        onClick={onClick}
-        style={{
-          background: 'transparent',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          borderRadius: '8px',
-          padding: '8px 12px',
-          color: '#ffffff',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          fontSize: '14px',
-          fontWeight: '500',
-          transition: 'all 0.2s ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = '#00FF94';
-          e.currentTarget.style.backgroundColor = 'rgba(0, 255, 148, 0.05)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-          e.currentTarget.style.backgroundColor = 'transparent';
-        }}
-      >
-        <ChevronLeft size={18} style={{ stroke: '#00FF94' }} />
-        Back to Library
-      </button>
-    );
-  };
-
-  // FolderCard Component
-  const FolderCard = ({ folder, itemCount, onClick, isMenuOpen, onToggleMenu, onDelete, isSelected, isSelectionMode }) => {
-    const style = {
-      transition: 'border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease',
-      background: '#0A0A0A', // Deep dark grey/black - matches deck cards
-      backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)',
-      borderRadius: '24px',
-      border: isSelected
-        ? '3px solid #00FF94'
-        : '1px solid rgba(255, 255, 255, 0.08)',
-      outline: isSelected ? '2px solid #00FF94' : 'none',
-      outlineOffset: isSelected ? '2px' : '0',
-      cursor: 'pointer',
-      boxShadow: isSelected
-        ? '0 0 40px rgba(0, 255, 148, 0.6), 0 0 20px rgba(0, 255, 148, 0.3), 0 4px 24px rgba(0, 0, 0, 0.4)'
-        : '0 4px 24px rgba(0, 0, 0, 0.4)',
-      position: 'relative',
-      overflow: 'visible',
-      display: 'flex',
-      flexDirection: 'column',
-      padding: '20px 20px 24px 20px', // Increased bottom padding
-      aspectRatio: '1 / 1', // Force square aspect ratio
-      width: '100%',
-      zIndex: isSelected ? 40 : 'auto',
-    };
-
-    return (
-      <motion.div
-        style={style}
-        onClick={(e) => {
-          // Don't trigger folder click if clicking on menu
-          if (e.target.closest('.folder-menu-button') || e.target.closest('.folder-menu-dropdown')) {
-            return;
-          }
-          // In selection mode, toggle selection instead of opening
-          if (isSelectionMode) {
-            // Selection is handled by parent component via handleFolderClick
-            onClick();
-            return;
-          }
-          onClick();
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.02)';
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-          e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = '';
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-          e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4)';
-        }}
-      >
-        {/* Clean Menu Button */}
-        <button
-          className="folder-menu-button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onToggleMenu(folder.id, e);
-          }}
-          style={{
-          position: 'absolute',
-            top: '16px',
-            right: '16px',
-            width: '36px',
-            height: '36px',
-            borderRadius: '12px', // Squircle style
-            border: 'none',
-            background: 'rgba(10, 10, 10, 0.8)', // Subtle dark glass
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            color: '#00FF94', // Neon green icon
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.2s ease',
-            zIndex: 10,
-            padding: '8px',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)'; // Subtle green tint on hover
-            e.currentTarget.style.boxShadow = '0 0 12px rgba(0, 255, 148, 0.2)'; // Subtle neon glow
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(10, 10, 10, 0.8)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          <svg style={{ width: '20px', height: '20px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-          </svg>
-        </button>
-
-        {/* Menu Dropdown */}
-        {isMenuOpen && (
-          <div
-            ref={menuRef}
-            className="folder-menu-dropdown"
-            style={{
-            position: 'absolute',
-              top: '48px',
-              right: '16px',
-              backgroundColor: 'rgba(30, 41, 59, 0.95)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              padding: '8px',
-              minWidth: '160px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              zIndex: 50,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-            }}
-          >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                onDelete(folder.id, e);
-              }}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'transparent',
-                color: '#ef4444',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                transition: 'background 0.2s ease',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-              </svg>
-              Delete
-            </button>
-          </div>
-        )}
-
-        {/* Folder Icon - Clean and Neutral */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flex: 1,
-          position: 'relative',
-          zIndex: 1,
-        }}>
-          {/* Clean Icon - No background container */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-            }}
-          >
-            {/* Folder Icon - Clean and Neutral */}
-            <Folder 
-              size={64} 
-              style={{ 
-                stroke: '#ffffff',
-                fill: 'none',
-                strokeWidth: '1.5',
-              }} 
-            />
-            
-            {/* iOS Notification Badge for Item Count */}
-            {itemCount > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                minWidth: '20px',
-                height: '20px',
-                background: 'rgba(255, 255, 255, 0.2)',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 6px',
-                fontSize: '11px',
-                fontWeight: '700',
-                color: '#ffffff',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.2)',
-                zIndex: 10,
-              }}>
-                {itemCount > 99 ? '99+' : itemCount}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Selection Checkmark Badge */}
-        {isSelected && (
-        <div style={{
-            position: 'absolute',
-            top: '12px',
-            right: '12px',
-            width: '32px',
-            height: '32px',
-            background: '#00FF94',
-            borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0, 255, 148, 0.4), 0 0 0 2px rgba(0, 0, 0, 0.2)',
-            zIndex: 50,
-            padding: '4px',
-          }}>
-            <Check size={20} style={{ stroke: '#000000', strokeWidth: '3', fill: 'none' }} />
-        </div>
-        )}
-
-        {/* Folder Title - Bottom Aligned */}
-        <h3 style={{
-          fontSize: '16px',
-          fontWeight: '700',
-          color: '#ffffff',
-          textAlign: 'center',
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          margin: '0',
-          marginTop: 'auto',
-          paddingTop: '20px',
-          paddingBottom: '4px',
-          position: 'relative',
-          zIndex: 1,
-        }}>
-          {folder.title || 'Untitled Folder'}
-        </h3>
-
-      </motion.div>
-    );
-  };
-
-  // DeckCard Component
-  const DeckCard = ({ deck, cardsDue, isMenuOpen, onDeckClick, onToggleMenu, onRename, onDelete, onExport, isSelected, isSelectionMode, editingDeckId, newDeckName, setNewDeckName, onUpdateDeckName }) => {
-    const gradient = getDeckGradient();
-
-    const style = {
-      background: '#0A0A0A', // Deep dark grey/black
-      backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)',
-      borderRadius: '24px',
-      border: isSelected
-        ? '3px solid #00FF94'
-        : '1px solid rgba(255, 255, 255, 0.1)',
-      outline: isSelected ? '2px solid #00FF94' : 'none',
-      outlineOffset: isSelected ? '2px' : '0',
-      cursor: 'pointer',
-      boxShadow: isSelected
-        ? '0 0 40px rgba(0, 255, 148, 0.6), 0 0 20px rgba(0, 255, 148, 0.3), 0 4px 24px rgba(0, 0, 0, 0.4)'
-        : '0 4px 24px rgba(0, 0, 0, 0.4)',
-      position: 'relative',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      padding: '24px',
-      aspectRatio: '1 / 1', // Force square aspect ratio
-      width: '100%',
-      zIndex: isSelected ? 40 : 'auto',
-    };
-
-    return (
-      <div
-        style={style}
-        onClick={(e) => {
-          // Don't trigger deck click if clicking on menu
-          if (e.target.closest('.menu-button') || e.target.closest('.menu-dropdown')) {
-            return;
-          }
-          // In selection mode, the parent handles selection toggle
-          // onDeckClick already handles this via handleDeckClick
-          onDeckClick(deck.id, e);
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.02)';
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-          e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.4)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = '';
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-          e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.3)';
-        }}
-      >
-
-        {/* Deck Icon with Ambient Light - Centered in Middle */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flex: 1,
-          position: 'relative',
-          zIndex: 1,
-          minHeight: '100px',
-        }}>
-          {/* Clean Icon - No background container, just the icon */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              zIndex: 1,
-            }}
-          >
-            {/* Layers Icon - Clean and Neutral */}
-            <Layers 
-              size={64} 
-              style={{ 
-                stroke: '#ffffff',
-                fill: 'none',
-                strokeWidth: '1.5',
-              }} 
-            />
-            
-            {/* iOS Notification Badge for Cards Due */}
-            {cardsDue > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                minWidth: '20px',
-                height: '20px',
-                background: 'rgba(255, 255, 255, 0.2)',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 6px',
-                fontSize: '11px',
-                fontWeight: '700',
-                color: '#ffffff',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.2)',
-                zIndex: 10,
-              }}>
-                {cardsDue > 99 ? '99+' : cardsDue}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Selection Checkmark Badge */}
-        {isSelected && (
-          <div style={{
-            position: 'absolute',
-            top: '12px',
-            right: '12px',
-            width: '32px',
-            height: '32px',
-            background: '#00FF94',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0, 255, 148, 0.4), 0 0 0 2px rgba(0, 0, 0, 0.2)',
-            zIndex: 50,
-            padding: '4px',
-          }}>
-            <Check size={20} style={{ stroke: '#000000', strokeWidth: '3', fill: 'none' }} />
-          </div>
-        )}
-
-        {/* Bottom Section: Title + Card Count Badge */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          position: 'relative',
-          zIndex: 1,
-          width: '100%',
-          flexShrink: 0,
-        }}>
-          {/* Card Count Badge */}
-          <div style={{
-            fontSize: '12px',
-            fontWeight: '500',
-            color: 'rgba(255, 255, 255, 0.6)',
-            background: 'rgba(255, 255, 255, 0.05)',
-            padding: '4px 8px',
-            borderRadius: '9999px',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-          }}>
-            {deck.card_count ?? 0} Cards
-          </div>
-
-          {/* Title or Edit Input */}
-          {editingDeckId === deck.id ? (
-            <input
-              type="text"
-              value={newDeckName}
-              onChange={(e) => setNewDeckName(e.target.value)}
-              onBlur={() => onUpdateDeckName(deck.id, newDeckName)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  onUpdateDeckName(deck.id, newDeckName);
-                } else if (e.key === 'Escape') {
-                  setEditingDeckId(null);
-                  setNewDeckName('');
-                }
-              }}
-              autoFocus
-              style={{
-                fontSize: '16px',
-                fontWeight: '700',
-                color: '#ffffff',
-                textAlign: 'center',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                background: 'transparent',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '6px',
-                padding: '4px 8px',
-                width: '100%',
-                maxWidth: '100%',
-                outline: 'none',
-                margin: 0,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <h3 style={{
-              fontSize: '16px',
-              fontWeight: '700',
-              color: '#ffffff',
-              textAlign: 'center',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              margin: 0,
-              padding: '0 8px',
-              width: '100%',
-              textDecoration: 'none',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              lineClamp: 2,
-              maxHeight: '48px',
-            }}>
-              {deck.title || 'Untitled Deck'}
-            </h3>
-          )}
-        </div>
-
-        {/* Three Dots Menu Button */}
-        <button
-          className="menu-button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onToggleMenu(deck.id, e);
-          }}
-          style={{
-            position: 'absolute',
-            top: '16px',
-            right: '16px',
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
-            border: 'none',
-            background: 'rgba(0, 0, 0, 0.3)',
-            backdropFilter: 'blur(8px)',
-            color: 'rgba(255, 255, 255, 0.9)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.2s ease',
-            zIndex: 10,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(0, 255, 148, 0.2)';
-            e.currentTarget.style.color = '#00FF94';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)';
-            e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)';
-          }}
-        >
-          <svg style={{ width: '20px', height: '20px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-          </svg>
-        </button>
-
-        {/* Menu Dropdown */}
-        {isMenuOpen && (
-          <div
-            ref={menuRef}
-            className="menu-dropdown"
-            style={{
-              position: 'absolute',
-              top: '48px',
-              right: '16px',
-              backgroundColor: 'rgba(30, 41, 59, 0.95)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              padding: '8px',
-              minWidth: '160px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              zIndex: 50,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-            }}
-          >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                onRename(deck.id, e);
-              }}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.8)',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                transition: 'background 0.2s ease',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-              </svg>
-              Rename
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setDeckToMove(deck.id);
-                setShowMoveToFolderModal(true);
-                setActiveMenuId(null);
-              }}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.8)',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                transition: 'background 0.2s ease',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
-              </svg>
-              Move to Folder
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                onExport(deck.id, deck.title);
-              }}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.8)',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                transition: 'background 0.2s ease',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
-              Export to Anki
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                onDelete(deck.id, e);
-              }}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'transparent',
-                color: '#ef4444',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                transition: 'background 0.2s ease',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-              </svg>
-              Delete
-            </button>
-          </div>
-        )}
-
-      </div>
-    );
-  };
-
-  // Get emoji based on first letter of title
-  const getDeckEmoji = (title) => {
-    if (!title) return '📚';
-    const firstLetter = title.charAt(0).toUpperCase();
-    const emojiMap = {
-      'A': '📖', 'B': '📘', 'C': '📗', 'D': '📙', 'E': '📕',
-      'F': '📓', 'G': '📔', 'H': '📒', 'I': '📑', 'J': '📋',
-      'K': '📊', 'L': '📈', 'M': '📉', 'N': '📇', 'O': '📅',
-      'P': '📆', 'Q': '📝', 'R': '📄', 'S': '📃', 'T': '📜',
-      'U': '📰', 'V': '📑', 'W': '📋', 'X': '📊', 'Y': '📈', 'Z': '📉'
-    };
-    return emojiMap[firstLetter] || '📚';
-  };
-
-  // Green gradient for deck icons (consistent theme)
-  const getDeckGradient = () => {
-    // Always return green gradient for consistent branding
-    return { from: '#00FF94', to: '#00D977' }; // Neon green to darker emerald
-  };
-
   // Cards whose next_review has arrived, tallied when the library loads.
   // Cards that have never been reviewed are not due - they enter the schedule
   // after their first study session.
@@ -971,13 +282,13 @@ const FlashcardDashboard = () => {
   const handleDeckSaved = () => {
     // Use the folder context that was stored when deck creation started
     const folderContext = pendingDeckFolderId;
-    
+
     // Clear the pending folder context
     setPendingDeckFolderId(null);
-    
+
     // Refresh decks and switch back to dashboard
     setView('dashboard');
-    
+
     // The useEffect will refetch decks when view changes to 'dashboard'
     // After decks are refetched, we'll update items with the folder context
     setTimeout(() => {
@@ -1007,7 +318,7 @@ const FlashcardDashboard = () => {
     if (e && (e.target.closest('.menu-button') || e.target.closest('.menu-dropdown'))) {
       return;
     }
-    
+
     // If in selection mode, toggle selection instead of opening
     if (isSelectionMode) {
       setSelectedItemIds(prev => {
@@ -1021,7 +332,7 @@ const FlashcardDashboard = () => {
       });
       return;
     }
-    
+
     setSelectedDeckId(deckId);
     setView('study');
   };
@@ -1041,7 +352,7 @@ const FlashcardDashboard = () => {
       });
       return;
     }
-    
+
     setCurrentFolderId(folderId);
   };
 
@@ -1057,7 +368,7 @@ const FlashcardDashboard = () => {
   // Handle bulk delete
   const handleBulkDelete = async () => {
     if (selectedItemIds.size === 0) return;
-    
+
     const count = selectedItemIds.size;
     if (!window.confirm(`Are you sure you want to delete ${count} ${count === 1 ? 'item' : 'items'}? This action cannot be undone.`)) {
       return;
@@ -1084,11 +395,11 @@ const FlashcardDashboard = () => {
 
       // Remove items from local state
       setItems(prevItems => prevItems.filter(item => !selectedItemIds.has(item.id)));
-      
+
       // Clear selection and exit selection mode
       setSelectedItemIds(new Set());
       setIsSelectionMode(false);
-      
+
       toast.success(`Deleted ${count} ${count === 1 ? 'item' : 'items'}`);
     } catch (error) {
       console.error('Error in handleBulkDelete:', error);
@@ -1212,12 +523,12 @@ const FlashcardDashboard = () => {
   // Handle folder creation from modal
   const handleConfirmCreateFolder = () => {
     const folderName = newFolderName.trim();
-    
+
     // If empty string, do nothing
     if (!folderName) {
       return;
     }
-    
+
     // Create folder with the provided name (flat structure)
     const newFolder = {
       id: `folder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID
@@ -1225,7 +536,7 @@ const FlashcardDashboard = () => {
       title: folderName,
       parentId: currentFolderId, // Create folder in current view (null for root)
     };
-    
+
     setItems((prevItems) => [...prevItems, newFolder]);
     setShowCreateFolderModal(false);
     setNewFolderName('');
@@ -1240,15 +551,15 @@ const FlashcardDashboard = () => {
   // Handle move deck to folder
   const handleMoveDeckToFolder = (folderId) => {
     if (!deckToMove) return;
-    
+
     setItems((items) => {
-      return items.map(item => 
-        item.id === deckToMove 
+      return items.map(item =>
+        item.id === deckToMove
           ? { ...item, parentId: folderId }
           : item
       );
     });
-    
+
     setShowMoveToFolderModal(false);
     setDeckToMove(null);
     toast.success('Deck moved to folder');
@@ -1257,15 +568,15 @@ const FlashcardDashboard = () => {
   // Handle move deck to root
   const handleMoveDeckToRoot = () => {
     if (!deckToMove) return;
-    
+
     setItems((items) => {
-      return items.map(item => 
-        item.id === deckToMove 
+      return items.map(item =>
+        item.id === deckToMove
           ? { ...item, parentId: null }
           : item
       );
     });
-    
+
     setShowMoveToFolderModal(false);
     setDeckToMove(null);
     toast.success('Deck moved to Library');
@@ -1293,6 +604,8 @@ const FlashcardDashboard = () => {
       }
       toast.success(`Imported ${result.cardCount} cards into "${title}".`);
       setShowImportModal(false);
+      // The same form now also lives in the New Deck modal's Anki tab.
+      setShowNewDeckModal(false);
       setImportText('');
       setImportDeckName('');
       setDeckRefresh((c) => c + 1);
@@ -1374,16 +687,16 @@ const FlashcardDashboard = () => {
     setItems((prevItems) => {
       // Remove the folder
       let updatedItems = prevItems.filter(item => item.id !== folderId);
-      
+
       // If folder has items, move them to root level (set parentId to null)
       if (hasItems) {
-        updatedItems = updatedItems.map(item => 
-          item.parentId === folderId 
+        updatedItems = updatedItems.map(item =>
+          item.parentId === folderId
             ? { ...item, parentId: null }
             : item
         );
       }
-      
+
       return updatedItems;
     });
 
@@ -1457,15 +770,350 @@ const FlashcardDashboard = () => {
     }
   };
 
+  // Handle exit from study view
+  const handleExitStudy = () => {
+    setView('dashboard');
+    setSelectedDeckId(null);
+  };
+
   // Get visible items based on current folder view (flat structure)
   const getVisibleItems = () => {
     // Filter items by parentId - root items have parentId: null
     return items.filter(item => item.parentId === currentFolderId);
   };
-  
+
   const visibleItems = getVisibleItems();
 
-  // Dashboard View
+  /* ------------------------------------------------------------------ */
+  /* Render helpers - plain functions (not components) so nothing        */
+  /* remounts on parent re-renders; all handlers reach in via closure.   */
+  /* ------------------------------------------------------------------ */
+
+  // Icon-only card menu trigger. Local primitive: the controlled dropdown
+  // (activeMenuId + outside-click ref) must stay, so the ui Popover's
+  // self-managed open state cannot be used here.
+  const menuTriggerClasses = (extra) =>
+    [
+      extra,
+      'flex h-7 w-7 shrink-0 items-center justify-center rounded-input text-secondary',
+      'transition-colors duration-150 hover:bg-elevated hover:text-primary',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
+    ].join(' ');
+
+  const selectionCheck = (
+    <span
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-pill bg-accent"
+      aria-hidden="true"
+    >
+      <Check size={12} strokeWidth={2} className="text-on-accent" />
+    </span>
+  );
+
+  // FolderCard
+  const renderFolderCard = (folder, itemCount) => {
+    const isSelected = selectedItemIds.has(folder.id);
+    const isMenuOpen = activeFolderMenuId === folder.id;
+    return (
+      <Card
+        key={folder.id}
+        interactive
+        className={[
+          'relative flex min-h-[132px] flex-col gap-3 p-4',
+          isSelected ? 'border-accent-line' : '',
+        ].join(' ')}
+        onClick={(e) => {
+          // Don't trigger folder click if clicking on menu
+          if (e.target.closest('.folder-menu-button') || e.target.closest('.folder-menu-dropdown')) {
+            return;
+          }
+          // In selection mode, toggle selection instead of opening
+          if (isSelectionMode) {
+            // Selection is handled by parent component via handleFolderClick
+            handleFolderClick(folder.id);
+            return;
+          }
+          handleFolderClick(folder.id);
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-input border border-soft bg-base text-secondary">
+            <Folder size={16} strokeWidth={1.5} />
+          </span>
+          <div className="flex items-center gap-1.5">
+            {isSelected ? selectionCheck : null}
+            <button
+              type="button"
+              aria-label="Folder options"
+              aria-haspopup="menu"
+              aria-expanded={isMenuOpen}
+              className={menuTriggerClasses('folder-menu-button')}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                toggleFolderMenu(folder.id, e);
+              }}
+            >
+              <MoreVertical size={16} strokeWidth={1.5} />
+            </button>
+          </div>
+        </div>
+
+        <h3 className="truncate text-body font-medium text-primary">
+          {folder.title || 'Untitled Folder'}
+        </h3>
+
+        <div className="mt-auto flex items-center justify-between gap-2">
+          <span className="font-mono text-micro uppercase text-secondary">
+            {itemCount > 99 ? '99+' : itemCount} {itemCount === 1 ? 'item' : 'items'}
+          </span>
+        </div>
+
+        {/* Menu Dropdown - controlled, closed by the outside-click effect */}
+        {isMenuOpen && (
+          <div
+            ref={menuRef}
+            role="menu"
+            className="folder-menu-dropdown absolute right-3 top-11 z-50 min-w-[160px] rounded-card border border-soft bg-elevated p-1 shadow-modal"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
+            <PopoverItem
+              danger
+              onSelect={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleDeleteFolder(folder.id, e);
+              }}
+            >
+              <Trash2 size={14} strokeWidth={1.5} />
+              Delete
+            </PopoverItem>
+          </div>
+        )}
+      </Card>
+    );
+  };
+
+  // DeckCard - the signature moment: layoutId expands into StudyInterface.
+  const renderDeckCard = (deck, cardsDue) => {
+    const isSelected = selectedItemIds.has(deck.id);
+    const isMenuOpen = activeMenuId === deck.id;
+    return (
+      <Card
+        key={deck.id}
+        as={motion.div}
+        layoutId={`deck-${deck.id}`}
+        transition={reduce ? { duration: 0 } : smooth}
+        interactive
+        className={[
+          'relative flex min-h-[132px] flex-col gap-3 p-4',
+          isSelected ? 'border-accent-line' : '',
+        ].join(' ')}
+        onClick={(e) => {
+          // Don't trigger deck click if clicking on menu
+          if (e.target.closest('.menu-button') || e.target.closest('.menu-dropdown')) {
+            return;
+          }
+          // In selection mode, the parent handles selection toggle
+          // handleDeckClick already handles this
+          handleDeckClick(deck.id, e);
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-input border border-soft bg-base text-secondary">
+            <Layers size={16} strokeWidth={1.5} />
+          </span>
+          <div className="flex items-center gap-1.5">
+            {isSelected ? selectionCheck : null}
+            <button
+              type="button"
+              aria-label="Deck options"
+              aria-haspopup="menu"
+              aria-expanded={isMenuOpen}
+              className={menuTriggerClasses('menu-button')}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                toggleMenu(deck.id, e);
+              }}
+            >
+              <MoreVertical size={16} strokeWidth={1.5} />
+            </button>
+          </div>
+        </div>
+
+        {/* Title or inline rename input */}
+        {editingDeckId === deck.id ? (
+          <Input
+            type="text"
+            value={newDeckName}
+            onChange={(e) => setNewDeckName(e.target.value)}
+            onBlur={() => handleUpdateDeckName(deck.id, newDeckName)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleUpdateDeckName(deck.id, newDeckName);
+              } else if (e.key === 'Escape') {
+                setEditingDeckId(null);
+                setNewDeckName('');
+              }
+            }}
+            autoFocus
+            className="h-8"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <h3 className="truncate text-body font-medium text-primary">
+            {deck.title || 'Untitled Deck'}
+          </h3>
+        )}
+
+        <div className="mt-auto flex items-center justify-between gap-2">
+          <span className="font-mono text-micro uppercase text-secondary">
+            {deck.card_count ?? 0} cards
+          </span>
+          {cardsDue > 0 && (
+            <Badge variant="accent">{cardsDue > 99 ? '99+' : cardsDue} due</Badge>
+          )}
+        </div>
+
+        {/* Menu Dropdown - controlled, closed by the outside-click effect */}
+        {isMenuOpen && (
+          <div
+            ref={menuRef}
+            role="menu"
+            className="menu-dropdown absolute right-3 top-11 z-50 min-w-[180px] rounded-card border border-soft bg-elevated p-1 shadow-modal"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
+            <PopoverItem
+              onSelect={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleRenameDeck(deck.id, e);
+              }}
+            >
+              <Pencil size={14} strokeWidth={1.5} />
+              Rename
+            </PopoverItem>
+            <PopoverItem
+              onSelect={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setDeckToMove(deck.id);
+                setShowMoveToFolderModal(true);
+                setActiveMenuId(null);
+              }}
+            >
+              <Folder size={14} strokeWidth={1.5} />
+              Move to Folder
+            </PopoverItem>
+            <PopoverItem
+              onSelect={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleExportDeck(deck.id, deck.title);
+              }}
+            >
+              <Upload size={14} strokeWidth={1.5} />
+              Export to Anki
+            </PopoverItem>
+            <PopoverSeparator />
+            <PopoverItem
+              danger
+              onSelect={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleDeleteDeck(deck.id, e);
+              }}
+            >
+              <Trash2 size={14} strokeWidth={1.5} />
+              Delete
+            </PopoverItem>
+          </div>
+        )}
+      </Card>
+    );
+  };
+
+  // The Anki import form. Rendered by plain function call (no component
+  // boundary) so the inputs never remount mid-keystroke. Shared between the
+  // standalone Import modal and the New Deck modal's Anki tab.
+  const renderAnkiImportForm = (onCancel) => {
+    const previewCount = parseAnkiText(importText).length;
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-small text-secondary">
+          In Anki: File → Export → "Notes in Plain Text (.txt)". Upload that file
+          or paste its contents below. Semicolon CSVs (like MindFlow's own export) work too.
+        </p>
+        <Field label="Deck name">
+          <Input
+            type="text"
+            value={importDeckName}
+            onChange={(e) => setImportDeckName(e.target.value)}
+            placeholder="Deck name (optional)"
+          />
+        </Field>
+        <Field label="Cards">
+          <Textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder={'Front of card\tBack of card\n…'}
+            rows={7}
+            className="font-mono text-small"
+          />
+        </Field>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <label
+            className={[
+              'inline-flex h-8 cursor-pointer select-none items-center gap-2 rounded-input border border-soft',
+              'bg-transparent px-3 text-small font-medium text-primary',
+              'transition-colors duration-150 hover:border-strong hover:bg-elevated',
+              'focus-within:ring-2 focus-within:ring-accent-ring',
+            ].join(' ')}
+          >
+            <FileUp size={14} strokeWidth={1.5} className="text-secondary" />
+            Upload file…
+            <input
+              type="file"
+              accept=".txt,.csv,.tsv,text/plain,text/csv"
+              onChange={handleImportFile}
+              className="sr-only"
+            />
+          </label>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={onCancel} disabled={isImporting}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleImportDeck} disabled={isImporting || !importText.trim()}>
+              {isImporting ? (
+                'Importing…'
+              ) : previewCount > 0 ? (
+                <>
+                  Import <span className="font-mono">{previewCount}</span> cards
+                </>
+              ) : (
+                'Import'
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Views - one return, one LayoutGroup, so the deck-card layoutId can  */
+  /* match StudyInterface's container when the subtree swaps.            */
+  /* ------------------------------------------------------------------ */
+
+  let content = null;
+
   if (view === 'dashboard') {
     // Determine header title
     let headerTitle;
@@ -1480,717 +1128,205 @@ const FlashcardDashboard = () => {
       headerTitle = 'My Library';
     }
 
-    return (
-      <div style={{
-        padding: '32px',
-        minHeight: '100%',
-        background: 'radial-gradient(ellipse at center, rgba(15, 23, 42, 0.8) 0%, rgba(3, 7, 18, 0.95) 40%, #030712 100%)',
-      }}>
-        {/* Header and Action Bar Container - Centered */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          marginBottom: '32px',
-        }}>
-          {/* Top Navigation Bar - Centered */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            width: '100%',
-            marginBottom: '24px',
-          }}>
-            {/* Title with Back button if in folder or unsorted decks view */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-          }}>
-            {currentFolderId !== null && (
-                <BackToLibraryButton onClick={() => {
-                  setCurrentFolderId(null);
-                }} />
+    content = (
+      <div className="min-h-full bg-base">
+        <div className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-8">
+          <Breadcrumb
+            trail={['MindFlow', 'Library']}
+            right={
+              <span className="font-mono text-micro uppercase text-secondary">
+                {decks.length} {decks.length === 1 ? 'deck' : 'decks'}
+              </span>
+            }
+          />
+
+          {/* Header + action bar */}
+          <div className="mb-8 mt-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {currentFolderId !== null && (
+                <Button variant="ghost" size="sm" onClick={() => setCurrentFolderId(null)}>
+                  <ChevronLeft size={16} strokeWidth={1.5} />
+                  Back to Library
+                </Button>
               )}
-              <h1 style={{
-                fontSize: '48px', // text-5xl equivalent
-                fontWeight: '700',
-                color: '#00FF94', // Neon green text
-                margin: 0,
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                textShadow: '0 0 20px rgba(0, 255, 148, 0.6), 0 0 40px rgba(0, 255, 148, 0.3)',
-              }}>
-                {headerTitle}
-              </h1>
+              <h1 className="text-h1 text-primary">{headerTitle}</h1>
             </div>
-          </div>
 
-          {/* Action Bar - Show everywhere */}
-          <div style={{
-              maxWidth: '1200px',
-              width: '100%',
-              background: 'rgba(255, 255, 255, 0.05)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              borderRadius: '16px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              padding: '12px',
-              display: 'flex',
-              flexDirection: 'row',
-              gap: '12px',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-            {/* Select Button / Cancel Button */}
-            {!isSelectionMode ? (
-              <button
-                onClick={handleToggleSelectionMode}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid rgba(0, 255, 148, 0.2)',
-                  borderRadius: '12px',
-                  padding: '10px 16px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s ease',
-                  color: '#00FF94',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.2)';
-                }}
-              >
-                <Check size={18} style={{ stroke: '#00FF94', fill: 'none' }} />
-                Select
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={handleToggleSelectionMode}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '12px',
-                    padding: '10px 16px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    transition: 'all 0.2s ease',
-                    color: 'rgba(255, 255, 255, 0.8)',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                  }}
-                >
-                  <X size={18} style={{ stroke: 'currentColor', fill: 'none' }} />
-                  Cancel
-                </button>
-                
-                {selectedItemIds.size > 0 && (
-                  <>
-                    <button
-                      onClick={handleBulkMove}
-                      style={{
-                        background: 'rgba(0, 255, 148, 0.1)',
-                        border: '1px solid rgba(0, 255, 148, 0.3)',
-                        borderRadius: '12px',
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        transition: 'all 0.2s ease',
-                        color: '#00FF94',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(0, 255, 148, 0.15)';
-                        e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.4)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-                        e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-                      }}
-                    >
-                      <Move size={18} style={{ stroke: '#00FF94', fill: 'none' }} />
-                      Move ({selectedItemIds.size})
-                    </button>
-                    
-                    <button
-                      onClick={handleBulkDelete}
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        borderRadius: '12px',
-                        padding: '10px 16px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        transition: 'all 0.2s ease',
-                        color: '#ef4444',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                      }}
-                    >
-                      <Trash2 size={18} style={{ stroke: '#ef4444', fill: 'none' }} />
-                      Delete ({selectedItemIds.size})
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-
-            {/* New Folder Button - Dark with Green Accent */}
-            {!isSelectionMode && (
-              <button
-                onClick={handleCreateFolder}
-                style={{
-                  background: 'rgba(10, 10, 10, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '12px',
-                  padding: '10px 16px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s ease',
-                  color: '#ffffff', // White text
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)'; // Subtle green tint on hover
-                  e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(10, 10, 10, 0.8)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-              >
-                <FolderPlus size={18} style={{ stroke: '#00FF94', fill: 'none' }} />
-                New Folder
-              </button>
-            )}
-
-            {/* New Deck Button - Dark with Green Accent */}
-            {!isSelectionMode && (
-              <button
-                onClick={handleCreateDeck}
-                style={{
-                  background: 'rgba(10, 10, 10, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '12px',
-                  padding: '10px 16px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s ease',
-                  color: '#ffffff', // White text
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)'; // Subtle green tint on hover
-                  e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(10, 10, 10, 0.8)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-              >
-                <Layers size={18} style={{ stroke: '#00FF94', fill: 'none' }} />
-                New Deck
-              </button>
-            )}
-
-            {/* Import Anki Button */}
-            {!isSelectionMode && (
-              <button
-                onClick={() => setShowImportModal(true)}
-                style={{
-                  background: 'rgba(10, 10, 10, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '12px',
-                  padding: '10px 16px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s ease',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(10, 10, 10, 0.8)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-              >
-                <Upload size={18} style={{ stroke: '#00FF94', fill: 'none' }} />
-                Import
-              </button>
-            )}
-
-          </div>
-        </div>
-
-        {/* Anki Import Modal */}
-        {showImportModal && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              backdropFilter: 'blur(8px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget && !isImporting) setShowImportModal(false);
-            }}
-          >
-            <div style={{
-              backgroundColor: 'rgba(17, 24, 39, 0.95)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '16px',
-              padding: '32px',
-              maxWidth: '560px',
-              width: '92%',
-            }}>
-              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
-                Import from Anki
-              </h2>
-              <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', marginBottom: '20px', lineHeight: 1.5 }}>
-                In Anki: File → Export → "Notes in Plain Text (.txt)". Upload that file
-                or paste its contents below. Semicolon CSVs (like MindFlow's own export) work too.
-              </p>
-              <input
-                type="text"
-                value={importDeckName}
-                onChange={(e) => setImportDeckName(e.target.value)}
-                placeholder="Deck name (optional)"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px',
-                  color: '#ffffff',
-                  fontSize: '15px',
-                  marginBottom: '12px',
-                  outline: 'none',
-                }}
-              />
-              <textarea
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-                placeholder={'Front of card\tBack of card\n…'}
-                style={{
-                  width: '100%',
-                  minHeight: '160px',
-                  padding: '12px 16px',
-                  backgroundColor: 'rgba(0,0,0,0.4)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px',
-                  color: '#ffffff',
-                  fontSize: '13px',
-                  fontFamily: 'monospace',
-                  resize: 'vertical',
-                  outline: 'none',
-                  marginBottom: '12px',
-                }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                <label style={{
-                  padding: '10px 16px',
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px',
-                  color: 'rgba(255,255,255,0.8)',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                }}>
-                  Upload file…
-                  <input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" onChange={handleImportFile} style={{ display: 'none' }} />
-                </label>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <button
-                    onClick={() => setShowImportModal(false)}
-                    disabled={isImporting}
-                    style={{
-                      padding: '10px 20px',
-                      backgroundColor: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '8px',
-                      color: 'rgba(255,255,255,0.7)',
-                      fontSize: '14px',
-                      fontWeight: '500',
-                      cursor: isImporting ? 'not-allowed' : 'pointer',
+            <div className="flex flex-wrap items-center gap-2">
+              {!isSelectionMode ? (
+                <>
+                  <Button variant="ghost" size="sm" onClick={handleToggleSelectionMode}>
+                    <Check size={14} strokeWidth={1.5} />
+                    Select
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={handleCreateFolder}>
+                    <FolderPlus size={14} strokeWidth={1.5} />
+                    New Folder
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setShowImportModal(true)}>
+                    <Upload size={14} strokeWidth={1.5} />
+                    Import
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setNewDeckTab('pdf');
+                      setShowNewDeckModal(true);
                     }}
                   >
+                    <Layers size={14} strokeWidth={1.5} />
+                    New Deck
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="secondary" size="sm" onClick={handleToggleSelectionMode}>
+                    <X size={14} strokeWidth={1.5} />
                     Cancel
-                  </button>
-                  <button
-                    onClick={handleImportDeck}
-                    disabled={isImporting || !importText.trim()}
-                    style={{
-                      padding: '10px 20px',
-                      background: (isImporting || !importText.trim())
-                        ? 'rgba(34, 197, 94, 0.3)'
-                        : 'linear-gradient(90deg, #22c55e, #10b981)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#ffffff',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      cursor: (isImporting || !importText.trim()) ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {isImporting ? 'Importing…' : `Import${parseAnkiText(importText).length > 0 ? ` ${parseAnkiText(importText).length} cards` : ''}`}
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                  {selectedItemIds.size > 0 && (
+                    <>
+                      <Button variant="secondary" size="sm" onClick={handleBulkMove}>
+                        <Move size={14} strokeWidth={1.5} />
+                        Move (<span className="font-mono">{selectedItemIds.size}</span>)
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={handleBulkDelete}>
+                        <Trash2 size={14} strokeWidth={1.5} />
+                        Delete (<span className="font-mono">{selectedItemIds.size}</span>)
+                      </Button>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </div>
-        )}
 
-        {/* Main Content Area */}
-        {/* Check for Empty State - Show Welcome Hero */}
-        {items.length === 0 && currentFolderId === null ? (
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '60vh',
-            width: '100%',
-            position: 'relative',
-            padding: '64px 32px',
-          }}>
-            {/* Background Radial Gradient */}
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: '800px',
-              height: '800px',
-              background: 'radial-gradient(circle at center, rgba(0, 255, 148, 0.08) 0%, rgba(0, 255, 148, 0.02) 40%, transparent 70%)',
-              pointerEvents: 'none',
-              zIndex: 0,
-            }} />
-
-            {/* Welcome Hero Content */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                textAlign: 'center',
-                position: 'relative',
-                zIndex: 1,
-                maxWidth: '600px',
-              }}
-            >
-              {/* Pulsing Icon */}
-              <motion.div
-                animate={{
-                  scale: [1, 1.1, 1],
-                  opacity: [0.8, 1, 0.8],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                }}
-                style={{
-                  marginBottom: '32px',
-                }}
-              >
-                <Brain 
-                  size={96} 
-                  style={{ 
-                    stroke: '#00FF94',
-                    fill: 'none',
-                    strokeWidth: '2',
-                    filter: 'drop-shadow(0 0 20px rgba(0, 255, 148, 0.5))',
-                  }} 
-                />
-              </motion.div>
-
-              {/* Title */}
-              <h2 style={{
-                fontSize: '36px',
-                fontWeight: '700',
-                color: '#ffffff',
-                marginBottom: '16px',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                Welcome to MindFlow
-              </h2>
-
-              {/* Subtitle */}
-              <p style={{
-                fontSize: '18px',
-                color: 'rgba(255, 255, 255, 0.6)',
-                marginBottom: '40px',
-                maxWidth: '480px',
-                lineHeight: '1.6',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                Your AI-powered path to mastery. Create your first deck to get started.
-              </p>
-
-              {/* Primary Action Button */}
-              <button
-                onClick={handleCreateDeck}
-                style={{
-                  background: '#00FF94',
-                  color: '#000000',
-                  border: 'none',
-                  padding: '16px 32px',
-                  borderRadius: '12px',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 0 0 0 rgba(0, 255, 148, 0.4)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 0 30px rgba(0, 255, 148, 0.6), 0 0 60px rgba(0, 255, 148, 0.3)';
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 0 0 0 rgba(0, 255, 148, 0.4)';
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-              >
-                Create First Deck
-              </button>
-            </motion.div>
-          </div>
-        ) : (
-              <div style={{
-                maxWidth: '1200px',
-                margin: '0 auto',
-                width: '100%',
-              }}>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={currentFolderId || 'root'}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                      gap: '32px',
-                      marginTop: '32px',
-                      minHeight: '500px',
-                      flexGrow: 1,
+          {/* Main Content Area */}
+          {items.length === 0 && currentFolderId === null ? (
+            <div className="mx-auto mt-12 max-w-lg">
+              <EmptyState
+                icon={<Layers size={18} strokeWidth={1.5} />}
+                title="Your library is empty"
+                description="Create your first deck from a PDF, pasted notes, or an Anki export."
+                action={
+                  <Button
+                    onClick={() => {
+                      setNewDeckTab('pdf');
+                      setShowNewDeckModal(true);
                     }}
                   >
-
-              {/* Render visible items */}
-              {visibleItems.map((item) => {
-                if (item.type === 'folder') {
-                  const itemCount = items.filter(i => i.parentId === item.id).length;
-                  return (
-                    <FolderCard
-                      key={item.id}
-                      folder={item}
-                      itemCount={itemCount}
-                      isMenuOpen={activeFolderMenuId === item.id}
-                      onClick={() => handleFolderClick(item.id)}
-                      onToggleMenu={toggleFolderMenu}
-                      onDelete={handleDeleteFolder}
-                      isSelected={selectedItemIds.has(item.id)}
-                      isSelectionMode={isSelectionMode}
-                    />
-                  );
-                } else if (item.type === 'deck') {
-                  const deck = decks.find(d => d.id === item.id);
-                  if (!deck) return null;
-                  const cardsDue = getCardsDue(deck.id);
-                  return (
-                    <DeckCard
-                      key={item.id}
-                      deck={deck}
-                      cardsDue={cardsDue}
-                      isMenuOpen={activeMenuId === deck.id}
-                      onDeckClick={handleDeckClick}
-                      onToggleMenu={toggleMenu}
-                      onRename={handleRenameDeck}
-                      onDelete={handleDeleteDeck}
-                      onExport={handleExportDeck}
-                      isSelected={selectedItemIds.has(item.id)}
-                      isSelectionMode={isSelectionMode}
-                      editingDeckId={editingDeckId}
-                      newDeckName={newDeckName}
-                      setNewDeckName={setNewDeckName}
-                      onUpdateDeckName={handleUpdateDeckName}
-                    />
-                  );
+                    Create First Deck
+                  </Button>
                 }
-                return null;
-              })}
-                </motion.div>
-              </AnimatePresence>
+              />
             </div>
-        )}
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentFolderId || 'root'}
+                initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
+                animate={
+                  reduce
+                    ? { opacity: 1, transition: reduced }
+                    : { opacity: 1, scale: 1, transition: smooth }
+                }
+                exit={{ opacity: 0, transition: reduced }}
+                className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-4"
+              >
+                {/* Render visible items */}
+                {visibleItems.map((item) => {
+                  if (item.type === 'folder') {
+                    const itemCount = items.filter(i => i.parentId === item.id).length;
+                    return renderFolderCard(item, itemCount);
+                  } else if (item.type === 'deck') {
+                    const deck = decks.find(d => d.id === item.id);
+                    if (!deck) return null;
+                    return renderDeckCard(deck, getCardsDue(deck.id));
+                  }
+                  return null;
+                })}
+              </motion.div>
+            </AnimatePresence>
+          )}
 
-        {/* Create Folder Modal */}
-        {showCreateFolderModal && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
+          {/* New Deck Modal - Tabs route into the existing machinery */}
+          <Modal
+            open={showNewDeckModal}
+            onClose={() => {
+              if (!isImporting) setShowNewDeckModal(false);
             }}
-            onClick={handleCancelCreateFolder}
+            title="New Deck"
+            className="max-w-lg"
           >
-            <div
-              style={{
-                background: 'rgba(30, 41, 59, 0.9)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: '1px solid rgba(0, 255, 148, 0.2)',
-                borderRadius: '24px',
-                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
-                padding: '32px',
-                width: '90%',
-                maxWidth: '480px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '24px',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <h2 style={{
-                  fontSize: '24px',
-                  fontWeight: '700',
-                  color: '#ffffff',
-                  margin: 0,
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                }}>
-                  Create Folder
-                </h2>
-                <button
-                  onClick={handleCancelCreateFolder}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    cursor: 'pointer',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#ffffff';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
+            <div className="flex flex-col gap-4">
+              <Tabs
+                items={[
+                  { value: 'pdf', label: 'Upload PDF' },
+                  { value: 'paste', label: 'Paste Text' },
+                  { value: 'anki', label: 'Import Anki' },
+                ]}
+                value={newDeckTab}
+                onChange={setNewDeckTab}
+              />
+              {newDeckTab === 'anki' ? (
+                renderAnkiImportForm(() => setShowNewDeckModal(false))
+              ) : (
+                <>
+                  <p className="text-small text-secondary">
+                    {newDeckTab === 'pdf'
+                      ? 'Upload a PDF and MindFlow turns it into flashcards.'
+                      : 'Paste notes or a summary and MindFlow turns them into flashcards.'}
+                  </p>
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => {
+                        setShowNewDeckModal(false);
+                        handleCreateDeck();
+                      }}
+                    >
+                      Continue
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Modal>
 
-              {/* Input Field */}
-              <input
+          {/* Anki Import Modal */}
+          <Modal
+            open={showImportModal}
+            onClose={() => {
+              if (!isImporting) setShowImportModal(false);
+            }}
+            title="Import from Anki"
+            className="max-w-lg"
+          >
+            {renderAnkiImportForm(() => setShowImportModal(false))}
+          </Modal>
+
+          {/* Create Folder Modal */}
+          <Modal
+            open={showCreateFolderModal}
+            onClose={handleCancelCreateFolder}
+            title="Create Folder"
+            footer={
+              <>
+                <Button variant="secondary" size="sm" onClick={handleCancelCreateFolder}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleConfirmCreateFolder}>
+                  Create
+                </Button>
+              </>
+            }
+          >
+            <Field label="Folder name">
+              <Input
                 type="text"
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="Enter folder name"
                 autoFocus
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  background: 'rgba(0, 0, 0, 0.3)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '12px',
-                  color: '#ffffff',
-                  fontSize: '16px',
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                  outline: 'none',
-                  transition: 'all 0.2s ease',
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#00FF94';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 255, 148, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -2201,332 +1337,85 @@ const FlashcardDashboard = () => {
                   }
                 }}
               />
+            </Field>
+          </Modal>
 
-              {/* Buttons */}
-              <div style={{
-                display: 'flex',
-                gap: '12px',
-                justifyContent: 'flex-end',
-              }}>
-                <button
-                  onClick={handleCancelCreateFolder}
-                  style={{
-                    padding: '12px 24px',
-                    background: 'transparent',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '12px',
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#ffffff';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmCreateFolder}
-                  style={{
-                    padding: '12px 24px',
-                    background: 'rgba(0, 255, 148, 0.1)',
-                    border: '1px solid rgba(0, 255, 148, 0.3)',
-                    borderRadius: '12px',
-                    color: '#00FF94',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 255, 148, 0.2)';
-                    e.currentTarget.style.borderColor = '#00FF94';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-                    e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-                  }}
-                >
-                  Create
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Move to Folder Modal */}
-        {showMoveToFolderModal && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-            }}
-            onClick={() => {
+          {/* Move to Folder Modal */}
+          <Modal
+            open={showMoveToFolderModal}
+            onClose={() => {
               setShowMoveToFolderModal(false);
               setDeckToMove(null);
             }}
+            title="Move to Folder"
+            className="max-w-md"
           >
-            <div
-              style={{
-                background: 'rgba(30, 41, 59, 0.9)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: '1px solid rgba(0, 255, 148, 0.2)',
-                borderRadius: '24px',
-                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
-                padding: '32px',
-                width: '90%',
-                maxWidth: '480px',
-                maxHeight: '80vh',
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '24px',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <h2 style={{
-                  fontSize: '24px',
-                  fontWeight: '700',
-                  color: '#ffffff',
-                  margin: 0,
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                }}>
-                  Move to Folder
-                </h2>
+            <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto">
+              {/* Move to Library (Root) */}
+              <button
+                type="button"
+                onClick={handleMoveDeckToRoot}
+                className={[
+                  'flex w-full items-center gap-2.5 rounded-input border border-soft bg-base px-3 py-2.5',
+                  'text-left text-small font-medium text-primary',
+                  'transition-colors duration-150 hover:border-strong hover:bg-elevated',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
+                ].join(' ')}
+              >
+                <Folder size={16} strokeWidth={1.5} className="text-secondary" />
+                Library (Root)
+              </button>
+
+              {/* Available Folders */}
+              {items.filter(item => item.type === 'folder').map(folder => (
                 <button
-                  onClick={() => {
-                    setShowMoveToFolderModal(false);
-                    setDeckToMove(null);
-                  }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    cursor: 'pointer',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#ffffff';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
+                  key={folder.id}
+                  type="button"
+                  onClick={() => handleMoveDeckToFolder(folder.id)}
+                  className={[
+                    'flex w-full items-center gap-2.5 rounded-input border border-soft bg-base px-3 py-2.5',
+                    'text-left text-small font-medium text-primary',
+                    'transition-colors duration-150 hover:border-strong hover:bg-elevated',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
+                  ].join(' ')}
                 >
-                  <X size={20} />
+                  <Folder size={16} strokeWidth={1.5} className="text-accent" />
+                  {folder.title || 'Untitled Folder'}
                 </button>
-              </div>
+              ))}
 
-              {/* Folder List */}
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-              }}>
-                {/* Move to Library (Root) */}
-                <button
-                  onClick={handleMoveDeckToRoot}
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    color: 'rgba(255, 255, 255, 0.9)',
-                    fontSize: '16px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                    transition: 'all 0.2s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-                    e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                  }}
-                >
-                  <Folder size={20} style={{ stroke: 'currentColor', fill: 'none' }} />
-                  Library (Root)
-                </button>
-
-                {/* Available Folders */}
-                {items.filter(item => item.type === 'folder').map(folder => (
-                  <button
-                    key={folder.id}
-                    onClick={() => handleMoveDeckToFolder(folder.id)}
-                    style={{
-                      width: '100%',
-                      padding: '14px 16px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '12px',
-                      color: 'rgba(255, 255, 255, 0.9)',
-                      fontSize: '16px',
-                      fontWeight: '500',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                      transition: 'all 0.2s ease',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(0, 255, 148, 0.1)';
-                      e.currentTarget.style.borderColor = 'rgba(0, 255, 148, 0.3)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    }}
-                  >
-                    <Folder size={20} style={{ stroke: '#00FF94', fill: 'none' }} />
-                    {folder.title || 'Untitled Folder'}
-                  </button>
-                ))}
-
-                {items.filter(item => item.type === 'folder').length === 0 && (
-                  <div style={{
-                    padding: '20px',
-                    textAlign: 'center',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    fontSize: '14px',
-                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                  }}>
-                    No folders available. Create a folder first.
-                  </div>
-                )}
-              </div>
+              {items.filter(item => item.type === 'folder').length === 0 && (
+                <p className="py-4 text-center text-small text-secondary">
+                  No folders available. Create a folder first.
+                </p>
+              )}
             </div>
-          </div>
-        )}
-
+          </Modal>
+        </div>
       </div>
     );
-  }
+  } else if (view === 'create') {
+    content = (
+      <div className="min-h-full bg-base">
+        <div className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-8">
+          <Breadcrumb trail={['MindFlow', 'Library']} />
 
-  // Create view
-  if (view === 'create') {
-    return (
-      <div style={{
-        padding: '32px',
-        minHeight: '100%',
-        background: 'radial-gradient(ellipse at center, rgba(15, 23, 42, 0.8) 0%, rgba(3, 7, 18, 0.95) 40%, #030712 100%)',
-      }}>
-        {/* Top Navigation Bar with Cancel Button */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '32px',
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-          }}>
-            <button
-              onClick={() => setView('dashboard')}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#00FF94';
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 255, 148, 0.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <ChevronLeft size={18} style={{ stroke: '#00FF94' }} />
+          <div className="mb-8 mt-6 flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setView('dashboard')}>
+              <ChevronLeft size={16} strokeWidth={1.5} />
               Cancel
-              </button>
-            <h1 style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: '#ffffff',
-              margin: 0,
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-            }}>
-              Create New Deck
-            </h1>
+            </Button>
+            <h1 className="text-h1 text-primary">Create New Deck</h1>
           </div>
-        </div>
 
-        {/* Create Deck Form */}
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          width: '100%',
-        }}>
           <PDFToFlashcardUploader
             onDeckSaved={handleDeckSaved}
           />
         </div>
       </div>
     );
-  }
-
-  // Handle exit from study view
-  const handleExitStudy = () => {
-    setView('dashboard');
-    setSelectedDeckId(null);
-  };
-
-  // Study view
-  if (view === 'study' && selectedDeckId) {
-                return (
+  } else if (view === 'study' && selectedDeckId) {
+    content = (
       <StudyInterface
         deckId={selectedDeckId}
         onExit={handleExitStudy}
@@ -2534,7 +1423,7 @@ const FlashcardDashboard = () => {
     );
   }
 
-  return null;
+  return <LayoutGroup>{content}</LayoutGroup>;
 };
 
 export default FlashcardDashboard;

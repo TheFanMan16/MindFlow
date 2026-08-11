@@ -1,8 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { Hourglass, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { findOrCreateTopic, setTopicExamDate } from '../utils/studyLoop';
+import { Breadcrumb, Card, Field, Input, Textarea, Button, Badge } from '../components/ui';
+import { motion, useReducedMotion, Stagger } from '../motion';
+import { entrance, reduced } from '../motion/transitions';
 
 const MIN_NOTES = 200;
 
@@ -46,6 +50,7 @@ const PanicMode = () => {
   const [plan, setPlan] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
   const [topic, setTopic] = useState(null);
+  const reduce = useReducedMotion();
 
   const hoursLeft = useMemo(() => {
     if (!examAt) return null;
@@ -97,169 +102,130 @@ const PanicMode = () => {
     });
   };
 
-  const inputStyle = {
-    width: '100%',
-    padding: '14px 16px',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: '12px',
-    color: '#ffffff',
-    fontSize: '15px',
-    fontFamily: 'inherit',
-    outline: 'none',
-    colorScheme: 'dark',
-  };
+  const runwayLabel =
+    hoursLeft !== null && hoursLeft < 48
+      ? `${Math.round(hoursLeft)} hour${Math.round(hoursLeft) === 1 ? '' : 's'}`
+      : hoursLeft !== null
+        ? `${Math.round(hoursLeft / 24)} days`
+        : null;
 
   return (
-    <div style={{ padding: '48px 24px', maxWidth: '760px', margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <h1 style={{
-          fontSize: '40px',
-          fontWeight: 700,
-          color: '#ef4444',
-          marginBottom: '10px',
-          textShadow: '0 0 24px rgba(239, 68, 68, 0.4)',
-        }}>
-          Exam soon? Paste your notes.
-        </h1>
-        <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
-          MindFlow triages the hours you have left: an instant recall test finds the
-          gaps, cards get built for only the gaps, and you get a schedule for the
-          time remaining. No re-reading marathons.
-        </p>
-      </div>
+    <div className="mx-auto w-full max-w-3xl px-6 py-10">
+      <Breadcrumb trail={['MindFlow', 'Panic']} />
 
-      {!plan ? (
-        <div style={{
-          backgroundColor: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(239, 68, 68, 0.25)',
-          borderRadius: '20px',
-          padding: '28px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}>
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 220px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '6px' }}>
-                What exam?
-              </label>
-              <input
-                type="text"
-                value={examName}
-                onChange={(e) => setExamName(e.target.value)}
-                placeholder="e.g. Bio 101 midterm"
-                style={inputStyle}
-              />
-            </div>
-            <div style={{ flex: '1 1 220px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '6px' }}>
-                When is it?
-              </label>
-              <input
-                type="datetime-local"
-                value={examAt}
-                onChange={(e) => setExamAt(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
+      <motion.div
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={reduce ? reduced : entrance}
+        className="mt-8"
+      >
+        <div className="mb-8">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="h-4 w-px bg-danger" aria-hidden="true" />
+            <span className="font-mono text-micro uppercase text-danger">Triage mode</span>
           </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '6px' }}>
-              Your notes
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Paste everything you need to know…"
-              style={{ ...inputStyle, minHeight: '260px', resize: 'vertical', lineHeight: 1.6 }}
-            />
-            <div style={{
-              fontSize: '12px',
-              marginTop: '6px',
-              color: notesShortBy > 0 ? '#f87171' : '#34d399',
-            }}>
-              {notesShortBy > 0
-                ? `Add at least ${notesShortBy} more characters so the AI has something to work with`
-                : `${notes.trim().length.toLocaleString()} characters — ready`}
-            </div>
-          </div>
-
-          {hoursLeft !== null && hoursLeft > 0 && (
-            <div style={{ fontSize: '14px', color: '#fbbf24', fontWeight: 600 }}>
-              ⏳ {hoursLeft < 48
-                ? `${Math.round(hoursLeft)} hour${Math.round(hoursLeft) === 1 ? '' : 's'} until the exam`
-                : `${Math.round(hoursLeft / 24)} days until the exam`}
-            </div>
-          )}
-
-          <button
-            onClick={handleBuildPlan}
-            disabled={isStarting}
-            style={{
-              padding: '16px 24px',
-              background: isStarting ? 'rgba(239, 68, 68, 0.4)' : 'linear-gradient(90deg, #ef4444, #f97316)',
-              border: 'none',
-              borderRadius: '14px',
-              color: '#ffffff',
-              fontSize: '17px',
-              fontWeight: 700,
-              cursor: isStarting ? 'wait' : 'pointer',
-              boxShadow: '0 4px 24px rgba(239, 68, 68, 0.35)',
-            }}
-          >
-            {isStarting ? 'Building your triage plan…' : 'Build my triage plan'}
-          </button>
+          <h1 className="text-h1 text-primary">Exam soon? Paste your notes.</h1>
+          <p className="mt-3 max-w-[60ch] text-body text-secondary">
+            MindFlow triages the hours you have left: an instant recall test finds the
+            gaps, cards get built for only the gaps, and you get a schedule for the
+            time remaining. No re-reading marathons.
+          </p>
         </div>
-      ) : (
-        <div style={{
-          backgroundColor: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(239, 68, 68, 0.25)',
-          borderRadius: '20px',
-          padding: '28px',
-        }}>
-          <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#ffffff', marginBottom: '20px' }}>
-            Your plan for the next {hoursLeft < 48 ? `${Math.round(hoursLeft)} hours` : `${Math.round(hoursLeft / 24)} days`}
-          </h2>
-          <ol style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {plan.map((step, i) => (
-              <li key={i} style={{
-                display: 'flex',
-                gap: '16px',
-                padding: '14px 18px',
-                backgroundColor: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '12px',
-              }}>
-                <div style={{ minWidth: '110px', fontSize: '13px', fontWeight: 700, color: '#f97316' }}>
-                  {step.when}
+
+        {!plan ? (
+          <Card className="border-danger-line p-6 md:p-7">
+            <div className="flex flex-col gap-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="What exam?">
+                  <Input
+                    type="text"
+                    value={examName}
+                    onChange={(e) => setExamName(e.target.value)}
+                    placeholder="e.g. Bio 101 midterm"
+                  />
+                </Field>
+                <Field label="When is it?">
+                  <Input
+                    type="datetime-local"
+                    value={examAt}
+                    onChange={(e) => setExamAt(e.target.value)}
+                    className="font-mono"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Your notes">
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Paste everything you need to know…"
+                  className="min-h-[260px] leading-relaxed"
+                />
+              </Field>
+              <p className={`-mt-3 text-small ${notesShortBy > 0 ? 'text-danger' : 'text-success'}`}>
+                {notesShortBy > 0 ? (
+                  <>
+                    Add at least <span className="font-mono">{notesShortBy}</span> more characters so the AI has something to work with
+                  </>
+                ) : (
+                  <>
+                    <span className="font-mono">{notes.trim().length.toLocaleString()}</span> characters — ready
+                  </>
+                )}
+              </p>
+
+              {hoursLeft !== null && hoursLeft > 0 && (
+                <div className="flex items-center gap-2 text-small text-warning">
+                  <Hourglass className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+                  <span>
+                    <span className="font-mono">{runwayLabel}</span> until the exam
+                  </span>
                 </div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
-                  {step.what}
-                </div>
-              </li>
-            ))}
-          </ol>
-          <button
-            onClick={startRecall}
-            style={{
-              width: '100%',
-              padding: '16px 24px',
-              background: 'linear-gradient(90deg, #ef4444, #f97316)',
-              border: 'none',
-              borderRadius: '14px',
-              color: '#ffffff',
-              fontSize: '17px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 4px 24px rgba(239, 68, 68, 0.35)',
-            }}
-          >
-            Step 1: Start the recall test →
-          </button>
-        </div>
-      )}
+              )}
+
+              <Button
+                size="lg"
+                mono
+                magnetic
+                className="w-full"
+                onClick={handleBuildPlan}
+                disabled={isStarting}
+              >
+                {isStarting ? 'Building your triage plan…' : 'Build my triage plan'}
+              </Button>
+            </div>
+          </Card>
+        ) : (
+          <Card className="border-danger-line p-6 md:p-7">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-h2 text-primary">
+                Your plan for the next{' '}
+                <span className="font-mono">
+                  {hoursLeft < 48 ? `${Math.round(hoursLeft)} hours` : `${Math.round(hoursLeft / 24)} days`}
+                </span>
+              </h2>
+              <Badge variant="danger">Triage</Badge>
+            </div>
+            <Stagger role="list" className="mb-6 flex flex-col gap-3">
+              {plan.map((step, i) => (
+                <Stagger.Item role="listitem" key={i}>
+                  <div className="flex gap-4 rounded-input border border-soft bg-base px-4 py-3.5">
+                    <div className="min-w-[110px] font-mono text-micro uppercase text-accent">
+                      {step.when}
+                    </div>
+                    <div className="text-small leading-relaxed text-secondary">{step.what}</div>
+                  </div>
+                </Stagger.Item>
+              ))}
+            </Stagger>
+            <Button size="lg" mono magnetic className="w-full" onClick={startRecall}>
+              Step 1: Start the recall test
+              <ArrowRight className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+            </Button>
+          </Card>
+        )}
+      </motion.div>
     </div>
   );
 };

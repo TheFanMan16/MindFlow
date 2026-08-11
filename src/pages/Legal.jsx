@@ -1,49 +1,50 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '../components/ui';
 
 export const CONTACT_EMAIL = 'hannajohn37@gmail.com';
 
-/** Shared shell for the legal/trust pages - dark theme, readable measure. */
+/** Shared shell for the legal/trust pages - system tokens, readable measure. */
 export const LegalLayout = ({ title, updated, children }) => {
   const navigate = useNavigate();
   return (
-    <div style={{
-      minHeight: '100%',
-      backgroundColor: '#030712',
-      color: 'rgba(255, 255, 255, 0.8)',
-      padding: '48px 24px',
-    }}>
-      <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        <button
+    <div className="min-h-full bg-base px-6 py-12">
+      <div className="mx-auto max-w-[65ch]">
+        <Button
+          variant="ghost"
+          size="sm"
+          mono
+          className="mb-8 -ml-3"
           onClick={() => navigate('/')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#a78bfa',
-            fontSize: '14px',
-            cursor: 'pointer',
-            padding: 0,
-            marginBottom: '32px',
-          }}
         >
-          ← Back to MindFlow
-        </button>
-        <h1 style={{ fontSize: '32px', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
-          {title}
-        </h1>
-        <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginBottom: '32px' }}>
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+          Back to MindFlow
+        </Button>
+        <h1 className="text-h1 text-primary">{title}</h1>
+        <p className="mb-8 mt-2 font-mono text-micro uppercase text-secondary">
           Last updated: {updated}
         </p>
-        <div style={{ fontSize: '15px', lineHeight: 1.7 }}>{children}</div>
+        <div className="text-body leading-relaxed text-secondary [&_p]:mb-4 [&_strong]:font-medium [&_strong]:text-primary">
+          {children}
+        </div>
       </div>
     </div>
   );
 };
 
 const H2 = ({ children }) => (
-  <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#ffffff', margin: '32px 0 12px' }}>
-    {children}
-  </h2>
+  <h2 className="mb-3 mt-8 text-h2 text-primary">{children}</h2>
+);
+
+/** In-copy mailto link, accent-toned with a visible focus ring. */
+const MailLink = () => (
+  <a
+    href={`mailto:${CONTACT_EMAIL}`}
+    className="text-accent underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+  >
+    {CONTACT_EMAIL}
+  </a>
 );
 
 export const PrivacyPage = () => (
@@ -82,43 +83,26 @@ export const PrivacyPage = () => (
     <p>
       Your data is kept while your account exists. You can clear local data in
       Settings → Data &amp; Privacy, and you can request full account deletion by
-      emailing <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#a78bfa' }}>{CONTACT_EMAIL}</a>.
+      emailing <MailLink />.
       Deletion removes your profile and all study data.
     </p>
 
     <H2>Contact</H2>
     <p>
-      Questions about this policy: <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#a78bfa' }}>{CONTACT_EMAIL}</a>.
+      Questions about this policy: <MailLink />.
     </p>
   </LegalLayout>
 );
 
 export const AboutPage = () => (
   <LegalLayout title="About MindFlow" updated="August 6, 2026">
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '20px',
-      marginBottom: '28px',
-    }}>
-      <div style={{
-        width: '72px',
-        height: '72px',
-        borderRadius: '50%',
-        background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '28px',
-        fontWeight: 700,
-        color: '#ffffff',
-        flexShrink: 0,
-      }}>
+    <div className="mb-7 flex items-center gap-5">
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-pill bg-accent-wash font-mono text-h2 text-accent">
         JH
       </div>
       <div>
-        <div style={{ fontSize: '18px', fontWeight: 600, color: '#ffffff' }}>John Hanna</div>
-        <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>Builder of MindFlow</div>
+        <div className="text-body font-medium text-primary">John Hanna</div>
+        <div className="text-small text-secondary">Builder of MindFlow</div>
       </div>
     </div>
 
@@ -142,7 +126,7 @@ export const AboutPage = () => (
     <H2>Get in touch</H2>
     <p>
       Bugs, ideas, or just want to say the recall grader was too harsh:{' '}
-      <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#a78bfa' }}>{CONTACT_EMAIL}</a>.
+      <MailLink />.
       I read everything.
     </p>
   </LegalLayout>
@@ -206,7 +190,7 @@ export const TermsPage = () => (
 
     <H2>Contact</H2>
     <p>
-      <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#a78bfa' }}>{CONTACT_EMAIL}</a>
+      <MailLink />
     </p>
   </LegalLayout>
 );

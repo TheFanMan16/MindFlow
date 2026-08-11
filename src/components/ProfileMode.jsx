@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import ConfirmModal from './ConfirmModal';
 import ProgressHeatmap from './ProgressHeatmap';
+import { Breadcrumb, Card, Button, Badge, StatTile } from './ui';
 
 export default function ProfileMode() {
   const navigate = useNavigate();
@@ -49,11 +51,11 @@ export default function ProfileMode() {
         toast.error('Error signing out. Please try again.');
         return;
       }
-      
+
       // Clear all local storage
       localStorage.clear();
       sessionStorage.clear();
-      
+
       // Redirect to login
       navigate('/login');
     } catch (err) {
@@ -80,241 +82,66 @@ export default function ProfileMode() {
   };
 
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      padding: '48px 24px',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'flex-start',
-    }}>
-      <div style={{
-        maxWidth: '1280px',
-        width: '100%',
-        display: 'grid',
-        gridTemplateColumns: '300px 1fr',
-        gap: '32px',
-      }}>
-        {/* Left Column: User Identity Card */}
-        <div style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.4)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '24px',
-          padding: '32px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '24px',
-          height: 'fit-content',
-        }}>
-          {/* Avatar with Gradient Ring */}
-          <div style={{
-            position: 'relative',
-            width: '120px',
-            height: '120px',
-          }}>
-            <div style={{
-              position: 'absolute',
-              inset: '-4px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #a855f7, #ec4899)',
-              opacity: 0.6,
-              filter: 'blur(8px)',
-            }} />
-            <div style={{
-              position: 'relative',
-              width: '100%',
-              height: '100%',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2))',
-              border: '3px solid rgba(168, 85, 247, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '40px',
-              fontWeight: '700',
-              color: '#ffffff',
-              boxShadow: '0 0 30px rgba(168, 85, 247, 0.3)',
-            }}>
-              {initial}
-            </div>
-          </div>
+    <div className="h-full w-full overflow-y-auto px-6 py-10">
+      <div className="mx-auto w-full max-w-5xl">
+        <Breadcrumb trail={['MindFlow', 'Profile']} />
 
-          {/* Identity Section */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '16px',
-            width: '100%',
-          }}>
-            <h1 style={{
-              fontSize: '22px',
-              fontWeight: '700',
-              color: '#ffffff',
-              textAlign: 'center',
-            }}>
-              {displayEmail}
-            </h1>
-            
-            {/* Member Since Badge */}
-            <div style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '12px',
-              color: 'rgba(255, 255, 255, 0.7)',
-            }}>
-              Member since {memberSince}
+        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-[300px_1fr]">
+          {/* Left column: identity */}
+          <Card className="flex h-fit flex-col items-center gap-5 p-6">
+            {/* Avatar: flat accent-wash circle */}
+            <div
+              className="flex h-24 w-24 items-center justify-center rounded-pill border border-accent-line bg-accent-wash"
+              aria-hidden="true"
+            >
+              <span className="font-mono text-h1 text-accent">{initial}</span>
             </div>
 
-            {/* Plan Badge */}
-            <div style={{
-              backgroundColor: actuallyHasPro 
-                ? 'rgba(168, 85, 247, 0.2)' 
-                : 'rgba(255, 255, 255, 0.05)',
-              border: `1px solid ${actuallyHasPro 
-                ? 'rgba(168, 85, 247, 0.4)' 
-                : 'rgba(255, 255, 255, 0.1)'}`,
-              borderRadius: '8px',
-              padding: '8px 16px',
-              fontSize: '14px',
-              fontWeight: '600',
-              color: actuallyHasPro ? '#a855f7' : 'rgba(255, 255, 255, 0.8)',
-            }}>
-              {actuallyHasPro ? '✨ Pro Plan' : 'Free Plan'}
-            </div>
-          </div>
+            <div className="flex w-full flex-col items-center gap-3">
+              <h1 className="max-w-full break-all text-center text-h2 text-primary">
+                {displayEmail}
+              </h1>
 
-          {/* Stats in Left Column */}
-          <div style={{
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            marginTop: '8px',
-          }}>
-            {/* Focus Minutes */}
-            <div style={{
-              backgroundColor: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.2)',
-              borderRadius: '12px',
-              padding: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-            }}>
-              <div style={{
-                fontSize: '11px',
-                fontWeight: '500',
-                color: 'rgba(255, 255, 255, 0.6)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}>
-                Focus Minutes
+              <div className="font-mono text-micro uppercase text-secondary">
+                Member since <span className="text-primary">{memberSince}</span>
               </div>
-              <div style={{
-                fontSize: '24px',
-                fontWeight: '700',
-                color: '#60a5fa',
-              }}>
-                {formatFocusTime(stats.totalFocusMinutes)}
-              </div>
+
+              <Badge variant={actuallyHasPro ? 'accent' : 'neutral'}>
+                {actuallyHasPro ? 'Pro Plan' : 'Free Plan'}
+              </Badge>
             </div>
 
-            {/* Streak */}
-            <div style={{
-              backgroundColor: 'rgba(168, 85, 247, 0.1)',
-              border: '1px solid rgba(168, 85, 247, 0.2)',
-              borderRadius: '12px',
-              padding: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-            }}>
-              <div style={{
-                fontSize: '11px',
-                fontWeight: '500',
-                color: 'rgba(255, 255, 255, 0.6)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}>
-                Streak
-              </div>
-              <div style={{
-                fontSize: '24px',
-                fontWeight: '700',
-                color: '#a855f7',
-              }}>
-                {stats.streakCount} days
-              </div>
+            {/* Stats */}
+            <div className="mt-1 grid w-full grid-cols-1 gap-3">
+              <StatTile
+                label="Focus Minutes"
+                value={stats.totalFocusMinutes}
+                format={(n) => formatFocusTime(Math.round(n))}
+              />
+              <StatTile
+                label="Streak"
+                value={stats.streakCount}
+                unit="days"
+              />
             </div>
-          </div>
 
-          {/* Edit Profile & Settings Button */}
-          <button
-            onClick={() => navigate('/settings')}
-            style={{
-              width: '100%',
-              padding: '12px 20px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(139, 92, 246, 0.2))',
-              border: '1px solid rgba(168, 85, 247, 0.3)',
-              color: '#a78bfa',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))';
-              e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
-              e.currentTarget.style.transform = 'scale(1.02)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(139, 92, 246, 0.2))';
-              e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)';
-              e.currentTarget.style.transform = 'scale(1)';
-            }}
-          >
-            <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Edit Profile & Settings
-          </button>
-        </div>
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => navigate('/settings')}
+            >
+              <Settings size={16} strokeWidth={1.5} aria-hidden="true" />
+              Edit Profile &amp; Settings
+            </Button>
+          </Card>
 
-        {/* Right Column: Progress Heatmap */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '24px',
-        }}>
-          <div style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '24px',
-            padding: '32px',
-          }}>
-            <h2 style={{
-              fontSize: '24px',
-              fontWeight: '700',
-              color: '#ffffff',
-              marginBottom: '24px',
-            }}>
-              Activity Heatmap
-            </h2>
-            <ProgressHeatmap />
-          </div>
+          {/* Right column: activity heatmap */}
+          <Card className="h-fit p-6">
+            <h2 className="text-h2 text-primary">Activity Heatmap</h2>
+            <div className="mt-5">
+              <ProgressHeatmap />
+            </div>
+          </Card>
         </div>
       </div>
 
