@@ -17,7 +17,7 @@ import {
 import { maybeNotifyDueCards } from '../utils/notifications';
 import { Eyebrow, Rule, RevealHeadline, Panel, IconFrame, Numeral, MagneticButton } from './ui';
 import { IconFocus, IconRecall, IconFeynman, IconLeitner, IconTriage, IconLead } from './icons';
-import { stagger, rise, inView } from '../design/motion';
+import { stagger, rise } from '../design/motion';
 
 /**
  * Dashboard - "Sleek Dark Architectural" reference implementation.
@@ -270,26 +270,34 @@ const Dashboard = () => {
 
   const go = (view) => navigate(user ? `/${view}` : '/login');
 
-  /** Modes. `span` drives the asymmetric grid - the loop's entry point earns
-   *  double width rather than every feature claiming equal importance. */
+  /**
+   * The loop, in the order the product actually describes it: focus, self-test,
+   * explain, spaced review. The numbering is load-bearing for that reason - it
+   * marks a real sequence a user moves through, not decoration. An earlier pass
+   * numbered them by visual prominence, which made 01-04 a pattern rather than
+   * information; if the order stops being a sequence, the numbers should go.
+   *
+   * `span` gives step one double width: it is where the loop starts, so the
+   * grid opens on it instead of presenting four equal choices.
+   */
   const modes = [
     {
-      id: 'blurting',
+      id: 'focus',
       index: '01',
-      title: 'Active Recall',
+      title: 'Deep Work',
       description:
-        'Blurt what you remember. The AI grades the gaps and turns every miss into a card.',
-      Icon: IconRecall,
-      view: 'recall',
+        'Pomodoro, Flowmodoro and Sentry Mode. Put the hours in before you test what stuck.',
+      Icon: IconFocus,
+      view: 'focus',
       span: true,
     },
     {
-      id: 'focus',
+      id: 'blurting',
       index: '02',
-      title: 'Deep Work',
-      description: 'Pomodoro, Flowmodoro and Sentry Mode.',
-      Icon: IconFocus,
-      view: 'focus',
+      title: 'Active Recall',
+      description: 'Blurt what you remember. The AI grades the gaps and turns every miss into a card.',
+      Icon: IconRecall,
+      view: 'recall',
     },
     {
       id: 'feynman',
@@ -370,10 +378,13 @@ const Dashboard = () => {
                 as="h1"
                 className="text-display-lg font-display text-paper"
               />
+              {/* Second line recedes to carry the two-part promise, but only to
+                  muted (8.5:1). The first pass used ghost at 2:1, which read as
+                  a deliberate design move on screen and was simply illegible. */}
               <RevealHeadline
                 text="Remember it on exam day."
                 as="p"
-                className="text-display-lg font-display text-paper-ghost"
+                className="text-display-lg font-display text-paper-muted"
               />
 
               <motion.p
@@ -460,13 +471,16 @@ const Dashboard = () => {
           </motion.div>
         )}
 
-        {/* ------------------------------------------------ today's plan -- */}
+        {/* ------------------------------------------------ today's plan --
+            Content sections animate on mount, not on intersection. A scroll
+            observer that fails to fire leaves initial="hidden" in place -
+            opacity 0 forever - so gating real content on one means a silent
+            bug blanks the page. Observers drive decoration only (Rule). */}
         {user && (dueCards.length > 0 || topicMastery.length > 0) && (
           <motion.section
             variants={stagger(0, 0.04)}
             initial="hidden"
-            whileInView="visible"
-            viewport={inView}
+            animate="visible"
             className="mt-16"
           >
             <motion.div variants={rise} className="flex flex-wrap items-end justify-between gap-5">
@@ -573,10 +587,9 @@ const Dashboard = () => {
 
         {/* ------------------------------------------------------ modes --- */}
         <motion.section
-          variants={stagger(0, 0.05)}
+          variants={stagger(0.12, 0.05)}
           initial="hidden"
-          whileInView="visible"
-          viewport={inView}
+          animate="visible"
           className="mt-16 md:mt-20"
         >
           <motion.div variants={rise}>
@@ -614,6 +627,21 @@ const Dashboard = () => {
                         {mode.description}
                       </p>
                     </div>
+
+                    {/* Step one is double width, which left a dead zone in the
+                        middle. A large ghosted step number fills it with the
+                        one thing that belongs there - where you are in the
+                        loop - rather than with padding. */}
+                    {mode.span && (
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none hidden select-none font-mono text-[7rem] font-bold
+                                   leading-none text-line-strong transition-colors duration-base
+                                   ease-mech group-hover:text-signal-dim lg:block"
+                      >
+                        {mode.index}
+                      </span>
+                    )}
 
                     <div
                       className={`mt-7 flex items-center justify-between gap-6 ${

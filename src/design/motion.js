@@ -77,6 +77,13 @@ export const panelHover = {
 export const MAGNET_SPRING = { type: 'spring', stiffness: 260, damping: 22, mass: 0.6 };
 
 /** Shared viewport config so scroll reveals fire at the same point everywhere.
+ *
  *  `once` matters: re-animating on every scroll-back is the fastest way to make
- *  a page feel cheap. */
-export const inView = { once: true, amount: 0.25, margin: '0px 0px -12% 0px' };
+ *  a page feel cheap.
+ *
+ *  `margin` is in px, not %. Framer passes this straight through to
+ *  IntersectionObserver's rootMargin, which rejects percentage values when the
+ *  root is the viewport - the observer then never fires and every section stays
+ *  at opacity 0. That failed silently: the page built, rendered, and showed
+ *  empty panels. */
+export const inView = { once: true, amount: 0.2, margin: '0px 0px -80px 0px' };

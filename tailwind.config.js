@@ -44,11 +44,16 @@ export default {
           bright: '#3A424B',
         },
         // Type ramp. Four steps, no more - more than four and hierarchy blurs.
+        // Every step carries real text somewhere, so every step clears 4.5:1 on
+        // ink-900. The first draft ran faint at 3.55:1 and ghost at 2.00:1,
+        // which looked appropriately recessive on a design surface and was
+        // simply unreadable. Contrast measured, not eyeballed:
+        //   paper 18.17  muted 8.48  faint 5.72  ghost 4.80
         paper: {
           DEFAULT: '#F4F6F8',
-          muted: '#98A1AC',
-          faint: '#616974',
-          ghost: '#3D444D',
+          muted: '#A3ABB5',
+          faint: '#838B96',
+          ghost: '#767E89',
         },
         // The single accent. Not violet-500 (#8B5CF6) - that exact value is the
         // giveaway of an untouched Tailwind palette. Shifted bluer and more
@@ -68,11 +73,12 @@ export default {
       },
 
       fontFamily: {
-        // Space Grotesk has real letterform character (the g, the a, the tight
-        // apertures) where Inter is deliberately neutral - which is why Inter
-        // is in every AI-generated interface and why this is not.
-        display: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        sans: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // A slightly narrow grotesque with squared terminals - closer to
+        // signage and technical lettering than to a product-marketing face.
+        // Inter is neutral by design, and Space Grotesk has become the default
+        // "designed" alternative; both now read as template.
+        display: ['"Instrument Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['"Instrument Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         // Every number in this product is data - timers, counts, percentages,
         // dates. Tabular mono stops them jittering as they tick.
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],

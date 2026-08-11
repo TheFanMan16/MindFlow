@@ -1,9 +1,15 @@
-/* Space Grotesk for voice, JetBrains Mono for data. Inter was here before and
-   is the most recognisable tell of an untouched AI-generated interface - it is
-   engineered to be neutral, which is exactly why it never reads as authored.
-   Weights are deliberately limited; the system uses weight contrast, not many
-   weights. */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+/* Instrument Sans for voice, JetBrains Mono for data.
+   Inter was here before: engineered to be neutral, which is exactly why it
+   never reads as authored and why it is in every generated interface. Space
+   Grotesk was the first replacement and got rejected for the same reason from
+   the other direction - it has become the default "designed" face, so it now
+   signals template just as loudly.
+   Instrument Sans is a slightly narrow grotesque with squared terminals and
+   tight apertures: it reads as signage and technical lettering rather than as
+   a product-marketing face, which is what this direction wants.
+   Weights are deliberately limited - the system works through weight contrast,
+   not through many weights. */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -23,7 +29,7 @@
     height: 100vh;
     overflow: hidden; /* Stop the browser window from scrolling */
     @apply bg-ink-900 text-paper;
-    font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
