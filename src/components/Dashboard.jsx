@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import config from '../config/api';
-import { getAuthHeader } from '../utils/authHeader';
 import { getLastActivityAt, formatTimeAgo } from '../utils/lastActivity';
 import {
   getDueCards,
@@ -16,40 +15,83 @@ import {
   toLocalDateKey,
 } from '../utils/studyLoop';
 import { maybeNotifyDueCards } from '../utils/notifications';
+import { Eyebrow, Rule, RevealHeadline, Panel, IconFrame, Numeral, MagneticButton } from './ui';
+import { IconFocus, IconRecall, IconFeynman, IconLeitner, IconTriage, IconLead } from './icons';
+import { stagger, rise, inView } from '../design/motion';
 
-/** Tiny inline sparkline for a topic's recall trend (oldest -> newest). */
-const Sparkline = ({ values, color = '#a78bfa', width = 96, height = 28 }) => {
+/**
+ * Dashboard - "Sleek Dark Architectural" reference implementation.
+ *
+ * What changed, and why, beyond swapping colours:
+ *
+ * - The centred hero is gone. A 100px gradient-filled "MindFlow" wordmark over
+ *   a centred tagline is the single most template-like element in the app, and it
+ *   spent the most valuable screen real estate restating the product name to
+ *   someone already signed in. The masthead is now asymmetric: the promise sits
+ *   left on a 7/5 split, with live instrument readings right.
+ * - Stats that were fetched and thrown away are now displayed. streakCount,
+ *   totalFocusMinutes and cardsCreated were all queried on every mount and
+ *   never rendered.
+ * - Topic rows are a ruled table, not a wrap of pill cards. Comparing mastery
+ *   across topics is the actual job; equal-width cards in a flex-wrap made
+ *   that harder than a shared baseline does.
+ * - The four mode cards are no longer four identical boxes with four different
+ *   two-stop gradients. They share one surface treatment and are asymmetric by
+ *   importance: the loop's entry point is wide, the rest are equal.
+ * - Dead billing handlers (handleSubscribe, handleCancelSubscription,
+ *   createPortalSession) and formatTime were removed - none were referenced by
+ *   any JSX here, and billing lives in SettingsMode.
+ */
+
+/** Recall trend. Square caps and a flat baseline so it reads as a plotted
+ *  instrument trace rather than a soft marketing sparkline. */
+const Sparkline = ({ values, tone = '#7B61FF', width = 88, height = 24 }) => {
   if (!values || values.length < 2) return null;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
   const points = values
     .map((v, i) => {
-      const x = (i / (values.length - 1)) * (width - 4) + 2;
-      const y = height - 3 - ((v - min) / range) * (height - 6);
+      const x = (i / (values.length - 1)) * (width - 2) + 1;
+      const y = height - 2 - ((v - min) / range) * (height - 4);
       return `${x},${y}`;
     })
     .join(' ');
   return (
-    <svg width={width} height={height} style={{ display: 'block' }} aria-hidden="true">
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width={width} height={height} className="block shrink-0" aria-hidden="true">
+      <line x1="0" y1={height - 1} x2={width} y2={height - 1} stroke="#1C1F24" strokeWidth="1" />
+      <polyline points={points} fill="none" stroke={tone} strokeWidth="1.25" strokeLinecap="square" />
     </svg>
   );
 };
+
+/** Mastery as a segmented bar. Ten discrete cells rather than a smooth fill:
+ *  discrete units read as measurement, and make small differences legible. */
+const MasteryMeter = ({ value, tone }) => {
+  const filled = Math.round((value / 100) * 10);
+  return (
+    <div className="flex items-center gap-[3px]" aria-hidden="true">
+      {Array.from({ length: 10 }).map((_, i) => (
+        <span
+          key={i}
+          className="h-3 w-[3px]"
+          style={{ backgroundColor: i < filled ? tone : '#1C1F24' }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const masteryTone = (m) => (m >= 70 ? '#57D9A3' : m >= 40 ? '#E8B339' : '#FF5C46');
+const masteryToneName = (m) => (m >= 70 ? 'ok' : m >= 40 ? 'warn' : 'risk');
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile, refreshProfile } = useAuth();
+
   const [stats, setStats] = useState({
-    totalStudyTime: 0, // in seconds
+    totalStudyTime: 0,
     sessionsCompleted: 0,
     hoursFocusedToday: 0,
     tasksCleared: 0,
@@ -59,9 +101,6 @@ const Dashboard = () => {
     cardsCreated: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [isSubscribing, setIsSubscribing] = useState(false);
-  const [isCanceling, setIsCanceling] = useState(false);
-  // Today's Plan: due cards, per-topic mastery, streak and weekly momentum
   const [dueCards, setDueCards] = useState([]);
   const [topicMastery, setTopicMastery] = useState([]);
   const [loopStreak, setLoopStreak] = useState(0);
@@ -105,26 +144,19 @@ const Dashboard = () => {
     }
   };
 
-  // Handle Stripe success redirect - refresh profile when redirected back after payment
+  // Stripe success redirect - refresh profile when returned after payment.
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
-    const success = searchParams.get('success');
-
-    if (success === 'true') {
-      console.log('✅ Payment successful, refreshing profile...');
-      // Refresh profile to get updated subscription status
+    if (searchParams.get('success') === 'true') {
       refreshProfile();
-      // Remove success parameter from URL
       navigate('/dashboard', { replace: true });
     }
   }, [location.search, refreshProfile, navigate]);
 
-  // Fetch real data from Supabase
+  // Profile + flashcard counts.
   useEffect(() => {
     const fetchDashboardStats = async () => {
-      // Use user from context if available, otherwise fetch
       const currentUser = user;
-
       if (!currentUser) {
         setLoading(false);
         return;
@@ -134,16 +166,13 @@ const Dashboard = () => {
         setLoading(true);
         const userId = currentUser.id;
 
-        // Fetch profile stats (streak_count, total_focus_minutes)
-        let { data: profile, error: profileError } = await supabase
+        let { data: profileRow, error: profileError } = await supabase
           .from('profiles')
           .select('streak_count, total_focus_minutes')
           .eq('id', userId)
           .maybeSingle();
 
-        // If profile doesn't exist, create a default one
-        if (!profile && !profileError) {
-          console.log('Profile not found, creating default profile...');
+        if (!profileRow && !profileError) {
           const { data: newProfile, error: createError } = await supabase
             .from('profiles')
             .insert({
@@ -160,13 +189,12 @@ const Dashboard = () => {
           if (createError) {
             console.error('Error creating profile:', createError);
           } else {
-            profile = newProfile;
+            profileRow = newProfile;
           }
         } else if (profileError) {
           console.error('Error fetching profile:', profileError);
         }
 
-        // Count flashcards
         const { count: flashcardsCount, error: flashcardsError } = await supabase
           .from('flashcards')
           .select('*', { count: 'exact', head: true })
@@ -176,15 +204,12 @@ const Dashboard = () => {
           console.error('Error counting flashcards:', flashcardsError);
         }
 
-        // Update stats with database values
-        setStats(prev => ({
+        setStats((prev) => ({
           ...prev,
-          streakCount: profile?.streak_count || 0,
-          totalFocusMinutes: profile?.total_focus_minutes || 0,
+          streakCount: profileRow?.streak_count || 0,
+          totalFocusMinutes: profileRow?.total_focus_minutes || 0,
           cardsCreated: flashcardsCount || 0,
-          // Keep localStorage-based stats for now (can be migrated later)
         }));
-
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
       } finally {
@@ -194,48 +219,42 @@ const Dashboard = () => {
 
     fetchDashboardStats();
 
-    // Also load localStorage stats (for backward compatibility)
+    // localStorage session history, kept for backward compatibility.
     try {
       const sessionHistory = localStorage.getItem('timerSessionHistory');
       if (sessionHistory) {
         const sessions = JSON.parse(sessionHistory);
-        const totalSeconds = sessions.reduce((sum, session) => sum + (session.duration || 0), 0);
+        const totalSeconds = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
         const totalHours = Math.floor(totalSeconds / 3600);
         const totalMinutes = Math.floor((totalSeconds % 3600) / 60);
 
-        // Calculate today's sessions
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const todaySessions = sessions.filter(session => {
-          const sessionDate = new Date(session.timestamp);
-          sessionDate.setHours(0, 0, 0, 0);
-          return sessionDate.getTime() === today.getTime();
+        const todaySessions = sessions.filter((s) => {
+          const d = new Date(s.timestamp);
+          d.setHours(0, 0, 0, 0);
+          return d.getTime() === today.getTime();
         });
-        const todaySeconds = todaySessions.reduce((sum, session) => sum + (session.duration || 0), 0);
+        const todaySeconds = todaySessions.reduce((sum, s) => sum + (s.duration || 0), 0);
         const todayHours = (todaySeconds / 3600).toFixed(1);
 
-        // Calculate weekly streak
         const uniqueDays = new Set();
-        sessions.forEach(session => {
-          const sessionDate = new Date(session.timestamp);
-          sessionDate.setHours(0, 0, 0, 0);
-          uniqueDays.add(sessionDate.getTime());
+        sessions.forEach((s) => {
+          const d = new Date(s.timestamp);
+          d.setHours(0, 0, 0, 0);
+          uniqueDays.add(d.getTime());
         });
 
-        // Count consecutive days (simplified - counts last 7 days with activity)
         const sortedDays = Array.from(uniqueDays).sort((a, b) => b - a);
         let streak = 0;
         const todayTime = today.getTime();
         for (let i = 0; i < sortedDays.length; i++) {
           const dayDiff = (todayTime - sortedDays[i]) / (1000 * 60 * 60 * 24);
-          if (dayDiff === i) {
-            streak++;
-          } else {
-            break;
-          }
+          if (dayDiff === i) streak++;
+          else break;
         }
 
-        setStats(prev => ({
+        setStats((prev) => ({
           ...prev,
           totalStudyTime: totalHours * 3600 + totalMinutes * 60,
           sessionsCompleted: sessions.length,
@@ -247,753 +266,406 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error loading localStorage stats:', error);
     }
-  }, [user]); // Add user to dependency array
+  }, [user]);
 
-  const formatTime = (seconds) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
-  };
+  const go = (view) => navigate(user ? `/${view}` : '/login');
 
-  const hexToRgb = (hex) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
-      : null;
-  };
-
-  // Handle Subscribe button click
-  const handleSubscribe = async () => {
-    if (!user) {
-      alert('Please sign in to subscribe.');
-      navigate('/login');
-      return;
-    }
-
-    if (profile?.is_pro) {
-      alert('You are already a Pro member!');
-      return;
-    }
-
-    try {
-      setIsSubscribing(true);
-
-      if (!user || !user.id) {
-        console.error('Subscribe blocked: no authenticated user in context');
-        alert('Error: Please log in to subscribe.');
-        setIsSubscribing(false);
-        return;
-      }
-
-      // The server takes the user and email from the verified token.
-      const response = await fetch(`${config.api.baseUrl}/create-checkout-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(await getAuthHeader()),
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('❌ Error response:', errorData);
-        alert(`Failed to start checkout: ${errorData.error || 'Unknown error'}. Please check the console for details.`);
-        setIsSubscribing(false);
-        return;
-      }
-
-      const data = await response.json();
-      console.log('Response data:', data);
-
-      if (data?.url) {
-        // Redirect to Stripe Checkout URL
-        window.location.assign(data.url);
-        // Note: setIsSubscribing(false) won't run because page is redirecting
-      } else {
-        alert('Failed to get checkout URL. Please try again.');
-        setIsSubscribing(false);
-      }
-    } catch (err) {
-      console.error('Subscribe error:', err);
-      alert('An unexpected error occurred. Please try again.');
-      setIsSubscribing(false);
-    }
-  };
-
-  // Handle Cancel Subscription button click
-  const handleCancelSubscription = async () => {
-    if (!profile?.is_pro) {
-      alert('You do not have an active subscription.');
-      return;
-    }
-
-    // Confirm cancellation
-    const confirmed = window.confirm(
-      'Are you sure you want to cancel your subscription? You will retain Pro access until the end of your current billing period.'
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setIsCanceling(true);
-
-      if (!user || !user.id) {
-        alert('Error: Please log in to cancel subscription.');
-        setIsCanceling(false);
-        return;
-      }
-
-      // Call the Express server to cancel subscription
-      const response = await fetch(`${config.api.baseUrl}/cancel-subscription`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(await getAuthHeader()),
-        },
-        body: JSON.stringify({}),
-      });
-
-      console.log('📥 Response status:', response.status, response.statusText);
-
-      if (!response.ok) {
-        let errorMessage = 'Unknown error';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-          console.error('❌ Error response:', errorData);
-        } catch (parseError) {
-          // If JSON parsing fails, try to get text
-          const errorText = await response.text().catch(() => 'Failed to read error response');
-          console.error('❌ Non-JSON error response:', errorText);
-          errorMessage = errorText || `Server returned ${response.status} ${response.statusText}`;
-        }
-        alert(`Failed to cancel subscription: ${errorMessage}`);
-        setIsCanceling(false);
-        return;
-      }
-
-      const data = await response.json();
-      console.log('Cancel subscription response:', data);
-
-      // Show success message with cancellation date
-      const cancelDate = data.cancellationDate || (data.cancel_at
-        ? new Date(data.cancel_at * 1000).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
-        : 'the end of your billing period');
-
-      alert(`Your subscription has been cancelled. You will retain Pro access until ${cancelDate}.`);
-
-      // Refresh profile to update the UI (though is_pro will still be true until period ends)
-      refreshProfile();
-    } catch (err) {
-      console.error('Cancel subscription error:', err);
-      alert('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsCanceling(false);
-    }
-  };
-
-  // Create Stripe Billing Portal Session
-  const createPortalSession = async () => {
-    if (!user || !user.id) {
-      alert('Error: Please log in to manage your subscription.');
-      return;
-    }
-
-    try {
-      // Call the Express server to create billing portal session
-      const response = await fetch(`${config.api.baseUrl}/create-portal-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(await getAuthHeader()),
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('❌ Error response:', errorData);
-        alert(`Failed to open billing portal: ${errorData.error || 'Unknown error'}`);
-        return;
-      }
-
-      const data = await response.json();
-      console.log('Billing portal session created:', data);
-
-      if (data?.url) {
-        // Redirect to Stripe Billing Portal
-        window.location.assign(data.url);
-      } else {
-        alert('Failed to get billing portal URL. Please try again.');
-      }
-    } catch (err) {
-      console.error('Billing portal error:', err);
-      alert('An unexpected error occurred. Please try again.');
-    }
-  };
-
-  const cards = [
+  /** Modes. `span` drives the asymmetric grid - the loop's entry point earns
+   *  double width rather than every feature claiming equal importance. */
+  const modes = [
+    {
+      id: 'blurting',
+      index: '01',
+      title: 'Active Recall',
+      description:
+        'Blurt what you remember. The AI grades the gaps and turns every miss into a card.',
+      Icon: IconRecall,
+      view: 'recall',
+      span: true,
+    },
     {
       id: 'focus',
-      title: 'Deep Work Timer',
-      description: 'Pomodoro, Flowmodoro, and Sentry Mode.',
-      icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', // Clock
-      gradient: ['#22d3ee', '#3b82f6'], // Cyan to Blue
-      neonColor: '#22d3ee', // Neon Cyan
+      index: '02',
+      title: 'Deep Work',
+      description: 'Pomodoro, Flowmodoro and Sentry Mode.',
+      Icon: IconFocus,
       view: 'focus',
     },
     {
-      id: 'blurting',
-      title: 'Active Recall',
-      description: 'Test your recall of knowledge with AI feedback.',
-      icon: 'M13 10V3L4 14h7v7l9-11h-7z', // Lightning/Brain
-      gradient: ['#8b5cf6', '#ec4899'], // Purple to Pink
-      neonColor: '#8b5cf6', // Neon Purple
-      view: 'recall',
-    },
-    {
       id: 'feynman',
-      title: 'Feynman Method',
-      description: 'Teach it to learn it. Explain concepts to a curious AI.',
-      icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', // Book/Education
-      gradient: ['#f59e0b', '#ea580c'], // Amber to Orange
-      neonColor: '#f59e0b', // Neon Amber
+      index: '03',
+      title: 'Feynman',
+      description: 'Teach it to learn it. Explain a concept to a curious AI.',
+      Icon: IconFeynman,
       view: 'feynman',
     },
     {
       id: 'flashcards',
-      title: 'Spaced Repetition',
-      description: 'AI-generated flashcards using the Leitner system.',
-      icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10', // Cards/Stack
-      gradient: ['#22c55e', '#10b981'], // Green to Emerald
-      neonColor: '#22c55e', // Neon Green
+      index: '04',
+      title: 'Spaced Review',
+      description: 'Leitner scheduling that resurfaces cards before you forget.',
+      Icon: IconLeitner,
       view: 'flashcards',
     },
   ];
 
+  const isFirstRun =
+    user &&
+    !loading &&
+    dueCards.length === 0 &&
+    topicMastery.length === 0 &&
+    weeklyMomentum === 0 &&
+    stats.sessionsCompleted === 0;
+
+  const readout = [
+    { label: 'Focus', value: stats.totalFocusMinutes, unit: 'min' },
+    { label: 'Cards', value: stats.cardsCreated, unit: '' },
+    { label: 'Streak', value: loopStreak || stats.streakCount, unit: 'd' },
+    { label: 'Week', value: `${weeklyMomentum}/7`, unit: '' },
+  ];
+
   return (
-    <div style={{
-      padding: 'clamp(16px, 5vw, 48px)',
-      width: '100%',
-      minHeight: '100%',
-      position: 'relative',
-      background: 'radial-gradient(ellipse at center, rgba(15, 23, 42, 0.8) 0%, rgba(3, 7, 18, 0.95) 40%, #030712 100%)',
-      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-    }}>
-      {/* Subtle noise texture overlay */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 400 400\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noiseFilter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noiseFilter)\' opacity=\'0.03\'/%3E%3C/svg%3E")',
-        pointerEvents: 'none',
-        zIndex: 1,
-      }} />
+    <div className="surface-architectural min-h-full w-full">
+      {/* Off-axis accent bloom. Centred glows read as the default hero orb. */}
+      <div className="bloom-signal" aria-hidden="true" />
 
-      {/* Content */}
-      <div style={{ position: 'relative', zIndex: 2, maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-        {/* Hero Section */}
-        <div className="text-center py-12 md:py-16 relative mb-8">
-          {/* Animated Orb - Positioned absolutely behind text */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 0 }}>
-            <div className="mindflow-animation-container">
-              <div className="mindflow-orb"></div>
+      <div className="relative z-[1] mx-auto w-full max-w-[1240px] px-5 py-8 md:px-10 md:py-12">
+        {/* ---------------------------------------------------- masthead -- */}
+        <motion.div variants={stagger(0, 0.05)} initial="hidden" animate="visible">
+          <motion.div variants={rise} className="flex flex-wrap items-center justify-between gap-4">
+            <Eyebrow>Mindflow / Dashboard</Eyebrow>
+            <div className="flex items-center gap-5">
+              <span className="font-mono text-micro text-paper-faint">
+                {new Date().toLocaleDateString('en-GB', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: 'short',
+                })}
+              </span>
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/panic')}
+                  className="group inline-flex items-center gap-2 rounded-xs border border-[rgba(255,92,70,0.28)]
+                             px-3 py-2 font-mono text-label uppercase text-risk transition-colors
+                             duration-quick ease-mech hover:border-risk hover:bg-[rgba(255,92,70,0.07)]"
+                >
+                  <IconTriage size={14} />
+                  Exam soon
+                </button>
+              )}
             </div>
-          </div>
+          </motion.div>
 
-          {/* Text Content - Positioned above orb */}
-          <div className="relative" style={{ zIndex: 1 }}>
-            <h1 className="text-7xl md:text-8xl lg:text-9xl font-black mb-6 tracking-tight fade-in-up-delay" style={{
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              textShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-              background: 'linear-gradient(90deg, #3b82f6 0%, #1e40af 25%, #6b21a8 50%, #a855f7 75%, #3b82f6 100%)',
-              backgroundSize: '200% auto',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              filter: 'none',
-              backdropFilter: 'none',
-              WebkitBackdropFilter: 'none',
-            }}>
-              MindFlow
-            </h1>
-            <p className="text-xs md:text-sm text-white/50 mb-8 fade-in-up-delay tracking-widest uppercase" style={{
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              letterSpacing: '0.2em',
-              fontWeight: '400',
-            }}>
-              Study it once. Remember it on exam day.
-            </p>
-            <p className="text-sm md:text-base text-white/60 mb-8 fade-in-up-delay" style={{
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              maxWidth: '520px',
-              margin: '0 auto 32px',
-              lineHeight: '1.6',
-            }}>
-              MindFlow runs your whole study loop — focus, self-test, and spaced review — so nothing you learn leaks away.
-            </p>
+          <motion.div variants={rise} className="mt-5">
+            <Rule />
+          </motion.div>
+
+          {/* Asymmetric 7/5 split. The old hero was centred, which gave the
+              page no reading edge and made every block feel like a poster. */}
+          <div className="mt-10 grid grid-cols-1 gap-10 md:mt-14 md:grid-cols-12 md:gap-8">
+            <div className="md:col-span-7">
+              <RevealHeadline
+                text="Study it once."
+                as="h1"
+                className="text-display-lg font-display text-paper"
+              />
+              <RevealHeadline
+                text="Remember it on exam day."
+                as="p"
+                className="text-display-lg font-display text-paper-ghost"
+              />
+
+              <motion.p
+                variants={rise}
+                className="mt-6 max-w-[46ch] text-[15px] leading-relaxed text-paper-muted"
+              >
+                MindFlow runs your whole study loop — focus, self-test and spaced review — so
+                nothing you learn leaks away.
+              </motion.p>
+
+              <motion.div variants={rise} className="mt-8 flex flex-wrap items-center gap-3">
+                <MagneticButton onClick={() => go(dueCards.length > 0 ? 'flashcards' : 'recall')}>
+                  {dueCards.length > 0 ? 'Start review' : 'Start the loop'}
+                  <IconLead size={15} />
+                </MagneticButton>
+                <MagneticButton variant="quiet" onClick={() => go('focus')}>
+                  Focus session
+                </MagneticButton>
+              </motion.div>
+            </div>
+
+            {/* Instrument readout. This data was already being fetched on every
+                mount and never rendered - showing it is why the dashboard now
+                tells you something on arrival. */}
+            <motion.div variants={rise} className="md:col-span-5">
+              <div className="border-t border-line">
+                {readout.map((r) => (
+                  <div
+                    key={r.label}
+                    className="flex items-baseline justify-between border-b border-line py-3.5"
+                  >
+                    <span className="font-mono text-label uppercase text-paper-faint">{r.label}</span>
+                    <Numeral
+                      value={r.value}
+                      unit={r.unit}
+                      tone={r.label === 'Streak' && (loopStreak || stats.streakCount) > 0 ? 'signal' : 'paper'}
+                      className="text-[22px] font-medium"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 font-mono text-[11px] leading-relaxed text-paper-ghost">
+                {dueCards.length > 0
+                  ? `${dueCards.length} card${dueCards.length === 1 ? '' : 's'} scheduled for today`
+                  : 'Nothing scheduled — the queue is clear'}
+              </p>
+            </motion.div>
           </div>
-        </div>
-        {/* First-run onboarding: the aha moment must happen in session one */}
-        {user && !loading && dueCards.length === 0 && topicMastery.length === 0 && weeklyMomentum === 0 && stats.sessionsCompleted === 0 && (
-          <div
-            className="max-w-7xl mx-auto"
-            style={{
-              backgroundColor: 'rgba(139, 92, 246, 0.08)',
-              border: '1px solid rgba(139, 92, 246, 0.35)',
-              borderRadius: '20px',
-              padding: '32px',
-              marginBottom: '32px',
-              textAlign: 'center',
-            }}
+        </motion.div>
+
+        {/* -------------------------------------------------- first run --- */}
+        {isFirstRun && (
+          <motion.div
+            variants={rise}
+            initial="hidden"
+            animate="visible"
+            className="mt-14 border border-signal-line bg-signal-wash p-7 md:p-9"
           >
-            <div style={{
-              fontSize: '13px',
-              fontWeight: '600',
-              color: '#a78bfa',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              marginBottom: '10px',
-            }}>
-              Start here
-            </div>
-            <h2 style={{ fontSize: '26px', fontWeight: '700', color: '#ffffff', marginBottom: '12px' }}>
+            <Eyebrow tone="signal">Start here</Eyebrow>
+            <h2 className="mt-4 text-display-md font-display text-paper">
               Feel the loop in 60 seconds
             </h2>
-            <p style={{
-              fontSize: '15px',
-              color: 'rgba(255, 255, 255, 0.65)',
-              maxWidth: '560px',
-              margin: '0 auto 24px',
-              lineHeight: '1.6',
-            }}>
-              Paste any notes, blurt what you remember, and watch the AI find your gaps
-              and turn them into flashcards that resurface right before you'd forget them.
+            <p className="mt-3 max-w-[56ch] text-[15px] leading-relaxed text-paper-muted">
+              Paste any notes, blurt what you remember, and watch the AI find your gaps and turn
+              them into flashcards that resurface right before you would forget them.
             </p>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '24px',
-              flexWrap: 'wrap',
-              marginBottom: '28px',
-              fontSize: '14px',
-              color: 'rgba(255, 255, 255, 0.75)',
-              fontWeight: '600',
-            }}>
-              <span>1 · Paste your notes</span>
-              <span>2 · Test yourself</span>
-              <span>3 · Misses become cards</span>
+            {/* Numbered steps as a ruled sequence - the old version was three
+                centred spans separated by mid-dots, which read as decoration
+                rather than as an ordered process. */}
+            <ol className="mt-7 grid grid-cols-1 gap-px bg-line sm:grid-cols-3">
+              {['Paste your notes', 'Test yourself', 'Misses become cards'].map((step, i) => (
+                <li key={step} className="bg-ink-900 p-4">
+                  <span className="font-mono text-label text-signal">{`0${i + 1}`}</span>
+                  <p className="mt-2 text-sm text-paper">{step}</p>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-7">
+              <MagneticButton onClick={() => navigate('/recall')}>
+                Paste your notes
+                <IconLead size={15} />
+              </MagneticButton>
             </div>
-            <button
-              onClick={() => navigate('/recall')}
-              style={{
-                background: 'linear-gradient(90deg, #8b5cf6, #ec4899)',
-                color: '#ffffff',
-                border: 'none',
-                padding: '16px 36px',
-                borderRadius: '14px',
-                fontSize: '16px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                boxShadow: '0 4px 24px rgba(139, 92, 246, 0.4)',
-              }}
-            >
-              Paste your notes → start the loop
-            </button>
-          </div>
+          </motion.div>
         )}
 
-        {/* Panic Button - the night-before-the-exam entry point */}
-        {user && (
-          <div className="max-w-7xl mx-auto" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-            <button
-              onClick={() => navigate('/panic')}
-              style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
-                borderRadius: '12px',
-                padding: '10px 18px',
-                color: '#f87171',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-              }}
-            >
-              🚨 Exam soon? Paste your notes
-            </button>
-          </div>
-        )}
-
-        {/* Today's Plan - the loop's daily entry point */}
+        {/* ------------------------------------------------ today's plan -- */}
         {user && (dueCards.length > 0 || topicMastery.length > 0) && (
-          <div
-            className="max-w-7xl mx-auto"
-            style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.4)',
-              backdropFilter: 'blur(16px)',
-              borderRadius: '20px',
-              padding: '28px 32px',
-              border: '1px solid rgba(139, 92, 246, 0.25)',
-              marginBottom: '32px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-            }}
+          <motion.section
+            variants={stagger(0, 0.04)}
+            initial="hidden"
+            whileInView="visible"
+            viewport={inView}
+            className="mt-16"
           >
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '16px',
-            }}>
+            <motion.div variants={rise} className="flex flex-wrap items-end justify-between gap-5">
               <div>
-                <div style={{
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  color: '#a78bfa',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  marginBottom: '6px',
-                }}>
-                  Today's Plan
-                </div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: '#ffffff' }}>
-                  {dueCards.length > 0
-                    ? `${dueCards.length} card${dueCards.length === 1 ? '' : 's'} due for review`
-                    : 'All caught up — start a new focus session'}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-                  {loopStreak > 0 && (
-                    <div style={{
-                      backgroundColor: 'rgba(251, 191, 36, 0.12)',
-                      border: '1px solid rgba(251, 191, 36, 0.35)',
-                      borderRadius: '20px',
-                      padding: '4px 14px',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      color: '#fbbf24',
-                    }}>
-                      🔥 {loopStreak}-day streak
-                    </div>
+                <Eyebrow>Today&rsquo;s plan</Eyebrow>
+                <h2 className="mt-3 text-display-md font-display text-paper">
+                  {dueCards.length > 0 ? (
+                    <>
+                      <Numeral value={dueCards.length} className="text-display-md" />{' '}
+                      card{dueCards.length === 1 ? '' : 's'} due
+                    </>
+                  ) : (
+                    'All caught up'
                   )}
-                  {weeklyMomentum > 0 && (
-                    <div
-                      title={`Active ${weeklyMomentum} of the last 7 days`}
-                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                    >
-                      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
-                        <circle cx="16" cy="16" r="13" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
-                        <circle
-                          cx="16" cy="16" r="13" fill="none"
-                          stroke="#a78bfa" strokeWidth="4" strokeLinecap="round"
-                          strokeDasharray={`${(weeklyMomentum / 7) * 2 * Math.PI * 13} ${2 * Math.PI * 13}`}
-                          transform="rotate(-90 16 16)"
-                        />
-                      </svg>
-                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#a78bfa' }}>
-                        {weeklyMomentum}/7 days this week
-                      </span>
-                    </div>
-                  )}
-                </div>
+                </h2>
               </div>
-              <button
+              <MagneticButton
+                variant="quiet"
                 onClick={() => navigate(dueCards.length > 0 ? '/flashcards' : '/focus')}
-                style={{
-                  background: 'linear-gradient(90deg, #8b5cf6, #ec4899)',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '14px 28px',
-                  borderRadius: '12px',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 20px rgba(139, 92, 246, 0.3)',
-                }}
               >
                 {dueCards.length > 0 ? "Start today's loop" : 'Start focusing'}
-              </button>
-            </div>
+                <IconLead size={15} />
+              </MagneticButton>
+            </motion.div>
 
+            <motion.div variants={rise} className="mt-6">
+              <Rule />
+            </motion.div>
+
+            {/* Topic rows as a ruled table. Shared baselines make mastery
+                comparable at a glance; the previous pill cards did not align. */}
             {topicMastery.length > 0 && (
-              <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '12px',
-                marginTop: '20px',
-                paddingTop: '20px',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-              }}>
+              <div className="mt-2">
+                <div className="hidden grid-cols-12 gap-4 border-b border-line py-2.5 md:grid">
+                  {['Topic', 'Mastery', 'Trend', 'Exam'].map((h, i) => (
+                    <span
+                      key={h}
+                      className={`font-mono text-label uppercase text-paper-ghost ${
+                        ['col-span-5', 'col-span-3', 'col-span-2', 'col-span-2'][i]
+                      }`}
+                    >
+                      {h}
+                    </span>
+                  ))}
+                </div>
+
                 {topicMastery.slice(0, 6).map(({ topic, mastery, recallTrend }) => {
                   const examDays = daysUntilExam(topic.exam_date);
+                  const tone = masteryTone(mastery);
                   return (
-                    <div
+                    <motion.div
+                      variants={rise}
                       key={topic.id}
-                      style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
-                        borderRadius: '12px',
-                        padding: '12px 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '14px',
-                        minWidth: '220px',
-                      }}
+                      className="grid grid-cols-2 items-center gap-4 border-b border-line py-4
+                                 transition-colors duration-quick ease-mech hover:bg-ink-850 md:grid-cols-12"
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          color: '#ffffff',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}>
-                          {topic.name}
-                        </div>
-                        <div style={{
-                          fontSize: '12px',
-                          color: mastery >= 70 ? '#34d399' : mastery >= 40 ? '#fbbf24' : '#f87171',
-                          fontWeight: '600',
-                        }}>
-                          {mastery}% mastery
-                        </div>
+                      <div className="col-span-2 min-w-0 md:col-span-5">
+                        <div className="truncate text-[15px] font-medium text-paper">{topic.name}</div>
                         {examDays !== null && examDays >= 0 && (
-                          <div style={{
-                            fontSize: '11px',
-                            fontWeight: '600',
-                            marginTop: '2px',
-                            color: mastery >= 60 ? '#34d399' : '#f87171',
-                          }}>
-                            {examDays === 0 ? 'Exam today' : `${examDays} day${examDays === 1 ? '' : 's'} to exam`}
-                            {' · '}
-                            {mastery >= 60 ? 'on track' : 'behind'}
+                          <div className="mt-1 font-mono text-[11px] text-paper-faint">
+                            {examDays === 0 ? 'Exam today' : `T-minus ${examDays}d`}
+                            <span className="mx-1.5 text-paper-ghost">/</span>
+                            <span style={{ color: mastery >= 60 ? '#57D9A3' : '#FF5C46' }}>
+                              {mastery >= 60 ? 'on track' : 'behind'}
+                            </span>
                           </div>
                         )}
+                      </div>
+
+                      <div className="col-span-1 flex items-center gap-3 md:col-span-3">
+                        <MasteryMeter value={mastery} tone={tone} />
+                        <Numeral
+                          value={mastery}
+                          unit="%"
+                          tone={masteryToneName(mastery)}
+                          className="text-[13px]"
+                        />
+                      </div>
+
+                      <div className="col-span-1 md:col-span-2">
+                        <Sparkline values={recallTrend} tone={tone} />
+                      </div>
+
+                      <div className="col-span-2 md:col-span-2">
                         <input
                           type="date"
                           value={topic.exam_date || ''}
                           onChange={(e) => handleSetExamDate(topic.id, e.target.value)}
                           aria-label={`Exam date for ${topic.name}`}
                           title="Set exam date"
-                          style={{
-                            marginTop: '6px',
-                            backgroundColor: 'transparent',
-                            border: 'none',
-                            color: 'rgba(255, 255, 255, 0.35)',
-                            fontSize: '11px',
-                            fontFamily: 'inherit',
-                            padding: 0,
-                            cursor: 'pointer',
-                            colorScheme: 'dark',
-                          }}
+                          className="w-full cursor-pointer rounded-xs border border-transparent bg-transparent
+                                     px-1.5 py-1 font-mono text-[11px] text-paper-faint transition-colors
+                                     duration-quick ease-mech hover:border-line-strong hover:text-paper
+                                     [color-scheme:dark]"
                         />
                       </div>
-                      <Sparkline
-                        values={recallTrend}
-                        color={mastery >= 70 ? '#34d399' : mastery >= 40 ? '#fbbf24' : '#f87171'}
-                      />
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
             )}
-          </div>
+          </motion.section>
         )}
 
-        {/* Main Tools Grid - Single Row Layout */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-          {cards.map((card) => (
-            <div
-              key={card.id}
-              className="fade-in-up-delay-more"
-              style={{
-                backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                borderRadius: '20px',
-                padding: '32px',
-                border: '1px solid rgba(255, 255, 255, 0.05)',
-                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                cursor: 'pointer',
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.55)';
-                e.currentTarget.style.transform = 'translateY(-8px)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                e.currentTarget.style.boxShadow = `0 20px 64px rgba(${hexToRgb(card.neonColor)}, 0.3), 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1)`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.5)';
-              }}
-              onClick={() => {
-                if (!user) {
-                  navigate('/login');
-                  return;
-                }
-                navigate(`/${card.view}`);
-              }}
-            >
-              {/* Icon with internal glow */}
-              <div style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '12px',
-                background: `rgba(${hexToRgb(card.neonColor)}, 0.08)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '20px',
-                border: `1px solid rgba(${hexToRgb(card.neonColor)}, 0.15)`,
-                boxShadow: `inset 0 0 20px rgba(${hexToRgb(card.neonColor)}, 0.1)`,
-                position: 'relative',
-              }}>
-                <svg
-                  className={
-                    card.id === 'focus' ? 'icon-spin-slow' :
-                      card.id === 'blurting' ? 'icon-pulse-soft' :
-                        card.id === 'feynman' ? 'icon-float' :
-                          card.id === 'flashcards' ? 'icon-breathe' : ''
-                  }
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    stroke: card.neonColor,
-                    fill: 'none',
-                    strokeWidth: '2',
-                    filter: `drop-shadow(0 0 8px rgba(${hexToRgb(card.neonColor)}, 0.4))`,
-                  }}
-                  viewBox="0 0 24 24"
+        {/* ------------------------------------------------------ modes --- */}
+        <motion.section
+          variants={stagger(0, 0.05)}
+          initial="hidden"
+          whileInView="visible"
+          viewport={inView}
+          className="mt-16 md:mt-20"
+        >
+          <motion.div variants={rise}>
+            <Eyebrow>The loop</Eyebrow>
+          </motion.div>
+
+          {/* Asymmetric by importance rather than a uniform 4-up grid. */}
+          <div className="mt-6 grid grid-cols-1 gap-px bg-line sm:grid-cols-2 lg:grid-cols-3">
+            {modes.map((mode) => {
+              const last = formatTimeAgo(getLastActivityAt(mode.id));
+              return (
+                <motion.div
+                  key={mode.id}
+                  variants={rise}
+                  className={mode.span ? 'lg:col-span-3' : ''}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d={card.icon} />
-                </svg>
-              </div>
+                  <Panel
+                    interactive
+                    tilt={!mode.span}
+                    onClick={() => go(mode.view)}
+                    className={`group flex h-full flex-col p-7 md:p-8 ${
+                      mode.span ? 'lg:flex-row lg:items-center lg:justify-between lg:gap-10' : ''
+                    }`}
+                  >
+                    <div className={mode.span ? 'lg:max-w-[52%]' : ''}>
+                      <div className="flex items-center justify-between gap-4">
+                        <IconFrame>
+                          <mode.Icon size={22} />
+                        </IconFrame>
+                        <span className="font-mono text-label text-paper-ghost">{mode.index}</span>
+                      </div>
 
-              <h2 style={{
-                fontSize: '24px',
-                fontWeight: '600',
-                color: '#ffffff',
-                marginBottom: '12px',
-                letterSpacing: '-0.02em',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                {card.title}
-              </h2>
-              <p style={{
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.55)',
-                lineHeight: '1.6',
-                marginBottom: '20px',
-                fontWeight: '400',
-                flex: 1,
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-              }}>
-                {card.description}
-              </p>
+                      <h3 className="mt-6 text-display-sm font-display text-paper">{mode.title}</h3>
+                      <p className="mt-2.5 max-w-[42ch] text-sm leading-relaxed text-paper-muted">
+                        {mode.description}
+                      </p>
+                    </div>
 
-              {/* Last Used Label - omitted for features that record no history */}
-              {formatTimeAgo(getLastActivityAt(card.id)) && (
-                <div style={{
-                  fontSize: '11px',
-                  color: 'rgba(255, 255, 255, 0.35)',
-                  marginBottom: '16px',
-                  fontWeight: '400',
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                }}>
-                  Last session: {formatTimeAgo(getLastActivityAt(card.id))}
-                </div>
-              )}
+                    <div
+                      className={`mt-7 flex items-center justify-between gap-6 ${
+                        mode.span ? 'lg:mt-0 lg:shrink-0' : ''
+                      }`}
+                    >
+                      <span className="font-mono text-[11px] text-paper-ghost">
+                        {last ? `Last ${last}` : 'Not started'}
+                      </span>
+                      {/* The arrow is the affordance; the whole panel is the
+                          hit target, so this is a cue rather than a button. */}
+                      <span
+                        className="inline-flex items-center gap-2 font-mono text-label uppercase
+                                   text-paper-faint transition-all duration-quick ease-mech
+                                   group-hover:gap-3 group-hover:text-signal"
+                      >
+                        {user ? 'Open' : 'Sign in'}
+                        <IconLead size={15} />
+                      </span>
+                    </div>
+                  </Panel>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.section>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!user) {
-                    navigate('/login');
-                    return;
-                  }
-                  navigate(`/${card.view}`);
-                }}
-                style={{
-                  background: `linear-gradient(135deg, ${card.gradient[0]}, ${card.gradient[1]})`,
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '14px 28px',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  width: '100%',
-                  boxShadow: `0 4px 20px rgba(${hexToRgb(card.gradient[0])}, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
-                  letterSpacing: '-0.01em',
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = `0 8px 32px rgba(${hexToRgb(card.gradient[0])}, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15)`;
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = `0 4px 20px rgba(${hexToRgb(card.gradient[0])}, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1)`;
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                {user ? 'Start' : 'Sign in to use'}
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <footer style={{
-          maxWidth: '80rem',
-          margin: '64px auto 0',
-          padding: '24px 0',
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          fontSize: '13px',
-          color: 'rgba(255, 255, 255, 0.4)',
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-        }}>
-          <div>© {new Date().getFullYear()} MindFlow</div>
-          <div style={{ display: 'flex', gap: '20px' }}>
-            <a href="/about" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>About</a>
-            <a href="/privacy" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Privacy</a>
-            <a href="/terms" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Terms</a>
-            <a href="mailto:hannajohn37@gmail.com" style={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'none' }}>Contact</a>
+        {/* ----------------------------------------------------- footer --- */}
+        <footer className="mt-20 border-t border-line pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <span className="font-mono text-[11px] text-paper-ghost">
+              © {new Date().getFullYear()} MindFlow
+            </span>
+            <nav className="flex flex-wrap gap-6">
+              {[
+                ['About', '/about'],
+                ['Privacy', '/privacy'],
+                ['Terms', '/terms'],
+                ['Contact', 'mailto:hannajohn37@gmail.com'],
+              ].map(([label, href]) => (
+                <a
+                  key={label}
+                  href={href}
+                  className="font-mono text-[11px] uppercase tracking-[0.14em] text-paper-faint
+                             transition-colors duration-quick ease-mech hover:text-paper"
+                >
+                  {label}
+                </a>
+              ))}
+            </nav>
           </div>
         </footer>
-
       </div>
     </div>
   );
