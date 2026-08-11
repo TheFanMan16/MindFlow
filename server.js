@@ -182,7 +182,20 @@ app.use(cors({
 // Health check for uptime monitors and keep-warm pings (UptimeRobot / cron).
 // Registered before the rate limiters so pings never consume request quota.
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    // Deploy readiness. These are the variables with a working fallback, so a
+    // missing one fails silently rather than stopping the server - APP_BASE_URL
+    // in particular just redirects paying customers to localhost. Booleans
+    // only, never values, so a misconfigured deploy is diagnosable from outside
+    // without publishing the configuration itself.
+    config: {
+      appBaseUrl: Boolean(process.env.APP_BASE_URL),
+      allowedOrigins: Boolean(process.env.ALLOWED_ORIGINS),
+      vercelPreviewScope: Boolean(process.env.VERCEL_PREVIEW_SCOPE),
+    },
+  });
 });
 
 // Rate Limiting: General limit for all routes (100 requests per 15 minutes)
