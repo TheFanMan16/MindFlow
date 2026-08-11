@@ -2,14 +2,11 @@
  * Token-purity lint: hardcoded hex colors are only legal in
  * src/styles/tokens.css.
  *
- * Two tiers, because the migration is staged:
- * - STRICT (exit 1 on any violation): the new foundation - src/styles,
- *   src/motion, src/components/ui, src/components/icons, the styleguide.
- *   These were born token-pure and must stay that way.
- * - BASELINE (report, don't fail): everything else. The audit counted 414
- *   hex literals across 32 legacy files; each page restyle in prompt 2
- *   drives this number down, and its strict list grows file by file until
- *   the baseline is zero and the tiers collapse into one.
+ * The migration is COMPLETE, so the whole of src/ is strict: any hex literal
+ * outside tokens.css fails the run. One documented allowance exists -
+ * third-party brand marks keep their official colors (the Google "G" in the
+ * OAuth button). The allowance is an exact count, so adding a fifth hex to
+ * that file still fails.
  *
  * Run: npm run lint:colors
  */
@@ -19,19 +16,14 @@ import { join, relative, sep } from 'node:path';
 const ROOT = process.cwd();
 const SRC = join(ROOT, 'src');
 
-const STRICT = [
-  'src/styles',
-  'src/motion',
-  'src/components/ui',
-  'src/components/icons',
-  'src/pages/DesignSystem.jsx',
-];
-
 const EXEMPT = ['src/styles/tokens.css'];
 
-// Hex color literal. The '#000' inside surface-architectural's mask-image is
-// a mask alpha stop, not a paint color, but it is still a literal - keep the
-// rule simple and let tokens.css be the only exemption.
+/** file -> exact number of permitted hex literals, with a reason. */
+const BRAND_MARK_ALLOWANCE = {
+  // Google's official "G" fills. A third-party mark keeps its identity.
+  'src/pages/Login.jsx': 4,
+};
+
 const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 // Test files may assert on literal values; they do not ship.
 const SKIP_FILE = /\.test\.(js|jsx)$/;
@@ -48,30 +40,24 @@ const walk = (dir, out = []) => {
 
 const rel = (p) => relative(ROOT, p).split(sep).join('/');
 
-const strictViolations = [];
-const baseline = [];
+const violations = [];
 
 for (const file of walk(SRC)) {
   const r = rel(file);
   if (EXEMPT.includes(r) || SKIP_FILE.test(r)) continue;
-  const matches = readFileSync(file, 'utf8').match(HEX);
-  if (!matches) continue;
-  const inStrict = STRICT.some((s) => r === s || r.startsWith(s + '/'));
-  (inStrict ? strictViolations : baseline).push({ file: r, count: matches.length });
-}
-
-if (baseline.length > 0) {
-  const total = baseline.reduce((sum, b) => sum + b.count, 0);
-  console.log(`baseline (legacy pages awaiting restyle): ${total} hex literals in ${baseline.length} files`);
-  for (const b of baseline.sort((a, z) => z.count - a.count).slice(0, 8)) {
-    console.log(`  ${b.file}: ${b.count}`);
+  const matches = readFileSync(file, 'utf8').match(HEX) || [];
+  const allowed = BRAND_MARK_ALLOWANCE[r] ?? 0;
+  if (matches.length > allowed) {
+    violations.push({ file: r, count: matches.length, allowed });
   }
 }
 
-if (strictViolations.length > 0) {
-  console.error('\nFAIL - hex colors in token-pure directories (tokens.css is the only legal home):');
-  for (const v of strictViolations) console.error(`  ${v.file}: ${v.count}`);
+if (violations.length > 0) {
+  console.error('FAIL - hex colors outside tokens.css:');
+  for (const v of violations) {
+    console.error(`  ${v.file}: ${v.count}${v.allowed ? ` (allowance ${v.allowed})` : ''}`);
+  }
   process.exit(1);
 }
 
-console.log('\nOK - foundation is token-pure.');
+console.log('OK - src/ is token-pure (brand-mark allowance: Login.jsx x4).');

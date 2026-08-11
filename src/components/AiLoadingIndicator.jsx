@@ -14,7 +14,7 @@ const ROTATE_INTERVAL_MS = 3000;
  *   orange=Feynman, green=Flashcards)
  * @param {() => void} [onCancel]
  */
-const AiLoadingIndicator = ({ messages, accent = '#a855f7', onCancel }) => {
+const AiLoadingIndicator = ({ messages, accent = 'var(--accent)', onCancel }) => {
   const [messageIndex, setMessageIndex] = useState(0);
   const [showColdStartNotice, setShowColdStartNotice] = useState(false);
 

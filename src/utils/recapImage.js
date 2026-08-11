@@ -16,10 +16,16 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+/** Resolve a design token at call time - the card must match the app's
+ * brand without this file carrying color literals of its own. */
+function token(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 function scoreColor(score) {
-  if (score >= 80) return '#34d399';
-  if (score >= 50) return '#fbbf24';
-  return '#f87171';
+  if (score >= 80) return token('--success');
+  if (score >= 50) return token('--warning');
+  return token('--danger');
 }
 
 /**
@@ -39,20 +45,14 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
   canvas.height = H;
   const ctx = canvas.getContext('2d');
   const font = (weight, size) =>
-    `${weight} ${size}px Inter, -apple-system, "Segoe UI", system-ui, sans-serif`;
+    `${weight} ${size}px Geist, -apple-system, "Segoe UI", system-ui, sans-serif`;
 
-  // Background: deep navy with a soft purple glow top-right
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#0b0b14');
-  bg.addColorStop(1, '#161028');
-  ctx.fillStyle = bg;
+  // Flat brand ground - no gradient, no glow.
+  ctx.fillStyle = token('--bg-base');
   ctx.fillRect(0, 0, W, H);
-
-  const glow = ctx.createRadialGradient(W * 0.85, H * 0.12, 0, W * 0.85, H * 0.12, 700);
-  glow.addColorStop(0, 'rgba(139, 92, 246, 0.35)');
-  glow.addColorStop(1, 'rgba(139, 92, 246, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, W, H);
+  // A single measured accent rule under the brand block.
+  ctx.fillStyle = token('--accent');
+  ctx.fillRect(W / 2 - 90, 340, 180, 6);
 
   ctx.textAlign = 'center';
 
@@ -66,7 +66,7 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
 
   // Topic
   if (topicName) {
-    ctx.fillStyle = '#a78bfa';
+    ctx.fillStyle = token('--accent');
     ctx.font = font(600, 56);
     const label = topicName.length > 26 ? `${topicName.slice(0, 25)}…` : topicName;
     ctx.fillText(label, W / 2, 470);
@@ -87,7 +87,7 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
   ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * Math.max(0, Math.min(100, score))) / 100);
   ctx.stroke();
 
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = token('--text-primary');
   ctx.font = font(700, 220);
   ctx.fillText(String(Math.round(score)), cx, cy + 60);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
