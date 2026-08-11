@@ -1,0 +1,81 @@
+/**
+ * MindFlow design tokens - the single source of truth for color, radius,
+ * shadow and font stacks. Tailwind mirrors these variables in
+ * tailwind.config.js; components consume Tailwind classes (or var() refs in
+ * the rare inline-style case) and NEVER hardcode a color. scripts/
+ * check-colors.mjs enforces that for the foundation directories.
+ *
+ * Direction: Linear/Vercel/Raycast-grade discipline. One neutral ramp, one
+ * accent, semantic status colors, and feature hues that survive only as 8%
+ * tints for icons and badges - never as fills, never as glows.
+ *
+ * The app is deliberately single-theme (near-black). That is a product
+ * decision, not an omission - there is no light mode to mirror.
+ */
+:root {
+  /* --------------------------------------------------------- surfaces -- */
+  --bg-base: #08090A;      /* app background */
+  --bg-subtle: #0E0F11;    /* raised surfaces: cards, sidebar */
+  --bg-elevated: #16181B;  /* modals, popovers, hover states */
+
+  /* ---------------------------------------------------------- borders -- */
+  --border-soft: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  /* ------------------------------------------------------------- text -- */
+  --text-primary: #EDEEF0;   /* 17.0:1 on --bg-base */
+  --text-secondary: #8A8F98; /*  7.0:1 on --bg-base */
+  /* 3.10:1 on --bg-base: FAILS WCAG AA for essential text. Reserved for
+     decorative/disabled/duplicated content only (ghosted numerals, disabled
+     labels, icons that repeat an adjacent label). Anything a user must read
+     uses secondary (6.13:1) or better. */
+  --text-tertiary: #5A5F66;
+
+  /* ----------------------------------------------------------- accent -- */
+  /* The ONE brand accent. Primary CTA, active nav, focus rings, key numbers.
+     If a second accent appears anywhere, that is a bug. */
+  --accent: #6E79FF;
+  --accent-hover: #828CFF;
+  --accent-ring: rgba(110, 121, 255, 0.4);   /* focus rings */
+  --accent-wash: rgba(110, 121, 255, 0.10);  /* selected/active fills */
+  --accent-line: rgba(110, 121, 255, 0.32);  /* accent-tinted borders */
+  /* Label color on an accent fill. Near-black, not white: the dark label on
+     the accent measures 5.54:1 (passes AA); white measures 3.59:1 (fails). */
+  --on-accent: #08090A;
+
+  /* ----------------------------------------------------------- status -- */
+  --success: #4CC38A;
+  --danger: #F2555A;
+  --warning: #F2A85C;
+  --success-wash: rgba(76, 195, 138, 0.08);
+  --danger-wash: rgba(242, 85, 90, 0.08);
+  --warning-wash: rgba(242, 168, 92, 0.08);
+  --danger-line: rgba(242, 85, 90, 0.32);
+
+  /* -------------------------------------------------- feature identity -- */
+  /* Desaturated feature hues. Allowed ONLY as icon/badge tints on their 8%
+     wash - never button fills, never glows, never headings. */
+  --tint-focus: #7AA7FF;
+  --tint-recall: #B08CFF;
+  --tint-feynman: #F2A85C;
+  --tint-flashcards: #4CC38A;
+  --tint-focus-wash: rgba(122, 167, 255, 0.08);
+  --tint-recall-wash: rgba(176, 140, 255, 0.08);
+  --tint-feynman-wash: rgba(242, 168, 92, 0.08);
+  --tint-flashcards-wash: rgba(76, 195, 138, 0.08);
+
+  /* ------------------------------------------------------------ shape -- */
+  /* 4px grid. Three radii, by surface class - not per-component whim. */
+  --radius-input: 6px;   /* inputs, buttons, small controls */
+  --radius-card: 10px;   /* cards, panels */
+  --radius-modal: 16px;  /* modals, large popovers */
+
+  /* ---------------------------------------------------------- shadows -- */
+  /* The ONLY shadow in the system. Cards elevate by border+background
+     change, never by shadow. */
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+  /* ------------------------------------------------------------ fonts -- */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace;
+}

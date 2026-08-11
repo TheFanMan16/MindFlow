@@ -334,14 +334,11 @@ const Dashboard = () => {
 
   return (
     <div className="surface-architectural min-h-full w-full">
-      {/* Off-axis accent bloom. Centred glows read as the default hero orb. */}
-      <div className="bloom-signal" aria-hidden="true" />
-
       <div className="relative z-[1] mx-auto w-full max-w-[1240px] px-5 py-8 md:px-10 md:py-12">
         {/* ---------------------------------------------------- masthead -- */}
         <motion.div variants={stagger(0, 0.05)} initial="hidden" animate="visible">
           <motion.div variants={rise} className="flex flex-wrap items-center justify-between gap-4">
-            <Eyebrow>Mindflow / Dashboard</Eyebrow>
+            <Eyebrow>MindFlow / Dashboard</Eyebrow>
             <div className="flex items-center gap-5">
               <span className="font-mono text-micro text-paper-faint">
                 {new Date().toLocaleDateString('en-GB', {

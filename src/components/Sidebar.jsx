@@ -55,7 +55,8 @@ const Sidebar = () => {
   const localPart = rawEmail ? (rawEmail.split('@')[0] || rawEmail) : '';
   const cleanedName = localPart ? localPart.replace(/\d+/g, '') : '';
 
-  // Hex map for colors (used for neon glow)
+  // Per-mode icon tint (flat color only - migrates to the feature tint
+  // tokens when this component restyles)
   const modeToHex = {
     dashboard: '#818cf8', // indigo
     timer: '#60a5fa', // blue
@@ -131,10 +132,8 @@ const Sidebar = () => {
         right: 0,
         zIndex: 40,
         display: 'flex',
-        backgroundColor: 'rgba(17, 24, 39, 0.95)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'var(--bg-subtle)',
+        borderTop: '1px solid var(--border-soft)',
         padding: '6px 4px calc(6px + env(safe-area-inset-bottom))',
       }}>
         {tabs.map((item) => {
@@ -164,7 +163,6 @@ const Sidebar = () => {
                   size={22}
                   style={{
                     color: isActive ? itemHex : 'rgba(255, 255, 255, 0.6)',
-                    filter: isActive ? `drop-shadow(0 0 8px ${itemHex})` : 'none',
                   }}
                 />
               ) : (
@@ -175,7 +173,6 @@ const Sidebar = () => {
                     stroke: isActive ? itemHex : 'rgba(255, 255, 255, 0.6)',
                     fill: 'none',
                     strokeWidth: '2',
-                    filter: isActive ? `drop-shadow(0 0 8px ${itemHex})` : 'none',
                   }}
                   viewBox="0 0 24 24"
                 >
@@ -203,9 +200,8 @@ const Sidebar = () => {
   return (
     <div style={{
       width: '96px',
-      backgroundColor: 'rgba(17, 24, 39, 0.5)',
-      backdropFilter: 'blur(24px)',
-      borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+      backgroundColor: 'var(--bg-subtle)',
+      borderRight: '1px solid var(--border-soft)',
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
@@ -215,13 +211,12 @@ const Sidebar = () => {
       zIndex: 10,
       gap: '8px',
     }}>
-      {/* Logo Section - Neon Glass (reference) */}
+      {/* Logo */}
       <div className="flex flex-col items-center justify-center py-6 w-full">
         <Lightbulb
           size={45}
           style={{
             color: activeColorHex,
-            filter: `drop-shadow(0 0 10px ${activeColorHex}) drop-shadow(0 0 20px ${activeColorHex})`,
           }}
         />
         <span style={{
@@ -229,7 +224,6 @@ const Sidebar = () => {
           fontWeight: 700,
           fontSize: 12,
           marginTop: 8,
-          textShadow: `0 0 10px ${activeColorHex}`,
           lineHeight: 1,
           letterSpacing: '-0.02em'
         }}>
@@ -284,7 +278,6 @@ const Sidebar = () => {
                 borderRadius: 999,
                 backgroundColor: isActive ? itemBg : 'transparent',
                 boxSizing: 'border-box',
-                filter: isActive ? ('drop-shadow(0 0 12px ' + itemHex + ')') : 'none',
                 border: 'none'
               }}>
                 <svg
