@@ -19,7 +19,9 @@ const UpgradeModal = ({ isOpen, onClose, message }) => {
   const navigate = useNavigate();
 
   return (
-    <Modal open={isOpen} onClose={onClose}>
+    // aria-label names the dialog for screen readers; the visible heading
+    // inside stays the visual title.
+    <Modal open={isOpen} onClose={onClose} aria-label="Upgrade to MindFlow Pro">
       <div className="flex flex-col gap-4 py-2">
         <div>
           <Badge variant="accent">Pro</Badge>

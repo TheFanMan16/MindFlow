@@ -138,12 +138,22 @@ const FlashcardDashboard = () => {
       }
     };
 
+    // Menus promise role="menu" semantics, so Escape must dismiss them too.
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setActiveMenuId(null);
+        setActiveFolderMenuId(null);
+      }
+    };
+
     if (activeMenuId || activeFolderMenuId) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
     };
   }, [activeMenuId, activeFolderMenuId]);
 

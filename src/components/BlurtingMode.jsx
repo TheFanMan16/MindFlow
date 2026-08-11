@@ -447,8 +447,18 @@ ${sourceText.slice(0, 6000)}`;
       const isMatch = cleanWord && cleanWord.length > 0 && attemptWords.has(cleanWord);
       const color = isMatch ? 'var(--success)' : 'var(--danger)'; // Green for match, red for missing
 
+      // Missed words carry an underline as well as the color - color alone
+      // fails WCAG 1.4.1 for colorblind readers.
       return (
-        <span key={index} style={{ color, fontWeight: isMatch ? '400' : '500' }}>
+        <span
+          key={index}
+          style={{
+            color,
+            fontWeight: isMatch ? '400' : '500',
+            textDecoration: isMatch ? 'none' : 'underline',
+            textUnderlineOffset: '3px',
+          }}
+        >
           {word}
         </span>
       );

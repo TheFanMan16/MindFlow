@@ -38,14 +38,14 @@ const DesignSystem = import.meta.env.DEV ? lazy(() => import('./pages/DesignSyst
 /** Shown while a route chunk is in flight. Mirrors the session-loading state. */
 const RouteFallback = () => (
   <div className="flex h-full w-full items-center justify-center py-20">
-    <div className="w-10 h-10 border-4 border-white/10 border-t-purple-500 rounded-full animate-spin" />
+    <div className="w-10 h-10 rounded-pill border-4 border-soft border-t-accent animate-spin motion-reduce:animate-none" />
   </div>
 );
 
 // Guest Layout (No Sidebar)
 const GuestLayout = ({ children }) => {
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
+    <div className="flex h-screen w-screen bg-base text-primary overflow-hidden">
       <main className="flex-1 h-full overflow-y-auto overflow-x-hidden relative">
         {children}
       </main>
@@ -57,7 +57,7 @@ const GuestLayout = ({ children }) => {
 const MainLayout = ({ children }) => {
   return (
     <ProfileProvider>
-      <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
+      <div className="flex h-screen w-screen bg-base text-primary overflow-hidden">
         <Sidebar />
         {/* pb-24 clears the mobile bottom tab bar; the bar hides at sm, where
             the side rail takes over, so the clearance hides with it */}
@@ -278,10 +278,10 @@ function App() {
   // Show loading state while checking session (but allow UpdatePassword and AuthCallback to render)
   if (loading && !isUpdatePasswordRoute && !isAuthCallbackRoute && !isPasswordRecovery) {
     return (
-      <div className="flex h-screen w-screen bg-slate-950 text-white items-center justify-center">
+      <div className="flex h-screen w-screen bg-base text-primary items-center justify-center">
         <div className="flex flex-col items-center gap-6">
-          <div className="w-12 h-12 border-4 border-white/10 border-t-purple-500 rounded-full animate-spin" />
-          <div className="text-slate-400 text-lg">Loading...</div>
+          <div className="w-12 h-12 rounded-pill border-4 border-soft border-t-accent animate-spin motion-reduce:animate-none" />
+          <div className="text-secondary text-lg">Loading...</div>
         </div>
       </div>
     );
@@ -291,14 +291,14 @@ function App() {
   // This is necessary for password recovery flow - allows it even WITH a recovery session
   if (isUpdatePasswordRoute || isPasswordRecovery) {
     return (
-      <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
+      <div className="flex h-screen w-screen bg-base text-primary overflow-hidden">
         <AppToaster />
         <Routes>
           {/* PUBLIC ROUTE: Update Password - accessible without authentication for password recovery */}
           <Route
             path="/update-password"
             element={
-              <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden items-center justify-center">
+              <div className="flex h-full w-full bg-base text-primary overflow-hidden items-center justify-center">
                 <UpdatePassword />
               </div>
             }
@@ -313,7 +313,7 @@ function App() {
   // If we're on auth/callback route, render AuthCallback (public route for OAuth)
   if (isAuthCallbackRoute) {
     return (
-      <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
+      <div className="flex h-screen w-screen bg-base text-primary overflow-hidden">
         <AppToaster />
         <Routes>
           {/* PUBLIC ROUTE: Auth Callback - accessible without authentication for OAuth callback */}
@@ -329,7 +329,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
+    <div className="flex h-screen w-screen bg-base text-primary overflow-hidden">
       {/* Mini Timer - Global timer display */}
       <MiniTimer />
 
@@ -361,7 +361,7 @@ function App() {
         <Route
           path="/update-password"
           element={
-            <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden items-center justify-center">
+            <div className="flex h-full w-full bg-base text-primary overflow-hidden items-center justify-center">
               <UpdatePassword />
             </div>
           }
@@ -458,7 +458,7 @@ function App() {
         <Route
           path="/study"
           element={
-            <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden">
+            <div className="flex h-full w-full bg-base text-primary overflow-hidden">
               <StudyInterface />
             </div>
           }
@@ -482,7 +482,7 @@ function App() {
         <Route
           path="/success"
           element={
-            <div className="flex h-full w-full bg-slate-950 text-white overflow-hidden items-center justify-center">
+            <div className="flex h-full w-full bg-base text-primary overflow-hidden items-center justify-center">
               <Success />
             </div>
           }

@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { saveGeneratedDeck } from '../utils/deckUtils';
-import { Sparkles, FileText, X, Pencil, Download, Bookmark } from 'lucide-react';
+import { Sparkles, FileText, X, Pencil, Download, Bookmark, Lock } from 'lucide-react';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
@@ -333,7 +333,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
               color: 'var(--text-primary)',
               border: '1px solid var(--danger-line)',
             },
-            icon: '🔒',
+            icon: <Lock size={16} strokeWidth={1.5} />,
           });
           setError('You have used your 3 free PDF upload credits this month. Upgrade to Pro for unlimited study.');
         } else {

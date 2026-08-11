@@ -408,6 +408,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
       switch (e.key) {
         case ' ': // Spacebar - Flip card
+        case 'Enter': // role="button" contract: Enter must activate too
           e.preventDefault();
           if (!sessionComplete && flashcards.length > 0) {
             setIsFlipped(prev => !prev);

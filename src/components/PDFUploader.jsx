@@ -218,7 +218,7 @@ const PDFUploader = ({ onTextExtracted }) => {
 
       {isProcessing ? (
         <>
-          <Loader2 className="mb-4 h-10 w-10 animate-spin text-accent" strokeWidth={1.5} aria-hidden="true" />
+          <Loader2 className="mb-4 h-10 w-10 animate-spin text-accent motion-reduce:animate-none" strokeWidth={1.5} aria-hidden="true" />
           <div className="text-body text-secondary">Extracting text from PDF...</div>
         </>
       ) : (

@@ -13,6 +13,8 @@ import {
   ArrowRight,
   AlertTriangle,
   Video,
+  Shield,
+  Eye,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTimer } from '../context/TimerContext';
@@ -873,10 +875,10 @@ const TimerMode = () => {
         const totalAway = distractions.reduce((sum, s) => sum + s, 0);
         toast(
           `Focus report: ${distractions.length} distraction${distractions.length === 1 ? '' : 's'}, ${totalAway}s away in total.`,
-          { icon: '🛡️', duration: 8000 }
+          { icon: <Shield size={16} strokeWidth={1.5} />, duration: 8000 }
         );
       } else if (isSentryActive) {
-        toast('Focus report: zero distractions. Locked in.', { icon: '🛡️', duration: 6000 });
+        toast('Focus report: zero distractions. Locked in.', { icon: <Shield size={16} strokeWidth={1.5} />, duration: 6000 });
       }
       distractionsRef.current = [];
 
@@ -954,7 +956,7 @@ const TimerMode = () => {
           if (awaySeconds > 0) {
             distractionsRef.current.push(awaySeconds);
             toast(`You left for ${awaySeconds} second${awaySeconds === 1 ? '' : 's'}.`, {
-              icon: '👀',
+              icon: <Eye size={16} strokeWidth={1.5} />,
               duration: 4000,
             });
           }
