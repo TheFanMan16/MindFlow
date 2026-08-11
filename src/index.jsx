@@ -6,6 +6,7 @@ import './config/api.js';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { MotionConfig } from 'framer-motion';
 import './index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -73,13 +74,20 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
-        <AuthProvider>
-          <TimerProvider>
-            <App />
-          </TimerProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      {/* Systemic reduced-motion floor for JS-driven animation: framer
+          disables transform/layout animations app-wide when the OS asks for
+          reduced motion, so a future ungated animation degrades instead of
+          shipping at full motion. Components still gate individually for
+          their bespoke fallbacks (crossfades, static renders). */}
+      <MotionConfig reducedMotion="user">
+        <BrowserRouter>
+          <AuthProvider>
+            <TimerProvider>
+              <App />
+            </TimerProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </MotionConfig>
     </ErrorBoundary>
   </React.StrictMode>
 );

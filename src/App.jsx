@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { AppToaster } from './components/ui';
+import { AnimatePresence, PageTransition } from './motion';
 import { supabase } from './lib/supabaseClient';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
@@ -28,6 +29,10 @@ const Success = lazy(() => import('./pages/Success'));
 const PrivacyPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.PrivacyPage })));
 const TermsPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.TermsPage })));
 const AboutPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.AboutPage })));
+
+// Living styleguide, dev only. import.meta.env.DEV is statically false in a
+// production build, so both the route and the chunk are eliminated from it.
+const DesignSystem = import.meta.env.DEV ? lazy(() => import('./pages/DesignSystem')) : null;
 
 /** Shown while a route chunk is in flight. Mirrors the session-loading state. */
 const RouteFallback = () => (
@@ -285,30 +290,7 @@ function App() {
   if (isUpdatePasswordRoute || isPasswordRecovery) {
     return (
       <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            style: {
-              background: '#1f2937',
-              color: '#ffffff',
-              border: '1px solid rgba(55, 65, 81, 0.5)',
-              borderRadius: '12px',
-              padding: '16px',
-            },
-            success: {
-              iconTheme: {
-                primary: '#22c55e',
-                secondary: '#ffffff',
-              },
-            },
-            error: {
-              iconTheme: {
-                primary: '#ef4444',
-                secondary: '#ffffff',
-              },
-            },
-          }}
-        />
+        <AppToaster />
         <Routes>
           {/* PUBLIC ROUTE: Update Password - accessible without authentication for password recovery */}
           <Route
@@ -330,30 +312,7 @@ function App() {
   if (isAuthCallbackRoute) {
     return (
       <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            style: {
-              background: '#1f2937',
-              color: '#ffffff',
-              border: '1px solid rgba(55, 65, 81, 0.5)',
-              borderRadius: '12px',
-              padding: '16px',
-            },
-            success: {
-              iconTheme: {
-                primary: '#22c55e',
-                secondary: '#ffffff',
-              },
-            },
-            error: {
-              iconTheme: {
-                primary: '#ef4444',
-                secondary: '#ffffff',
-              },
-            },
-          }}
-        />
+        <AppToaster />
         <Routes>
           {/* PUBLIC ROUTE: Auth Callback - accessible without authentication for OAuth callback */}
           <Route
@@ -378,35 +337,20 @@ function App() {
       )}
 
       {/* Global Toast Notifications */}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: '#1f2937', // gray-800
-            color: '#ffffff',
-            border: '1px solid rgba(55, 65, 81, 0.5)', // gray-700
-            borderRadius: '12px',
-            padding: '16px',
-          },
-          success: {
-            iconTheme: {
-              primary: '#22c55e', // green-500
-              secondary: '#ffffff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#ef4444', // red-500
-              secondary: '#ffffff',
-            },
-          },
-        }}
-      />
+      <AppToaster />
+      {/* Route transitions: exit is a 120ms fade-down, enter rides the
+          entrance spring. mode="wait" sequences them; initial={false} stops
+          the first paint from double-animating pages that choreograph their
+          own entrances. Routes must receive this location so the exiting
+          tree keeps rendering the old route during its exit. */}
+      <AnimatePresence mode="wait" initial={false}>
+      <PageTransition key={location.pathname}>
       {/* Outer boundary for routes that render outside MainLayout. */}
       <Suspense fallback={<RouteFallback />}>
-      <Routes>
+      <Routes location={location}>
         {/* PUBLIC ROUTE: Login */}
         <Route path="/login" element={<Login />} />
+        {DesignSystem ? <Route path="/design" element={<DesignSystem />} /> : null}
 
         {/* PUBLIC ROUTE: Update Password (accessible without session for password recovery) */}
         <Route
@@ -550,6 +494,8 @@ function App() {
         />
       </Routes>
       </Suspense>
+      </PageTransition>
+      </AnimatePresence>
     </div>
   );
 }
