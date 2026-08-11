@@ -10,6 +10,7 @@ import AuthCallback from './pages/AuthCallback';
 import NotFound from './pages/NotFound';
 import SentryModal from './components/SentryModal';
 import MiniTimer from './components/MiniTimer';
+import CommandPalette from './components/CommandPalette';
 import { useAuth } from './context/AuthContext';
 import { ProfileProvider } from './context/ProfileContext';
 
@@ -58,8 +59,9 @@ const MainLayout = ({ children }) => {
     <ProfileProvider>
       <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
         <Sidebar />
-        {/* pb-24 clears the mobile bottom tab bar; md+ has the side rail instead */}
-        <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-4 pb-24 md:p-6 relative">
+        {/* pb-24 clears the mobile bottom tab bar; the bar hides at sm, where
+            the side rail takes over, so the clearance hides with it */}
+        <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-4 pb-24 sm:pb-4 md:p-6 relative">
           {/* Inner boundary so a route chunk loads without unmounting the
               sidebar - React resolves to the nearest Suspense ancestor. */}
           <Suspense fallback={<RouteFallback />}>{children}</Suspense>
@@ -330,6 +332,9 @@ function App() {
     <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden">
       {/* Mini Timer - Global timer display */}
       <MiniTimer />
+
+      {/* Cmd/Ctrl+K command palette - the shell's fastest way anywhere */}
+      <CommandPalette />
 
       {/* Sentry Modal - Global overlay */}
       {sentryTriggered && (

@@ -58,94 +58,12 @@
     flex-direction: column;
   }
 
-  /* Used by TimerMode's inline animation styles (audit-verified). These two
-     keyframes migrate into the motion library when TimerMode restyles. */
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-  }
-
-  @keyframes slideInDown {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-}
-
-/* ==========================================================================
-   DEPRECATED - surfaces from the previous direction, referenced only by
-   Dashboard and ui/legacy.jsx. Deleted when those restyle in prompt 2.
-   ========================================================================== */
-
-@layer components {
-  .surface-architectural {
-    position: relative;
-    background-color: var(--bg-base);
-    isolation: isolate;
-  }
-
-  .surface-architectural::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -2;
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.016) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.016) 1px, transparent 1px);
-    background-size: 72px 72px;
-    -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 78%);
-    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 78%);
-    pointer-events: none;
-  }
-
-  .bracket {
-    position: relative;
-  }
-  .bracket::before,
-  .bracket::after {
-    content: '';
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    border-color: var(--border-strong);
-    border-style: solid;
-    transition: border-color 160ms cubic-bezier(0.2, 0, 0, 1);
-    pointer-events: none;
-  }
-  .bracket::before {
-    top: -1px; left: -1px;
-    border-width: 1px 0 0 1px;
-  }
-  .bracket::after {
-    bottom: -1px; right: -1px;
-    border-width: 0 1px 1px 0;
-  }
-  .bracket:hover::before,
-  .bracket:hover::after {
-    border-color: var(--accent);
-  }
 }
 
 @layer utilities {
-  .rule-h {
-    height: 1px;
-    background: linear-gradient(90deg, var(--border-strong) 0%, var(--border-soft) 60%, transparent 100%);
-    transform-origin: left center;
-  }
-
   /* CSS-level reduced-motion floor. JS-driven (framer) animation is gated
-     per-component via useReducedMotion - this cannot reach it. */
+     per-component via useReducedMotion plus the root MotionConfig - this
+     rule cannot reach it. */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
