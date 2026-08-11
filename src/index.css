@@ -1,4 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Space Grotesk for voice, JetBrains Mono for data. Inter was here before and
+   is the most recognisable tell of an untouched AI-generated interface - it is
+   engineered to be neutral, which is exactly why it never reads as authored.
+   Weights are deliberately limited; the system uses weight contrast, not many
+   weights. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -17,11 +22,30 @@
     width: 100vw;
     height: 100vh;
     overflow: hidden; /* Stop the browser window from scrolling */
-    @apply bg-slate-950 text-white;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', system-ui, sans-serif;
+    @apply bg-ink-900 text-paper;
+    font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Tabular figures everywhere numbers appear, so timers and counters do not
+     reflow as digits change width. */
+  .font-mono, code, kbd, samp {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+  }
+
+  /* One visible focus treatment for the whole app, matching the accent. The
+     default browser ring is the other thing that makes interfaces look unowned. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 1px solid #7B61FF;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: rgba(123, 97, 255, 0.28);
+    color: #F4F6F8;
   }
 
   #root {
@@ -290,3 +314,112 @@
   }
 }
 
+
+/* ==========================================================================
+   Architectural atmosphere
+   --------------------------------------------------------------------------
+   Replaces the previous purple radial-gradient wash. Three near-invisible
+   layers do the work instead: a drafting grid for structure, film grain to
+   kill banding on near-black, and a vignette to seat the content. Individually
+   none of them should be noticeable - together they stop the background
+   reading as flat #000 with a gradient dropped on top.
+   ========================================================================== */
+
+@layer components {
+  .surface-architectural {
+    position: relative;
+    background-color: #0A0B0D;
+    isolation: isolate;
+  }
+
+  /* Drafting grid. 72px module, 1.6% white - visible as rhythm, not as lines.
+     Masked to fade out toward the edges so it never looks like a tiled tablecloth. */
+  .surface-architectural::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.016) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.016) 1px, transparent 1px);
+    background-size: 72px 72px;
+    -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 78%);
+    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 78%);
+    pointer-events: none;
+  }
+
+  /* Film grain. Higher frequency and lower opacity than the old overlay: at
+     0.9 baseFrequency the noise was coarse enough to read as texture. This is
+     fine enough to only break up the gradient banding. */
+  .surface-architectural::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.022'/%3E%3C/svg%3E");
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+
+  /* A single low-opacity accent bloom, offset off-axis. Centred glows read as
+     the default "hero orb"; putting it off-centre reads as intentional light. */
+  .bloom-signal {
+    position: absolute;
+    width: 46rem;
+    height: 46rem;
+    top: -22rem;
+    right: -14rem;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(123, 97, 255, 0.13) 0%, rgba(123, 97, 255, 0.04) 42%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Corner brackets - the recurring motif. Registration marks rather than
+     borders: they imply a frame without drawing a box, which is what keeps the
+     layout from looking like a grid of cards. */
+  .bracket {
+    position: relative;
+  }
+  .bracket::before,
+  .bracket::after {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-color: #272C33;
+    border-style: solid;
+    transition: border-color 160ms cubic-bezier(0.2, 0, 0, 1);
+    pointer-events: none;
+  }
+  .bracket::before {
+    top: -1px; left: -1px;
+    border-width: 1px 0 0 1px;
+  }
+  .bracket::after {
+    bottom: -1px; right: -1px;
+    border-width: 0 1px 1px 0;
+  }
+  .bracket:hover::before,
+  .bracket:hover::after {
+    border-color: #7B61FF;
+  }
+}
+
+@layer utilities {
+  /* Hairline rules that animate in from the left edge on reveal. */
+  .rule-h {
+    height: 1px;
+    background: linear-gradient(90deg, #272C33 0%, #1C1F24 60%, transparent 100%);
+    transform-origin: left center;
+  }
+
+  /* Respect reduced motion globally rather than per-component. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
