@@ -23,7 +23,7 @@ import { Stagger } from '../motion';
 const SettingsSection = ({ label, danger = false, children, className = '' }) => (
   <Card className={[danger ? 'border-danger-line' : '', 'p-5 md:p-6', className].join(' ')}>
     <div
-      className={`mb-4 font-mono text-micro uppercase ${danger ? 'text-danger' : 'text-secondary'}`}
+      className={`mb-4 text-label-sm ${danger ? 'text-danger' : 'text-secondary'}`}
     >
       {label}
     </div>
@@ -306,12 +306,12 @@ const SettingsMode = () => {
   };
 
   return (
-    <div className="min-h-full w-full overflow-y-auto bg-base p-6 md:p-10">
+    <div className="min-h-full w-full overflow-y-auto bg-canvas p-6 md:p-10">
       <div className="mx-auto w-full max-w-2xl">
         <Breadcrumb trail={['MindFlow', 'Settings']} className="mb-8" />
 
-        <h1 className="text-h1 text-primary">Settings</h1>
-        <p className="mt-1 mb-8 text-small text-secondary">
+        <h1 className="text-display-sm text-primary">Settings</h1>
+        <p className="mt-1 mb-8 text-body-sm text-secondary">
           Manage your preferences and subscription
         </p>
 
@@ -364,7 +364,7 @@ const SettingsMode = () => {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-body font-medium text-primary">Tick tock sound</div>
-                  <p className="mt-0.5 text-small text-secondary">
+                  <p className="mt-0.5 text-body-sm text-secondary">
                     Play ticking sound during focus
                   </p>
                 </div>
@@ -378,15 +378,15 @@ const SettingsMode = () => {
                 />
               </div>
 
-              <div className="mt-6 border-t border-soft pt-5">
+              <div className="mt-6 border-t border-line pt-5">
                 <div className="mb-2 flex items-center justify-between">
                   <label
                     htmlFor="settings-alarm-volume"
-                    className="font-mono text-micro uppercase text-secondary"
+                    className="text-label-sm text-secondary"
                   >
                     Alarm volume
                   </label>
-                  <span className="font-mono text-small tabular-nums text-secondary">
+                  <span className="text-body-sm tabular-nums text-secondary">
                     {alarmVolume}%
                   </span>
                 </div>
@@ -405,7 +405,7 @@ const SettingsMode = () => {
                   style={{ accentColor: 'var(--accent)' }}
                   aria-label="Alarm volume"
                 />
-                <p className="mt-3 text-small text-secondary">
+                <p className="mt-3 text-body-sm text-secondary">
                   Adjust volume for session completion alarms and ticking sounds.
                 </p>
               </div>
@@ -418,7 +418,7 @@ const SettingsMode = () => {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-body font-medium text-primary">Daily review reminder</div>
-                  <p className="mt-0.5 text-small text-secondary">
+                  <p className="mt-0.5 text-body-sm text-secondary">
                     One browser notification a day when flashcards are due — never more.
                   </p>
                 </div>
@@ -438,14 +438,14 @@ const SettingsMode = () => {
                 <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2.5">
-                      <h3 className="text-h2 text-primary">Pro plan active</h3>
+                      <h3 className="text-title text-primary">Pro plan active</h3>
                       <Badge variant="accent">PRO</Badge>
                     </div>
-                    <p className="mt-1.5 text-small text-secondary">
+                    <p className="mt-1.5 text-body-sm text-secondary">
                       You have full access to all AI features and unlimited study tools.
                     </p>
                     {subscriptionData?.current_period_end && (
-                      <p className="mt-3 flex items-center gap-1.5 font-mono text-micro uppercase text-secondary">
+                      <p className="mt-3 flex items-center gap-1.5 text-label-sm text-secondary">
                         <Clock size={12} strokeWidth={1.5} aria-hidden="true" />
                         Next billing:{' '}
                         {new Date(subscriptionData.current_period_end * 1000).toLocaleDateString()}
@@ -477,8 +477,8 @@ const SettingsMode = () => {
               ) : (
                 <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0">
-                    <h3 className="text-h2 text-primary">Upgrade to Pro</h3>
-                    <p className="mt-1.5 max-w-lg text-small text-secondary">
+                    <h3 className="text-title text-primary">Upgrade to Pro</h3>
+                    <p className="mt-1.5 max-w-lg text-body-sm text-secondary">
                       Unlock unlimited AI flashcards, Feynman analysis, and smart study tools.
                     </p>
                   </div>
@@ -517,7 +517,7 @@ const SettingsMode = () => {
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <div className="text-body font-medium text-primary">Reset all data</div>
-                  <p className="mt-0.5 text-small text-secondary">
+                  <p className="mt-0.5 text-body-sm text-secondary">
                     Permanently delete all session history, local settings, and progress.
                   </p>
                 </div>

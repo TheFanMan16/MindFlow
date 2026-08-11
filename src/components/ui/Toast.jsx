@@ -14,17 +14,17 @@ export const AppToaster = () => (
     toastOptions={{
       duration: 3500,
       style: {
-        background: 'var(--bg-elevated)',
+        background: 'var(--bg-raised)',
         color: 'var(--text-primary)',
-        border: '1px solid var(--border-soft)',
-        borderRadius: 'var(--radius-card)',
-        boxShadow: 'var(--shadow-modal)',
+        border: '1px solid var(--border-line)',
+        borderRadius: 'var(--r-lg)',
+        boxShadow: 'var(--shadow-raised)',
         padding: '12px 16px',
         fontSize: '13px',
         maxWidth: '380px',
       },
-      success: { iconTheme: { primary: 'var(--success)', secondary: 'var(--bg-base)' } },
-      error: { iconTheme: { primary: 'var(--danger)', secondary: 'var(--bg-base)' } },
+      success: { iconTheme: { primary: 'var(--positive)', secondary: 'var(--bg-canvas)' } },
+      error: { iconTheme: { primary: 'var(--negative)', secondary: 'var(--bg-canvas)' } },
     }}
   />
 );

@@ -45,9 +45,9 @@ import { IconFocus, IconRecall, IconFeynman, IconLeitner } from '../components/i
 
 const Section = ({ title, note, children }) => (
   <section className="mt-14 first:mt-0">
-    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-soft pb-3">
-      <h2 className="text-h2 text-primary">{title}</h2>
-      {note ? <p className="font-mono text-micro uppercase text-tertiary">{note}</p> : null}
+    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
+      <h2 className="text-title text-primary">{title}</h2>
+      {note ? <p className="text-label-sm text-tertiary">{note}</p> : null}
     </div>
     <div className="mt-6">{children}</div>
   </section>
@@ -77,11 +77,11 @@ const Swatch = ({ label, className, varName }) => {
   }, []);
   return (
     <div className="flex items-center gap-3">
-      <div ref={ref} className={`h-10 w-10 shrink-0 rounded-input border border-soft ${className}`} />
+      <div ref={ref} className={`h-10 w-10 shrink-0 rounded-sm border border-line ${className}`} />
       <div className="min-w-0">
-        <div className="truncate text-small font-medium text-primary">{label}</div>
-        <div className="truncate font-mono text-micro text-tertiary">{varName}</div>
-        <div className="truncate font-mono text-micro text-secondary">{resolved}</div>
+        <div className="truncate text-body-sm font-medium text-primary">{label}</div>
+        <div className="truncate text-label-sm text-tertiary">{varName}</div>
+        <div className="truncate text-label-sm text-secondary">{resolved}</div>
       </div>
     </div>
   );
@@ -103,10 +103,10 @@ const DesignSystem = () => {
   }, []);
 
   return (
-    <div className="h-full w-full overflow-y-auto bg-base">
+    <div className="h-full w-full overflow-y-auto bg-canvas">
       <div className="mx-auto w-full max-w-[1080px] px-6 py-12">
         {/* Masthead - also the TextReveal demo surface */}
-        <p className="font-mono text-micro uppercase text-secondary">MindFlow / Design system</p>
+        <p className="text-label-sm text-secondary">MindFlow / Design system</p>
         <TextReveal text="Calm surfaces. Confident motion." as="h1" className="mt-3 text-display text-primary" />
         <p className="mt-4 max-w-[60ch] text-body text-secondary">
           One neutral ramp, one accent, mono for every number. Restraint lives in the color and
@@ -122,9 +122,9 @@ const DesignSystem = () => {
         {/* ------------------------------------------------------ tokens -- */}
         <Section title="Color" note="tokens.css · nothing else is legal">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            <Swatch label="Base" varName="--bg-base" className="bg-base" />
-            <Swatch label="Subtle" varName="--bg-subtle" className="bg-subtle" />
-            <Swatch label="Elevated" varName="--bg-elevated" className="bg-elevated" />
+            <Swatch label="Base" varName="--bg-canvas" className="bg-canvas" />
+            <Swatch label="Subtle" varName="--bg-surface" className="bg-surface" />
+            <Swatch label="Elevated" varName="--bg-raised" className="bg-raised" />
             <Swatch label="Accent" varName="--accent" className="bg-accent" />
             <Swatch label="Accent hover" varName="--accent-hover" className="bg-accent-hover" />
             <Swatch label="Accent wash" varName="--accent-wash" className="bg-accent-wash" />
@@ -136,40 +136,51 @@ const DesignSystem = () => {
             <Swatch label="Tint · feynman" varName="--tint-feynman" className="bg-tint-feynman" />
             <Swatch label="Tint · flashcards" varName="--tint-flashcards" className="bg-tint-flashcards" />
           </div>
-          <div className="mt-6 grid grid-cols-1 gap-2 rounded-card border border-soft bg-subtle p-5 sm:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-2 rounded-lg border border-line bg-surface p-5 sm:grid-cols-3">
             <p className="text-body text-primary">text-primary — running copy</p>
             <p className="text-body text-secondary">text-secondary — support</p>
             <div>
               <p className="text-body text-tertiary">text-tertiary — decorative</p>
-              <p className="mt-1 font-mono text-micro text-warning">
+              <p className="mt-1 text-label-sm text-warning">
                 3.10:1 — fails AA. Never essential text.
               </p>
             </div>
           </div>
         </Section>
 
-        <Section title="Type scale" note="Geist · Geist Mono for data">
+        <Section title="Type scale" note="Geist variable · mono for log timestamps only">
           <div className="flex flex-col gap-5">
             <div>
-              <span className="text-display text-primary">Display 56</span>
-              <span className="ml-4 font-mono text-micro text-tertiary">56/64 · -0.03em</span>
+              <span className="text-metric text-primary">52</span>
+              <span className="ml-4 text-label-sm text-tertiary">metric 52/48 — maximum one per screen</span>
             </div>
             <div>
-              <span className="text-h1 text-primary">Heading 32</span>
-              <span className="ml-4 font-mono text-micro text-tertiary">32/40 · -0.02em</span>
+              <span className="text-display text-primary">Display 38</span>
+              <span className="ml-4 text-label-sm text-tertiary">38/40 · -0.028em</span>
             </div>
             <div>
-              <span className="text-h2 text-primary">Heading 24</span>
-              <span className="ml-4 font-mono text-micro text-tertiary">24/32 · -0.01em</span>
+              <span className="text-display-sm text-primary">Display 28</span>
+              <span className="ml-4 text-label-sm text-tertiary">28/32 · -0.022em</span>
+            </div>
+            <div>
+              <span className="text-title text-primary">Title 21</span>
+              <span className="ml-4 text-label-sm text-tertiary">21/28 · -0.017em</span>
+            </div>
+            <div>
+              <span className="text-title-sm text-primary">Title 17</span>
+              <span className="ml-4 text-label-sm text-tertiary">17/24 · -0.011em</span>
             </div>
             <p className="max-w-[65ch] text-body text-secondary">
               Body 15/24. Study it once, remember it on exam day — MindFlow runs the whole loop
               so nothing you learn leaks away.
             </p>
-            <p className="text-small text-secondary">Small 13/20 — metadata and captions.</p>
-            <p className="font-mono text-micro uppercase text-secondary">Micro-label 11/16 mono +0.08em</p>
-            <p className="font-mono text-h1 text-primary tabular-nums">
-              25:00 · 1,284 · 87% <span className="text-small text-tertiary">← data is always mono</span>
+            <p className="text-body-sm text-secondary">Body-sm 13/20 — metadata and captions.</p>
+            <p className="text-label-sm text-secondary">Label-sm 12/16 — sentence case, never uppercase mono</p>
+            <p className="text-display-sm text-primary tabular-nums">
+              25:00 · 1,284 · 87%{' '}
+              <span className="text-body-sm text-tertiary">
+                ← numbers are Geist Sans, tabular, slashed zero
+              </span>
             </p>
           </div>
         </Section>
@@ -190,7 +201,7 @@ const DesignSystem = () => {
             <Button mono variant="secondary" size="sm">
               Mono label
             </Button>
-            <span className="font-mono text-micro text-tertiary">← magnetic: tracks the cursor ±4px</span>
+            <span className="text-label-sm text-tertiary">← magnetic: tracks the cursor ±4px</span>
           </div>
         </Section>
 
@@ -226,7 +237,7 @@ const DesignSystem = () => {
             <Badge feature="flashcards">
               <IconLeitner size={12} /> Cards
             </Badge>
-            <span className="font-mono text-micro text-tertiary">← never fills, never glows</span>
+            <span className="text-label-sm text-tertiary">← never fills, never glows</span>
           </div>
         </Section>
 
@@ -235,16 +246,16 @@ const DesignSystem = () => {
             <StatTile label="Focus minutes" value={stat} unit="min" delta={12} />
             <StatTile label="Cards created" value={Math.round(stat / 3)} delta={-4} />
             <Card interactive className="flex items-center justify-center p-4">
-              <span className="text-small text-secondary">Interactive card — hover me</span>
+              <span className="text-body-sm text-secondary">Interactive card — hover me</span>
             </Card>
             <Card className="flex items-center justify-center gap-4 p-4">
               <CountRing key={`ring-${ring}`} value={ring} size={64} strokeWidth={5}>
                 <AnimatedNumber
                   value={Math.round(ring * 100)}
-                  className="text-small text-primary"
+                  className="text-body-sm text-primary"
                 />
               </CountRing>
-              <div className="font-mono text-micro uppercase text-secondary">
+              <div className="text-label-sm text-secondary">
                 Count
                 <br />
                 Ring
@@ -255,7 +266,7 @@ const DesignSystem = () => {
             <Button variant="secondary" size="sm" mono onClick={randomise}>
               Randomise data
             </Button>
-            <span className="ml-3 font-mono text-micro text-tertiary">
+            <span className="ml-3 text-label-sm text-tertiary">
               numbers tick on a spring — they never jump
             </span>
           </div>
@@ -278,7 +289,7 @@ const DesignSystem = () => {
           <StepRailDemo />
           <div className="mt-6 max-w-md">
             <Progress value={ring} label="Demo progress" />
-            <p className="mt-2 font-mono text-micro text-secondary">
+            <p className="mt-2 text-label-sm text-secondary">
               Progress — thin scaleX line (blurt timer drain, study position)
             </p>
           </div>
@@ -349,7 +360,7 @@ const DesignSystem = () => {
             <TextReveal
               text="Remember it on exam day."
               as="p"
-              className="text-h1 text-primary"
+              className="text-display-sm text-primary"
             />
           </Replay>
         </Section>
@@ -359,7 +370,7 @@ const DesignSystem = () => {
             <Stagger className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {['Focus', 'Recall', 'Feynman', 'Review'].map((label) => (
                 <Stagger.Item key={label}>
-                  <Card className="p-4 text-center text-small text-secondary">{label}</Card>
+                  <Card className="p-4 text-center text-body-sm text-secondary">{label}</Card>
                 </Stagger.Item>
               ))}
             </Stagger>
@@ -388,8 +399,8 @@ const DesignSystem = () => {
           <PageTransitionDemo />
         </Section>
 
-        <footer className="mt-16 border-t border-soft pt-5 pb-8">
-          <p className="font-mono text-micro uppercase text-tertiary">
+        <footer className="mt-16 border-t border-line pt-5 pb-8">
+          <p className="text-label-sm text-tertiary">
             Dev-only route — excluded from production builds
           </p>
         </footer>
@@ -436,7 +447,7 @@ const SaveButtonDemo = () => {
       <SaveButton state={state} onClick={run}>
         Save settings
       </SaveButton>
-      <span className="font-mono text-micro text-tertiary">label → spinner → check</span>
+      <span className="text-label-sm text-tertiary">label → spinner → check</span>
     </div>
   );
 };
@@ -451,12 +462,12 @@ const PageTransitionDemo = () => {
           Navigate
         </Button>
       </div>
-      <div className="h-28 overflow-hidden rounded-card border border-soft bg-subtle">
+      <div className="h-28 overflow-hidden rounded-lg border border-line bg-surface">
         <AnimatePresence mode="wait" initial={false}>
           <PageTransition key={page} className="flex items-center justify-center">
             <div className="text-center">
-              <p className="font-mono text-micro uppercase text-secondary">Route</p>
-              <p className="font-mono text-h2 text-primary">/page-{page}</p>
+              <p className="text-label-sm text-secondary">Route</p>
+              <p className="text-title text-primary">/page-{page}</p>
             </div>
           </PageTransition>
         </AnimatePresence>

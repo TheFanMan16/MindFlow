@@ -48,7 +48,7 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
     `${weight} ${size}px Geist, -apple-system, "Segoe UI", system-ui, sans-serif`;
 
   // Flat brand ground - no gradient, no glow.
-  ctx.fillStyle = token('--bg-base');
+  ctx.fillStyle = token('--bg-canvas');
   ctx.fillRect(0, 0, W, H);
   // A single measured accent rule under the brand block.
   ctx.fillStyle = token('--accent');

@@ -44,11 +44,11 @@ const ConfirmModal = ({
         </>
       }
     >
-      <p className="text-small leading-relaxed text-secondary">{message}</p>
+      <p className="text-body-sm leading-relaxed text-secondary">{message}</p>
 
       {typeToConfirm ? (
         <div className="mt-4 flex flex-col gap-1.5">
-          <label htmlFor={inputId} className="font-mono text-micro uppercase text-secondary">
+          <label htmlFor={inputId} className="text-label-sm text-secondary">
             Type <span className="font-medium text-danger">{typeToConfirm}</span> to confirm
           </label>
           <Input
@@ -60,7 +60,7 @@ const ConfirmModal = ({
             autoFocus
             autoComplete="off"
             spellCheck={false}
-            className="font-mono"
+            className=""
           />
         </div>
       ) : null}

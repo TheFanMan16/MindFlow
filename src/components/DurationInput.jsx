@@ -48,7 +48,7 @@ const DurationInput = ({ label, value, min, max, onCommit }) => {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={`duration-${label}`} className="font-mono text-micro uppercase text-secondary">
+      <label htmlFor={`duration-${label}`} className="text-label-sm text-secondary">
         {label}
       </label>
       <input
@@ -64,13 +64,13 @@ const DurationInput = ({ label, value, min, max, onCommit }) => {
             commit();
           }
         }}
-        className="h-9 w-full rounded-input border border-soft bg-base px-3 font-mono text-body
+        className="h-9 w-full rounded-sm border border-line bg-inset px-3 text-body
                    tabular-nums text-primary transition-colors duration-150
                    placeholder:text-tertiary hover:border-strong
                    focus:border-strong focus:outline-none focus:ring-2 focus:ring-accent-ring"
       />
       {notice && (
-        <div role="alert" className="text-small text-warning">
+        <div role="alert" className="text-body-sm text-warning">
           {notice}
         </div>
       )}

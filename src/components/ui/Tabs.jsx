@@ -17,7 +17,7 @@ export const Tabs = ({ items, value, onChange, className = '' }) => {
   return (
     <div
       role="tablist"
-      className={`inline-flex items-center gap-0.5 rounded-input border border-soft bg-subtle p-0.5 ${className}`}
+      className={`inline-flex items-center gap-0.5 rounded-sm border border-line bg-surface p-0.5 ${className}`}
     >
       {items.map((item) => {
         const active = item.value === value;
@@ -29,7 +29,7 @@ export const Tabs = ({ items, value, onChange, className = '' }) => {
             aria-selected={active}
             onClick={() => onChange(item.value)}
             className={[
-              'relative rounded-[4px] px-3 py-1.5 font-mono text-micro uppercase',
+              'relative rounded-[4px] px-3 py-1.5 text-label-sm',
               'transition-colors duration-150',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
               active ? 'text-primary' : 'text-secondary hover:text-primary',
@@ -42,7 +42,7 @@ export const Tabs = ({ items, value, onChange, className = '' }) => {
                 // translate+scale however brief, so the pill must teleport,
                 // not slide.
                 transition={reduce ? { duration: 0 } : snappy}
-                className="absolute inset-0 rounded-[4px] border border-soft bg-elevated"
+                className="absolute inset-0 rounded-[4px] border border-line bg-raised"
                 aria-hidden="true"
               />
             ) : null}

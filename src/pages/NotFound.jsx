@@ -14,14 +14,14 @@ const NotFound = () => {
   const location = useLocation();
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-base p-12 text-center">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-canvas p-12 text-center">
       <h1 className="select-none font-mono text-[10rem] font-medium leading-none text-tertiary opacity-20">
         404
       </h1>
 
-      <h2 className="text-h2 text-primary">This page doesn't exist</h2>
+      <h2 className="text-title text-primary">This page doesn't exist</h2>
 
-      <p className="max-w-[480px] break-all font-mono text-small text-secondary">
+      <p className="max-w-[480px] break-all text-body-sm text-secondary">
         {location.pathname}
       </p>
 

@@ -27,10 +27,10 @@ export const AnimatedNumber = ({
   }, [value, mv]);
 
   if (reduce) {
-    return <span className={`font-mono tabular-nums ${className}`}>{format(value)}</span>;
+    return <span className={`tabular-nums ${className}`}>{format(value)}</span>;
   }
 
-  return <motion.span className={`font-mono tabular-nums ${className}`}>{text}</motion.span>;
+  return <motion.span className={`tabular-nums ${className}`}>{text}</motion.span>;
 };
 
 export default AnimatedNumber;

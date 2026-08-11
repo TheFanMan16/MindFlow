@@ -14,14 +14,14 @@ import { Magnetic } from '../../motion/Magnetic';
  * - danger: outlined red, fills to an 8% wash on hover. Destructive actions
  *   never get a solid red fill at rest.
  *
- * `mono` sets the 12px uppercase mono label treatment (CTAs and toolbar
+ * `mono` (legacy name) sets the label-sm treatment (CTAs and toolbar
  * actions in the Linear idiom). `magnetic` adds cursor-tracking via
  * motion/Magnetic - reserve it for primary CTAs.
  */
 const VARIANTS = {
   primary: 'bg-accent text-on-accent border border-transparent hover:bg-accent-hover',
-  secondary: 'bg-transparent text-primary border border-soft hover:border-strong hover:bg-elevated',
-  ghost: 'bg-transparent text-secondary border border-transparent hover:text-primary hover:bg-elevated',
+  secondary: 'bg-transparent text-primary border border-line hover:border-strong hover:bg-hover',
+  ghost: 'bg-transparent text-secondary border border-transparent hover:text-primary hover:bg-hover',
   danger: 'bg-transparent text-danger border border-danger-line hover:bg-danger-wash',
 };
 
@@ -49,11 +49,11 @@ export const Button = ({
       whileTap={reduce ? undefined : { scale: 0.98 }}
       transition={snappy}
       className={[
-        'inline-flex select-none items-center justify-center gap-2 rounded-input',
+        'inline-flex select-none items-center justify-center gap-2 rounded-sm',
         'transition-colors duration-150',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
         'disabled:pointer-events-none disabled:opacity-50',
-        mono ? 'font-mono text-xs font-medium uppercase tracking-[0.08em]' : 'text-small font-medium',
+        mono ? 'text-label-sm' : 'text-body-sm font-medium',
         VARIANTS[variant] || VARIANTS.primary,
         SIZES[size] || SIZES.md,
         className,

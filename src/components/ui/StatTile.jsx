@@ -7,14 +7,14 @@ import { AnimatedNumber } from '../../motion/AnimatedNumber';
  * numbers are always mono, always tabular, and tick rather than jump.
  */
 export const StatTile = ({ label, value, unit, delta, format, countUp = false, className = '' }) => (
-  <div className={`rounded-card border border-soft bg-subtle p-4 ${className}`}>
-    <div className="font-mono text-micro uppercase text-secondary">{label}</div>
+  <div className={`rounded-lg border border-line bg-surface p-4 ${className}`}>
+    <div className="text-label-sm text-secondary">{label}</div>
     <div className="mt-2 flex items-baseline gap-1.5">
-      <AnimatedNumber value={value} format={format} countUp={countUp} className="text-h1 text-primary" />
-      {unit ? <span className="font-mono text-small text-secondary">{unit}</span> : null}
+      <AnimatedNumber value={value} format={format} countUp={countUp} className="text-display-sm text-primary" />
+      {unit ? <span className="text-body-sm text-secondary">{unit}</span> : null}
     </div>
     {delta != null ? (
-      <div className={`mt-1 font-mono text-micro ${delta >= 0 ? 'text-success' : 'text-danger'}`}>
+      <div className={`mt-1 text-label-sm ${delta >= 0 ? 'text-success' : 'text-danger'}`}>
         {delta >= 0 ? '+' : ''}
         {delta}%
       </div>

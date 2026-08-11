@@ -10,8 +10,8 @@ import React from 'react';
  */
 const TONES = {
   accent: 'var(--accent)',
-  success: 'var(--success)',
-  danger: 'var(--danger)',
+  success: 'var(--positive)',
+  danger: 'var(--negative)',
   warning: 'var(--warning)',
 };
 
@@ -43,7 +43,7 @@ export const ProgressRing = ({
           r={r}
           fill="none"
           strokeWidth={strokeWidth}
-          style={{ stroke: 'var(--border-soft)' }}
+          style={{ stroke: 'var(--border-line)' }}
         />
         <circle
           cx={size / 2}

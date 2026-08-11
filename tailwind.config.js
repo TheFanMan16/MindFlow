@@ -1,15 +1,27 @@
 /** @type {import('tailwindcss').Config} */
 
 /**
- * Tailwind mirror of src/styles/tokens.css. The CSS variables are the source
- * of truth; everything here resolves to a var() so a token change lands
- * app-wide without touching this file.
+ * Tailwind mirror of src/styles/tokens.css - every value resolves to a
+ * var(), so a token change lands app-wide without touching this file.
  *
- * One vocabulary: bg-base/subtle/elevated, border-soft/strong,
- * text-primary/secondary/tertiary, accent, success/danger/warning, feature
- * tints, rounded-input/card/modal, shadow-modal, and the type scale
- * display/h1/h2/body/small/micro/timer. The previous direction's bridge
- * tokens were deleted with the pages that used them.
+ * Vocabulary:
+ *   surfaces  bg-canvas / bg-inset / bg-surface / bg-raised / bg-hover / bg-active
+ *   hairlines border-faint / border-line / border-strong  (border-soft aliases line)
+ *   text      text-primary / secondary / tertiary / disabled
+ *   accent    accent / accent-hover / accent-press / accent-ink / wash / line
+ *   semantic  positive / negative (+ -wash)  - muted, never saturated
+ *   radius    rounded-sm 6 (controls) / rounded-md 10 (inner panels) /
+ *             rounded-lg 14 (outer cards) / rounded-pill (status pills ONLY)
+ *             NESTED RULE: inner radius = outer radius - inner padding;
+ *             a parent and child never share a radius.
+ *   elevation shadow-edge on every surface; shadow-raised ONLY on elements
+ *             that genuinely float (modals, popovers, toasts)
+ *
+ * Type scale (px / lh / tracking / weight) - every text node maps to
+ * EXACTLY one step; if something doesn't fit, the step is wrong:
+ *   label-xs 11/14  label-sm 12/16  body-sm 13/20  body 15/24
+ *   title-sm 17/24  title 21/28  display-sm 28/32  display 38/40
+ *   metric 52/48 - MAXIMUM ONE PER SCREEN
  */
 export default {
   content: [
@@ -19,84 +31,108 @@ export default {
   theme: {
     extend: {
       screens: {
-        // The sidebar's third breakpoint: full label rail above 1100px,
-        // icon rail between sm and here, bottom tab bar below sm.
         nav: '1100px',
       },
-      /* ------------------------------------------------------- system -- */
+
       backgroundColor: {
-        base: 'var(--bg-base)',
-        subtle: 'var(--bg-subtle)',
-        elevated: 'var(--bg-elevated)',
+        canvas: 'var(--bg-canvas)',
+        inset: 'var(--bg-inset)',
+        surface: 'var(--bg-surface)',
+        raised: 'var(--bg-raised)',
+        hover: 'var(--bg-hover)',
+        active: 'var(--bg-active)',
+        /* legacy aliases - swept out with call sites */
+        base: 'var(--bg-canvas)',
+        subtle: 'var(--bg-surface)',
+        elevated: 'var(--bg-raised)',
       },
       borderColor: {
-        soft: 'var(--border-soft)',
-        strong: 'var(--border-strong)',
+        faint: 'var(--line-faint)',
+        line: 'var(--line)',
+        strong: 'var(--line-strong)',
+        soft: 'var(--line)', /* legacy alias */
       },
       textColor: {
         primary: 'var(--text-primary)',
         secondary: 'var(--text-secondary)',
         tertiary: 'var(--text-tertiary)',
-        'on-accent': 'var(--on-accent)',
+        disabled: 'var(--text-disabled)',
+        'on-accent': 'var(--accent-ink)',
       },
       colors: {
         accent: {
           DEFAULT: 'var(--accent)',
           hover: 'var(--accent-hover)',
-          ring: 'var(--accent-ring)',
+          press: 'var(--accent-press)',
+          ink: 'var(--accent-ink)',
+          ring: 'var(--accent-line)',
           wash: 'var(--accent-wash)',
           line: 'var(--accent-line)',
         },
-        success: { DEFAULT: 'var(--success)', wash: 'var(--success-wash)' },
-        danger: { DEFAULT: 'var(--danger)', wash: 'var(--danger-wash)', line: 'var(--danger-line)' },
-        warning: { DEFAULT: 'var(--warning)', wash: 'var(--warning-wash)' },
-        // Feature identity hues: icon/badge tints ONLY (with their -wash
-        // backgrounds), never fills, never glows.
+        positive: { DEFAULT: 'var(--positive)', wash: 'var(--positive-wash)' },
+        negative: { DEFAULT: 'var(--negative)', wash: 'var(--negative-wash)' },
+        /* legacy aliases (success/danger/warning + feature tints) - the
+           warning family and identity tints have NO equivalent in the new
+           spec; see the migration report. */
+        success: { DEFAULT: 'var(--positive)', wash: 'var(--positive-wash)' },
+        danger: { DEFAULT: 'var(--negative)', wash: 'var(--negative-wash)', line: 'var(--danger-line)' },
+        warning: { DEFAULT: 'var(--accent)', wash: 'var(--accent-wash)' },
         tint: {
           focus: 'var(--tint-focus)',
           recall: 'var(--tint-recall)',
           feynman: 'var(--tint-feynman)',
           flashcards: 'var(--tint-flashcards)',
         },
-
       },
 
       fontFamily: {
-        sans: ['Geist', '"Geist Fallback"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Geist', '"Geist Fallback"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        mono: ['"Geist Mono"', '"Geist Mono Fallback"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        sans: ['Geist', '"Geist Fallback"', '"Instrument Sans"', 'system-ui', 'sans-serif'],
+        display: ['Geist', '"Geist Fallback"', '"Instrument Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"Geist Mono"', '"Geist Mono Fallback"', 'ui-monospace', 'monospace'],
       },
 
       fontSize: {
-        /* The scale. Mono-for-data is half the look: stats, timers, counts
-           and dates always render in font-mono at these sizes. */
-        display: ['3.5rem', { lineHeight: '4rem', letterSpacing: '-0.03em', fontWeight: '600' }],
-        h1: ['2rem', { lineHeight: '2.5rem', letterSpacing: '-0.02em', fontWeight: '600' }],
-        h2: ['1.5rem', { lineHeight: '2rem', letterSpacing: '-0.01em', fontWeight: '600' }],
-        body: ['0.9375rem', { lineHeight: '1.5rem' }],
-        small: ['0.8125rem', { lineHeight: '1.25rem' }],
-        /* The focus timer readout. 72px mono - the largest number in the
-           product gets its own token rather than an arbitrary value. */
-        timer: ['4.5rem', { lineHeight: '1', letterSpacing: '-0.02em', fontWeight: '500' }],
-        micro: ['0.6875rem', { lineHeight: '1rem', letterSpacing: '0.08em', fontWeight: '500' }],
+        'label-xs': ['11px', { lineHeight: '14px', letterSpacing: '0.010em', fontWeight: '500' }],
+        'label-sm': ['12px', { lineHeight: '16px', letterSpacing: '0.005em', fontWeight: '500' }],
+        'body-sm': ['13px', { lineHeight: '20px', letterSpacing: '0', fontWeight: '400' }],
+        body: ['15px', { lineHeight: '24px', letterSpacing: '0', fontWeight: '400' }],
+        'title-sm': ['17px', { lineHeight: '24px', letterSpacing: '-0.011em', fontWeight: '550' }],
+        title: ['21px', { lineHeight: '28px', letterSpacing: '-0.017em', fontWeight: '560' }],
+        'display-sm': ['28px', { lineHeight: '32px', letterSpacing: '-0.022em', fontWeight: '600' }],
+        display: ['38px', { lineHeight: '40px', letterSpacing: '-0.028em', fontWeight: '600' }],
+        /* MAXIMUM ONE PER SCREEN */
+        metric: ['52px', { lineHeight: '48px', letterSpacing: '-0.035em', fontWeight: '600' }],
       },
 
       borderRadius: {
-        input: 'var(--radius-input)',
-        card: 'var(--radius-card)',
-        modal: 'var(--radius-modal)',
-        pill: '999px',
+        sm: 'var(--r-sm)',
+        md: 'var(--r-md)',
+        lg: 'var(--r-lg)',
+        pill: 'var(--r-full)',
+        /* legacy aliases - swept with call sites */
+        input: 'var(--r-sm)',
+        card: 'var(--r-lg)',
+        modal: 'var(--r-lg)',
       },
 
       boxShadow: {
-        /* The only shadow in the system. */
-        modal: 'var(--shadow-modal)',
+        /* Every surface gets the edge; raised (which INCLUDES the edge)
+           is only for elements that genuinely float. */
+        edge: 'var(--edge)',
+        raised: 'var(--edge), var(--shadow-raised)',
       },
 
       transitionTimingFunction: {
-        /* Fast out, precise arrival - for CSS-only micro-transitions
-           (hover shifts) that do not warrant framer. */
-        mech: 'cubic-bezier(0.2, 0, 0, 1)',
+        out: 'var(--ease-out)',
+        in: 'var(--ease-in)',
+        std: 'var(--ease-std)',
+        mech: 'var(--ease-std)', /* legacy alias */
+      },
+      transitionDuration: {
+        micro: '120ms',
+        base: '180ms',
+        enter: '260ms',
+        layout: '380ms',
       },
     },
   },

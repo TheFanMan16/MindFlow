@@ -44,7 +44,7 @@ const FolderGroup = ({ folder, children = [], onItemClick }) => {
               className={
                 item
                   ? 'border border-accent-line bg-accent-wash'
-                  : 'border border-soft bg-base'
+                  : 'border border-line bg-canvas'
               }
             />
           ))}
@@ -52,13 +52,13 @@ const FolderGroup = ({ folder, children = [], onItemClick }) => {
 
         {/* Overflow Count Badge */}
         {children.length > 9 && (
-          <span className="absolute right-3 top-3 rounded-pill border border-soft bg-elevated px-2 py-0.5 font-mono text-micro text-secondary">
+          <span className="absolute right-3 top-3 rounded-pill border border-line bg-raised px-2 py-0.5 text-label-sm text-secondary">
             +{children.length - 9}
           </span>
         )}
 
         {/* Folder Title (Bottom) */}
-        <h3 className="mt-3 w-full truncate text-center text-small font-medium text-primary">
+        <h3 className="mt-3 w-full truncate text-center text-body-sm font-medium text-primary">
           {folder.title || 'Untitled Folder'}
         </h3>
       </Card>
@@ -70,7 +70,7 @@ const FolderGroup = ({ folder, children = [], onItemClick }) => {
         title={folder.title || 'Untitled Folder'}
         className="max-w-3xl"
         footer={
-          <span className="font-mono text-micro uppercase text-secondary">
+          <span className="text-label-sm text-secondary">
             {children.length} {children.length === 1 ? 'item' : 'items'}
           </span>
         }
@@ -88,10 +88,10 @@ const FolderGroup = ({ folder, children = [], onItemClick }) => {
               }}
               className="flex flex-col items-center gap-2 p-4"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-input border border-soft bg-base text-secondary">
+              <span className="flex h-8 w-8 items-center justify-center rounded-sm border border-line bg-canvas text-secondary">
                 <Layers size={16} strokeWidth={1.5} />
               </span>
-              <span className="w-full truncate text-center text-small font-medium text-primary">
+              <span className="w-full truncate text-center text-body-sm font-medium text-primary">
                 {item.title || 'Untitled'}
               </span>
             </Card>

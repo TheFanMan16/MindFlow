@@ -27,14 +27,14 @@ const UpgradeModal = ({ isOpen, onClose, message }) => {
           <Badge variant="accent">Pro</Badge>
         </div>
         <div>
-          <h2 className="text-h2 text-primary">You're on a roll</h2>
+          <h2 className="text-title text-primary">You're on a roll</h2>
           <p className="mt-2 text-body text-secondary">
             {message || "You've used your 5 free AI actions for today."}
           </p>
         </div>
         <ul className="flex flex-col gap-2">
           {PRO_FEATURES.map((feature) => (
-            <li key={feature} className="flex items-center gap-2.5 text-small text-secondary">
+            <li key={feature} className="flex items-center gap-2.5 text-body-sm text-secondary">
               <span aria-hidden="true" className="font-mono text-accent">
                 ✓
               </span>

@@ -125,11 +125,11 @@ export const CommandPalette = () => {
                 : { opacity: 1, scale: 1, y: 0, transition: snappy }
             }
             exit={{ opacity: 0, transition: reduced }}
-            className="relative w-full max-w-lg overflow-hidden rounded-modal border border-soft bg-elevated shadow-modal"
+            className="relative w-full max-w-lg overflow-hidden rounded-lg border border-line bg-raised shadow-raised"
             onKeyDown={onKeyDown}
           >
-            <div className="flex items-center gap-3 border-b border-soft px-4">
-              <span className="font-mono text-micro uppercase text-tertiary" aria-hidden="true">
+            <div className="flex items-center gap-3 border-b border-line px-4">
+              <span className="text-label-sm text-tertiary" aria-hidden="true">
                 ⌘K
               </span>
               <input
@@ -144,7 +144,7 @@ export const CommandPalette = () => {
 
             <div ref={listRef} className="max-h-[300px] overflow-y-auto p-1.5" role="listbox">
               {results.length === 0 ? (
-                <p className="px-3 py-6 text-center text-small text-secondary">
+                <p className="px-3 py-6 text-center text-body-sm text-secondary">
                   Nothing matches “{query}”.
                 </p>
               ) : (
@@ -153,7 +153,7 @@ export const CommandPalette = () => {
                   if (items.length === 0) return null;
                   return (
                     <div key={group}>
-                      <p className="px-3 pb-1 pt-2.5 font-mono text-micro uppercase text-tertiary">
+                      <p className="px-3 pb-1 pt-2.5 text-label-sm text-tertiary">
                         {group}
                       </p>
                       {items.map((cmd) => {
@@ -175,8 +175,8 @@ export const CommandPalette = () => {
                               active ? 'bg-accent-wash text-primary' : 'text-secondary',
                             ].join(' ')}
                           >
-                            <span className="text-small font-medium">{cmd.label}</span>
-                            <span className="truncate font-mono text-micro text-tertiary">
+                            <span className="text-body-sm font-medium">{cmd.label}</span>
+                            <span className="truncate text-label-sm text-tertiary">
                               {cmd.hint}
                             </span>
                           </button>
@@ -188,14 +188,14 @@ export const CommandPalette = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-4 border-t border-soft px-4 py-2">
+            <div className="flex items-center gap-4 border-t border-line px-4 py-2">
               {[
                 ['↑↓', 'navigate'],
                 ['↵', 'select'],
                 ['esc', 'close'],
               ].map(([key, what]) => (
-                <span key={what} className="flex items-center gap-1.5 font-mono text-micro text-tertiary">
-                  <kbd className="rounded-[3px] border border-soft bg-subtle px-1 py-0.5">{key}</kbd>
+                <span key={what} className="flex items-center gap-1.5 text-label-sm text-tertiary">
+                  <kbd className="rounded-[3px] border border-line bg-surface px-1 py-0.5">{key}</kbd>
                   {what}
                 </span>
               ))}

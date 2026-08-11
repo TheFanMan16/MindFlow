@@ -34,7 +34,7 @@ class ErrorBoundary extends React.Component {
           style={{
             width: '100%',
             height: '100vh',
-            backgroundColor: 'var(--bg-base)',
+            backgroundColor: 'var(--bg-canvas)',
             color: 'var(--text-primary)',
             display: 'flex',
             flexDirection: 'column',
@@ -47,9 +47,9 @@ class ErrorBoundary extends React.Component {
           <div
             style={{
               maxWidth: '560px',
-              backgroundColor: 'var(--bg-subtle)',
+              backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--danger-line)',
-              borderRadius: 'var(--radius-modal)',
+              borderRadius: 'var(--r-lg)',
               padding: '32px',
             }}
           >
@@ -59,7 +59,7 @@ class ErrorBoundary extends React.Component {
                 fontWeight: '600',
                 letterSpacing: '-0.01em',
                 marginBottom: '12px',
-                color: 'var(--danger)',
+                color: 'var(--negative)',
               }}
             >
               Something went wrong
@@ -80,9 +80,9 @@ class ErrorBoundary extends React.Component {
                 style={{
                   marginTop: '16px',
                   padding: '14px',
-                  backgroundColor: 'var(--bg-base)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-input)',
+                  backgroundColor: 'var(--bg-canvas)',
+                  border: '1px solid var(--border-line)',
+                  borderRadius: 'var(--r-sm)',
                   fontSize: '13px',
                   color: 'var(--text-secondary)',
                 }}
@@ -123,10 +123,10 @@ class ErrorBoundary extends React.Component {
               style={{
                 marginTop: '20px',
                 backgroundColor: 'var(--accent)',
-                color: 'var(--on-accent)',
+                color: 'var(--accent-ink)',
                 border: 'none',
                 padding: '10px 20px',
-                borderRadius: 'var(--radius-input)',
+                borderRadius: 'var(--r-sm)',
                 fontSize: '13px',
                 fontWeight: '500',
                 cursor: 'pointer',

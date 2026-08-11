@@ -7,16 +7,16 @@ import React from 'react';
  */
 export const EmptyState = ({ icon, title, description, action, className = '' }) => (
   <div
-    className={`flex flex-col items-center rounded-card border border-dashed border-soft bg-subtle px-6 py-10 text-center ${className}`}
+    className={`flex flex-col items-center rounded-lg border border-dashed border-line bg-surface px-6 py-10 text-center ${className}`}
   >
     {icon ? (
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-input border border-soft bg-elevated text-secondary">
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-sm border border-line bg-raised text-secondary">
         {icon}
       </div>
     ) : null}
     <h3 className="text-body font-medium text-primary">{title}</h3>
     {description ? (
-      <p className="mt-1.5 max-w-[36ch] text-small text-secondary">{description}</p>
+      <p className="mt-1.5 max-w-[36ch] text-body-sm text-secondary">{description}</p>
     ) : null}
     {action ? <div className="mt-5">{action}</div> : null}
   </div>

@@ -59,9 +59,9 @@ const PHASE_ORDER = ['SETUP', 'WRITING', 'ANALYSIS'];
 // Score → status tone (same 80/50 thresholds the old UI used).
 const scoreTone = (score) => (score >= 80 ? 'success' : score >= 50 ? 'warning' : 'danger');
 const TONE_VARS = {
-  success: 'var(--success)',
+  success: 'var(--positive)',
   warning: 'var(--warning)',
-  danger: 'var(--danger)',
+  danger: 'var(--negative)',
 };
 
 // Reduced-motion step transition: opacity only, 150ms.
@@ -451,7 +451,7 @@ ${sourceText.slice(0, 6000)}`;
 
       const cleanWord = word.toLowerCase().replace(/[^\w]/g, '');
       const isMatch = cleanWord && cleanWord.length > 0 && attemptWords.has(cleanWord);
-      const color = isMatch ? 'var(--success)' : 'var(--danger)'; // Green for match, red for missing
+      const color = isMatch ? 'var(--positive)' : 'var(--negative)'; // Green for match, red for missing
 
       // Missed words carry an underline as well as the color - color alone
       // fails WCAG 1.4.1 for colorblind readers.
@@ -482,7 +482,7 @@ ${sourceText.slice(0, 6000)}`;
 
   return (
     <div
-      className="relative min-h-full flex-1 overflow-y-auto bg-base"
+      className="relative min-h-full flex-1 overflow-y-auto bg-canvas"
       style={{ padding: 'clamp(16px, 5vw, 48px)' }}
     >
       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
@@ -512,7 +512,7 @@ ${sourceText.slice(0, 6000)}`;
             {phase === 'SETUP' && (
               <div className="flex flex-col gap-6">
                 <div>
-                  <h1 className="text-h1 text-primary">Active Recall</h1>
+                  <h1 className="text-display-sm text-primary">Active Recall</h1>
                   <p className="mt-2 max-w-xl text-body text-secondary">
                     Blurting is a powerful active recall technique. Read, write, then check what
                     you missed.
@@ -547,7 +547,7 @@ ${sourceText.slice(0, 6000)}`;
                 {/* Character counter: flips to success once the AI minimum is met */}
                 <div className="flex items-center justify-end">
                   <span
-                    className={`font-mono text-micro uppercase tabular-nums ${
+                    className={`text-label-sm tabular-nums ${
                       sourceReady ? 'text-success' : 'text-secondary'
                     }`}
                     aria-live="polite"
@@ -584,11 +584,11 @@ ${sourceText.slice(0, 6000)}`;
                 {/* The countdown, as a thin bar draining across the page */}
                 <Progress value={fractionRemaining} tone={timerTone} label="Time remaining" />
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-small text-secondary">
+                  <p className="text-body-sm text-secondary">
                     Write everything you remember without looking at the source
                   </p>
                   <span
-                    className={`font-mono text-micro tabular-nums ${
+                    className={`text-label-sm tabular-nums ${
                       timerTone === 'danger' ? 'text-danger' : 'text-secondary'
                     }`}
                   >
@@ -613,7 +613,7 @@ ${sourceText.slice(0, 6000)}`;
                 </div>
 
                 <div className="flex justify-end">
-                  <span className="font-mono text-micro uppercase tabular-nums text-secondary">
+                  <span className="text-label-sm tabular-nums text-secondary">
                     {wordCount.toLocaleString('en-US')} words · {userAttempt.length.toLocaleString('en-US')} chars
                   </span>
                 </div>
@@ -627,7 +627,7 @@ ${sourceText.slice(0, 6000)}`;
             {phase === 'ANALYSIS' && (
               <div className="flex flex-col gap-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h1 className="text-h1 text-primary">Analysis</h1>
+                  <h1 className="text-display-sm text-primary">Analysis</h1>
                   <div className="flex items-center gap-3">
                     {aiScore !== null && (
                       <Badge variant={scoreTone(aiScore)}>Recall: {aiScore}%</Badge>
@@ -644,29 +644,29 @@ ${sourceText.slice(0, 6000)}`;
                   style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))' }}
                 >
                   <Card className="flex h-[500px] flex-col p-5">
-                    <div className="mb-3 flex shrink-0 items-center gap-2 font-mono text-micro uppercase text-secondary">
+                    <div className="mb-3 flex shrink-0 items-center gap-2 text-label-sm text-secondary">
                       <span
                         className="h-1.5 w-1.5 rounded-pill"
-                        style={{ backgroundColor: 'var(--danger)' }}
+                        style={{ backgroundColor: 'var(--negative)' }}
                         aria-hidden="true"
                       />
                       Source Material
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-mono text-small leading-relaxed">
+                    <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap text-body-sm leading-relaxed">
                       {highlightText(sourceText, userAttempt)}
                     </div>
                   </Card>
 
                   <Card className="flex h-[500px] flex-col p-5">
-                    <div className="mb-3 flex shrink-0 items-center gap-2 font-mono text-micro uppercase text-secondary">
+                    <div className="mb-3 flex shrink-0 items-center gap-2 text-label-sm text-secondary">
                       <span
                         className="h-1.5 w-1.5 rounded-pill"
-                        style={{ backgroundColor: 'var(--success)' }}
+                        style={{ backgroundColor: 'var(--positive)' }}
                         aria-hidden="true"
                       />
                       Your Attempt
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-mono text-small leading-relaxed text-primary">
+                    <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap text-body-sm leading-relaxed text-primary">
                       {userAttempt || '(Empty)'}
                     </div>
                   </Card>
@@ -683,7 +683,7 @@ ${sourceText.slice(0, 6000)}`;
                         <motion.div
                           key={analysisError}
                           animate={reduce ? undefined : shake}
-                          className="rounded-input border border-danger-line bg-danger-wash px-4 py-3 text-center text-small leading-relaxed text-primary"
+                          className="rounded-sm border border-danger-line bg-danger-wash px-4 py-3 text-center text-body-sm leading-relaxed text-primary"
                           role="alert"
                         >
                           {analysisError}
@@ -700,7 +700,7 @@ ${sourceText.slice(0, 6000)}`;
                         {analysisError ? 'Try Again' : 'Analyze Understanding with AI'}
                       </Button>
                       {isLimitReached && (
-                        <div className="rounded-input border border-danger-line bg-danger-wash px-4 py-3 text-center text-small font-medium text-danger">
+                        <div className="rounded-sm border border-danger-line bg-danger-wash px-4 py-3 text-center text-body-sm font-medium text-danger">
                           Daily Limit Reached - Upgrade to Pro
                         </div>
                       )}
@@ -724,11 +724,11 @@ ${sourceText.slice(0, 6000)}`;
                     <Card className="flex flex-col items-center gap-4 p-8 text-center">
                       <CountRing value={1} size={160} strokeWidth={6} tone="success">
                         <div className="flex items-baseline gap-1">
-                          <AnimatedNumber value={100} countUp className="text-h1 text-primary" />
-                          <span className="font-mono text-micro text-secondary">%</span>
+                          <AnimatedNumber value={100} countUp className="text-display-sm text-primary" />
+                          <span className="text-label-sm text-secondary">%</span>
                         </div>
                       </CountRing>
-                      <div className="text-h2 text-success">Perfect Recall!</div>
+                      <div className="text-title text-success">Perfect Recall!</div>
                       <p className="max-w-md text-body text-secondary">
                         You've captured all the key concepts from the source material.
                       </p>
@@ -753,14 +753,14 @@ ${sourceText.slice(0, 6000)}`;
                                 <AnimatedNumber
                                   value={aiScore}
                                   countUp
-                                  className="text-h1 text-primary"
+                                  className="text-display-sm text-primary"
                                 />
-                                <span className="font-mono text-micro text-secondary">%</span>
+                                <span className="text-label-sm text-secondary">%</span>
                               </div>
                             </CountRing>
 
                             <div className="flex flex-col items-center gap-1">
-                              <span className="font-mono text-micro uppercase text-secondary">
+                              <span className="text-label-sm text-secondary">
                                 Grade
                               </span>
                               {/* Stamps in after the ring starts drawing */}
@@ -768,7 +768,7 @@ ${sourceText.slice(0, 6000)}`;
                                 initial={reduce ? { opacity: 0 } : { scale: 1.3, opacity: 0 }}
                                 animate={reduce ? { opacity: 1 } : { scale: 1, opacity: 1 }}
                                 transition={reduce ? reduced : { ...snappy, delay: 0.35 }}
-                                className="font-mono text-display leading-none"
+                                className="text-display leading-none"
                                 style={{ color: TONE_VARS[scoreTone(aiScore)] }}
                               >
                                 {aiGrade}
@@ -777,7 +777,7 @@ ${sourceText.slice(0, 6000)}`;
                           </div>
 
                           {aiSummary && (
-                            <p className="mt-4 border-t border-soft pt-4 text-body leading-relaxed text-secondary">
+                            <p className="mt-4 border-t border-line pt-4 text-body leading-relaxed text-secondary">
                               {aiSummary}
                             </p>
                           )}
@@ -795,7 +795,7 @@ ${sourceText.slice(0, 6000)}`;
                       {aiFeedback && aiFeedback.length > 0 && (
                         <Card className="p-6">
                           <div className="mb-4 flex items-center justify-between">
-                            <span className="font-mono text-micro uppercase text-secondary">
+                            <span className="text-label-sm text-secondary">
                               Missing Concepts
                             </span>
                             <Badge variant="danger">{aiFeedback.length}</Badge>
@@ -808,18 +808,18 @@ ${sourceText.slice(0, 6000)}`;
                                 typeof item === 'object' && item.explanation ? item.explanation : '';
                               return (
                                 <Stagger.Item key={index}>
-                                  <div className="flex items-start gap-3 rounded-input border border-soft bg-base px-4 py-3">
+                                  <div className="flex items-start gap-3 rounded-sm border border-line bg-canvas px-4 py-3">
                                     <XIcon
                                       className="mt-0.5 h-4 w-4 shrink-0 text-danger"
                                       strokeWidth={1.5}
                                       aria-hidden="true"
                                     />
                                     <div className="min-w-0 flex-1">
-                                      <div className="text-small font-medium text-primary">
+                                      <div className="text-body-sm font-medium text-primary">
                                         {conceptText}
                                       </div>
                                       {explanation && (
-                                        <div className="mt-0.5 text-small leading-relaxed text-secondary">
+                                        <div className="mt-0.5 text-body-sm leading-relaxed text-secondary">
                                           {explanation}
                                         </div>
                                       )}
@@ -867,7 +867,7 @@ ${sourceText.slice(0, 6000)}`;
                       {/* Instant Quiz */}
                       {aiQuiz && aiQuiz.length > 0 && (
                         <Card className="p-6">
-                          <div className="mb-5 font-mono text-micro uppercase text-secondary">
+                          <div className="mb-5 text-label-sm text-secondary">
                             Knowledge Check
                           </div>
                           {aiQuiz.map((quizItem, questionIndex) => (
@@ -875,12 +875,12 @@ ${sourceText.slice(0, 6000)}`;
                               key={questionIndex}
                               className={
                                 questionIndex < aiQuiz.length - 1
-                                  ? 'mb-6 border-b border-soft pb-6'
+                                  ? 'mb-6 border-b border-line pb-6'
                                   : ''
                               }
                             >
                               <div className="mb-3 text-body font-medium text-primary">
-                                <span className="font-mono tabular-nums">{questionIndex + 1}.</span>{' '}
+                                <span className="tabular-nums">{questionIndex + 1}.</span>{' '}
                                 {quizItem.question}
                               </div>
                               <div className="flex flex-col gap-2">
@@ -890,23 +890,23 @@ ${sourceText.slice(0, 6000)}`;
                                   const showResult = quizAnswers[questionIndex] !== undefined;
 
                                   let stateClasses =
-                                    'border-soft bg-base text-primary hover:border-strong hover:bg-elevated';
+                                    'border-line bg-canvas text-primary hover:border-strong hover:bg-hover';
                                   let stateStyle;
                                   if (showResult) {
                                     if (isCorrect) {
-                                      stateClasses = 'border-soft';
+                                      stateClasses = 'border-line';
                                       stateStyle = {
-                                        backgroundColor: 'var(--success-wash)',
-                                        color: 'var(--success)',
+                                        backgroundColor: 'var(--positive-wash)',
+                                        color: 'var(--positive)',
                                       };
                                     } else if (isSelected) {
                                       stateClasses = 'border-danger-line';
                                       stateStyle = {
-                                        backgroundColor: 'var(--danger-wash)',
-                                        color: 'var(--danger)',
+                                        backgroundColor: 'var(--negative-wash)',
+                                        color: 'var(--negative)',
                                       };
                                     } else {
-                                      stateClasses = 'border-soft bg-base text-secondary';
+                                      stateClasses = 'border-line bg-canvas text-secondary';
                                     }
                                   } else if (isSelected) {
                                     stateClasses = 'border-accent-line bg-accent-wash text-primary';
@@ -922,7 +922,7 @@ ${sourceText.slice(0, 6000)}`;
                                       disabled={showResult}
                                       style={stateStyle}
                                       className={[
-                                        'flex items-center gap-3 rounded-input border px-4 py-3 text-left text-small font-medium',
+                                        'flex items-center gap-3 rounded-sm border px-4 py-3 text-left text-body-sm font-medium',
                                         'transition-colors duration-150',
                                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
                                         showResult ? 'cursor-default' : '',

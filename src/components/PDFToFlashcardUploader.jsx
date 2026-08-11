@@ -58,11 +58,11 @@ const GenerationStatus = ({ messages, onCancel }) => {
   return (
     <div className="flex w-full max-w-sm flex-col items-center gap-4 px-4 py-8 text-center">
       <Progress value={progress} label="Generating deck" className="w-full" />
-      <div aria-live="polite" className="font-mono text-micro uppercase text-secondary">
+      <div aria-live="polite" className="text-label-sm text-secondary">
         {message}
       </div>
       {showColdStartNotice && (
-        <p className="max-w-sm text-small text-secondary">
+        <p className="max-w-sm text-body-sm text-secondary">
           First request of the day can take up to a minute — we're waking the
           AI up. Hang tight.
         </p>
@@ -86,9 +86,9 @@ const ErrorNotice = ({ error, timedOut = false, onRetry }) => {
     <motion.div
       key={error}
       animate={reduce ? undefined : shake}
-      className="flex w-full flex-col items-start gap-3 rounded-card border border-danger-line bg-danger-wash px-4 py-3 text-left"
+      className="flex w-full flex-col items-start gap-3 rounded-lg border border-danger-line bg-danger-wash px-4 py-3 text-left"
     >
-      <p className={`text-small ${timedOut ? 'text-secondary' : 'text-danger'}`}>{error}</p>
+      <p className={`text-body-sm ${timedOut ? 'text-secondary' : 'text-danger'}`}>{error}</p>
       {timedOut && onRetry && (
         <Button variant="secondary" size="sm" mono onClick={onRetry}>
           Try again
@@ -331,7 +331,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
           toast.error('You have used your 3 free credits. Upgrade for unlimited study.', {
             duration: 5000,
             style: {
-              background: 'var(--bg-elevated)',
+              background: 'var(--bg-raised)',
               color: 'var(--text-primary)',
               border: '1px solid var(--danger-line)',
             },
@@ -541,7 +541,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                 <span className="font-mono">{generatedCards.length}</span> flashcards ready
               </span>
             </div>
-            <p className="text-small text-secondary">
+            <p className="text-body-sm text-secondary">
               Review and edit each card before saving to your library.
             </p>
           </div>
@@ -564,7 +564,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                       type="button"
                       aria-label={`Edit card ${index + 1}`}
                       onClick={(e) => startEditing(index, e)}
-                      className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-input border border-transparent text-secondary transition-colors duration-150 hover:border-soft hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+                      className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-sm border border-transparent text-secondary transition-colors duration-150 hover:border-line hover:bg-hover hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
                     >
                       <Pencil size={14} strokeWidth={1.5} />
                     </button>
@@ -603,17 +603,17 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                     <>
                       {/* Question (Front) */}
                       <div className="mb-3 pr-8">
-                        <div aria-hidden="true" className="mb-1 font-mono text-micro uppercase text-tertiary">
+                        <div aria-hidden="true" className="mb-1 text-label-sm text-tertiary">
                           {String(index + 1).padStart(2, '0')}
                         </div>
-                        <div className="text-small font-medium leading-5 text-primary" style={clamp(3)}>
+                        <div className="text-body-sm font-medium leading-5 text-primary" style={clamp(3)}>
                           {card.front || card.question}
                         </div>
                       </div>
 
                       {/* Answer (Back) */}
-                      <div className="border-t border-soft pt-3">
-                        <div className="text-small leading-5 text-secondary" style={clamp(4)}>
+                      <div className="border-t border-line pt-3">
+                        <div className="text-body-sm leading-5 text-secondary" style={clamp(4)}>
                           {card.back || card.answer}
                         </div>
                       </div>
@@ -626,7 +626,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
         </Stagger>
 
         {/* Sticky Action Bar Footer */}
-        <div className="sticky bottom-0 z-10 mt-auto border-t border-soft bg-base py-4">
+        <div className="sticky bottom-0 z-10 mt-auto border-t border-line bg-canvas py-4">
           <div className="flex flex-wrap justify-center gap-3">
             <Button
               variant="secondary"
@@ -702,14 +702,14 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       <div className="flex flex-col gap-3">
         {upgradeModal}
         <Card className="flex items-center gap-4 px-5 py-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input bg-accent-wash">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-accent-wash">
             <FileText size={20} strokeWidth={1.5} className="text-accent" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-body font-medium text-primary">
               {file.name}
             </div>
-            <div className="mt-0.5 font-mono text-micro uppercase text-secondary">
+            <div className="mt-0.5 text-label-sm text-secondary">
               {(file.size / 1024).toFixed(1)} KB
             </div>
           </div>
@@ -717,7 +717,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             type="button"
             aria-label="Remove file"
             onClick={clearFile}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input border border-soft text-secondary transition-colors duration-150 hover:border-danger-line hover:bg-danger-wash hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-line text-secondary transition-colors duration-150 hover:border-danger-line hover:bg-danger-wash hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
           >
             <X size={16} strokeWidth={1.5} />
           </button>
@@ -770,12 +770,12 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             }
           }}
           className={[
-            'flex min-h-[200px] flex-col items-center justify-center rounded-card border border-dashed px-8 py-12 text-center',
+            'flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed px-8 py-12 text-center',
             'transition-colors duration-150',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
             isDragActive
               ? 'border-accent-line bg-accent-wash'
-              : 'border-soft bg-subtle hover:border-strong hover:bg-elevated',
+              : 'border-line bg-surface hover:border-strong hover:bg-hover',
             isLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
           ].join(' ')}
         >
@@ -804,7 +804,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
               <div className={`mb-2 text-body font-medium transition-colors duration-150 ${isDragActive ? 'text-accent' : 'text-primary'}`}>
                 {isDragActive ? 'Drop your PDF here' : 'Drag & drop your lecture PDF (or click to browse)'}
               </div>
-              <div className="text-small text-secondary">
+              <div className="text-body-sm text-secondary">
                 Max file size: <span className="font-mono">5MB</span>
               </div>
             </>

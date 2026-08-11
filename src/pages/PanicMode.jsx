@@ -122,9 +122,9 @@ const PanicMode = () => {
         <div className="mb-8">
           <div className="mb-3 flex items-center gap-2">
             <span className="h-4 w-px bg-danger" aria-hidden="true" />
-            <span className="font-mono text-micro uppercase text-danger">Triage mode</span>
+            <span className="text-label-sm text-danger">Triage mode</span>
           </div>
-          <h1 className="text-h1 text-primary">Exam soon? Paste your notes.</h1>
+          <h1 className="text-display-sm text-primary">Exam soon? Paste your notes.</h1>
           <p className="mt-3 max-w-[60ch] text-body text-secondary">
             MindFlow triages the hours you have left: an instant recall test finds the
             gaps, cards get built for only the gaps, and you get a schedule for the
@@ -163,7 +163,7 @@ const PanicMode = () => {
                   className="min-h-[260px] leading-relaxed"
                 />
               </Field>
-              <p className={`-mt-3 text-small ${notesShortBy > 0 ? 'text-danger' : 'text-success'}`}>
+              <p className={`-mt-3 text-body-sm ${notesShortBy > 0 ? 'text-danger' : 'text-success'}`}>
                 {notesShortBy > 0 ? (
                   <>
                     Add at least <span className="font-mono">{notesShortBy}</span> more characters so the AI has something to work with
@@ -176,7 +176,7 @@ const PanicMode = () => {
               </p>
 
               {hoursLeft !== null && hoursLeft > 0 && (
-                <div className="flex items-center gap-2 text-small text-warning">
+                <div className="flex items-center gap-2 text-body-sm text-warning">
                   <Hourglass className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
                   <span>
                     <span className="font-mono">{runwayLabel}</span> until the exam
@@ -199,7 +199,7 @@ const PanicMode = () => {
         ) : (
           <Card className="border-danger-line p-6 md:p-7">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-h2 text-primary">
+              <h2 className="text-title text-primary">
                 Your plan for the next{' '}
                 <span className="font-mono">
                   {hoursLeft < 48 ? `${Math.round(hoursLeft)} hours` : `${Math.round(hoursLeft / 24)} days`}
@@ -210,11 +210,11 @@ const PanicMode = () => {
             <Stagger role="list" className="mb-6 flex flex-col gap-3">
               {plan.map((step, i) => (
                 <Stagger.Item role="listitem" key={i}>
-                  <div className="flex gap-4 rounded-input border border-soft bg-base px-4 py-3.5">
-                    <div className="min-w-[110px] font-mono text-micro uppercase text-accent">
+                  <div className="flex gap-4 rounded-sm border border-line bg-canvas px-4 py-3.5">
+                    <div className="min-w-[110px] text-label-sm text-accent">
                       {step.when}
                     </div>
-                    <div className="text-small leading-relaxed text-secondary">{step.what}</div>
+                    <div className="text-body-sm leading-relaxed text-secondary">{step.what}</div>
                   </div>
                 </Stagger.Item>
               ))}

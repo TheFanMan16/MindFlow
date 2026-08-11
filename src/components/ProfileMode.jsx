@@ -94,15 +94,15 @@ export default function ProfileMode() {
               className="flex h-24 w-24 items-center justify-center rounded-pill border border-accent-line bg-accent-wash"
               aria-hidden="true"
             >
-              <span className="font-mono text-h1 text-accent">{initial}</span>
+              <span className="text-display-sm text-accent">{initial}</span>
             </div>
 
             <div className="flex w-full flex-col items-center gap-3">
-              <h1 className="max-w-full break-all text-center text-h2 text-primary">
+              <h1 className="max-w-full break-all text-center text-title text-primary">
                 {displayEmail}
               </h1>
 
-              <div className="font-mono text-micro uppercase text-secondary">
+              <div className="text-label-sm text-secondary">
                 Member since <span className="text-primary">{memberSince}</span>
               </div>
 
@@ -137,7 +137,7 @@ export default function ProfileMode() {
 
           {/* Right column: activity heatmap */}
           <Card className="h-fit p-6">
-            <h2 className="text-h2 text-primary">Activity Heatmap</h2>
+            <h2 className="text-title text-primary">Activity Heatmap</h2>
             <div className="mt-5">
               <ProgressHeatmap />
             </div>

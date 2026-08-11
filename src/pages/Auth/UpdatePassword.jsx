@@ -10,7 +10,7 @@ import { motion, useReducedMotion, Stagger, shake } from '../../motion';
 const Wordmark = () => (
   <span className="inline-flex items-center gap-1.5">
     <Lightbulb size={16} strokeWidth={1.5} className="text-accent" aria-hidden="true" />
-    <span className="text-small font-semibold text-primary">MindFlow</span>
+    <span className="text-body-sm font-semibold text-primary">MindFlow</span>
   </span>
 );
 
@@ -441,7 +441,7 @@ const UpdatePassword = () => {
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-base p-6">
+    <div className="flex min-h-screen w-full items-center justify-center bg-canvas p-6">
       <motion.div
         key={shakeCount}
         animate={reduce ? undefined : shakeCount ? shake : undefined}
@@ -451,22 +451,22 @@ const UpdatePassword = () => {
           <div className="mb-8 flex flex-col items-center gap-4 text-center">
             <Wordmark />
             <div>
-              <h1 className="text-h2 text-primary">Reset Password</h1>
-              <p className="mt-1 text-small text-secondary">Enter your new password below</p>
+              <h1 className="text-title text-primary">Reset Password</h1>
+              <p className="mt-1 text-body-sm text-secondary">Enter your new password below</p>
             </div>
           </div>
 
           {error && (
             <div
               role="alert"
-              className="mb-4 rounded-card border border-danger-line bg-danger-wash px-4 py-3 text-small text-danger"
+              className="mb-4 rounded-lg border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger"
             >
               {error}
             </div>
           )}
 
           {success && (
-            <div className="mb-4 rounded-card border border-soft bg-success-wash p-5 text-center">
+            <div className="mb-4 rounded-lg border border-line bg-success-wash p-5 text-center">
               <CheckCircle2
                 size={20}
                 strokeWidth={1.5}
@@ -474,12 +474,12 @@ const UpdatePassword = () => {
                 aria-hidden="true"
               />
               <p className="text-body font-medium text-primary">Password updated successfully</p>
-              <p className="mt-2 text-small text-secondary">
+              <p className="mt-2 text-body-sm text-secondary">
                 Your password has been updated. You can now sign in with your new password.
               </p>
               <Link
                 to="/"
-                className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-input border border-soft px-4 text-small font-medium text-primary transition-colors duration-150 hover:border-strong hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+                className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-sm border border-line px-4 text-body-sm font-medium text-primary transition-colors duration-150 hover:border-strong hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
               >
                 Go to Login
               </Link>
@@ -492,8 +492,8 @@ const UpdatePassword = () => {
                 aria-hidden="true"
                 className="mb-1 h-8 w-8 animate-spin rounded-pill border-2 border-strong border-t-transparent motion-reduce:animate-none"
               />
-              <p className="text-small text-secondary">Validating password reset link...</p>
-              <p className="font-mono text-micro uppercase text-secondary">
+              <p className="text-body-sm text-secondary">Validating password reset link...</p>
+              <p className="text-label-sm text-secondary">
                 Checking for recovery tokens in URL...
               </p>
             </div>

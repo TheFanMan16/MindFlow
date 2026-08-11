@@ -56,7 +56,7 @@ export const Tooltip = ({ label, side = 'top', children, className = '' }) => {
                 : { opacity: 1, scale: 1, y: 0, transition: snappy }
             }
             exit={{ opacity: 0, transition: reduced }}
-            className={`pointer-events-none absolute z-40 whitespace-nowrap rounded-[4px] border border-soft bg-elevated px-2 py-1 font-mono text-micro text-primary shadow-modal ${pos}`}
+            className={`pointer-events-none absolute z-40 whitespace-nowrap rounded-[4px] border border-line bg-raised px-2 py-1 text-label-sm text-primary shadow-raised ${pos}`}
           >
             {label}
           </motion.span>

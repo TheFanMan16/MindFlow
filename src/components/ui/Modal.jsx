@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { smooth, reduced } from '../../motion/transitions';
 
 /**
- * Modal. bg-elevated, 16px radius, and the system's single permitted shadow.
+ * Modal. bg-raised, 16px radius, and the system's single permitted shadow.
  * The scrim is a plain darken - glassmorphism (backdrop-blur) is purged.
  *
  * Portals to document.body: PageTransition animates transforms on the route
@@ -94,20 +94,20 @@ export const Modal = ({ open, onClose, title, children, footer, className = '', 
             }
             exit={{ opacity: 0, transition: reduced }}
             className={[
-              'relative w-full max-w-md rounded-modal border border-soft bg-elevated shadow-modal',
+              'relative w-full max-w-md rounded-lg border border-line bg-raised shadow-raised',
               'focus-visible:outline-none',
               className,
             ].join(' ')}
             {...rest}
           >
             {title ? (
-              <div className="border-b border-soft px-5 py-4">
+              <div className="border-b border-line px-5 py-4">
                 <h2 className="text-body font-medium text-primary">{title}</h2>
               </div>
             ) : null}
             <div className="px-5 py-4">{children}</div>
             {footer ? (
-              <div className="flex justify-end gap-2 border-t border-soft px-5 py-3.5">{footer}</div>
+              <div className="flex justify-end gap-2 border-t border-line px-5 py-3.5">{footer}</div>
             ) : null}
           </motion.div>
         </div>

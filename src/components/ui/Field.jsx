@@ -1,26 +1,26 @@
 import React, { useId } from 'react';
 
 /**
- * Text inputs. Flat bg-base wells inside cards (or bg-subtle on the page
+ * Text inputs. Inset wells (--bg-inset, darker than canvas) so fields read
  * ground), soft border, visible focus: border sharpens to strong plus a 2px
  * accent ring at 40% opacity. Error state swaps the ring for danger.
  */
 const fieldClasses = (error) =>
   [
-    'w-full rounded-input border bg-base px-3 py-2 text-body text-primary',
+    'w-full rounded-sm border bg-inset px-3 py-2 text-body text-primary',
     'placeholder:text-tertiary',
     'transition-colors duration-150',
     'focus:outline-none focus-visible:outline-none focus:ring-2',
     error
       ? 'border-danger-line focus:border-danger focus:ring-danger-wash'
-      : 'border-soft hover:border-strong focus:border-strong focus:ring-accent-ring',
+      : 'border-line hover:border-strong focus:border-strong focus:ring-accent-ring',
     'disabled:pointer-events-none disabled:opacity-50',
   ].join(' ');
 
 export const Label = ({ children, htmlFor, className = '' }) => (
   <label
     htmlFor={htmlFor}
-    className={`font-mono text-micro uppercase text-secondary ${className}`}
+    className={`text-label-sm text-secondary ${className}`}
   >
     {children}
   </label>
@@ -48,11 +48,11 @@ export const Field = ({ label, error, hint, children, className = '' }) => {
         'aria-describedby': error ? `${id}-error` : hint ? `${id}-hint` : undefined,
       })}
       {error ? (
-        <p id={`${id}-error`} className="text-small text-danger">
+        <p id={`${id}-error`} className="text-body-sm text-danger">
           {error}
         </p>
       ) : hint ? (
-        <p id={`${id}-hint`} className="text-small text-secondary">
+        <p id={`${id}-hint`} className="text-body-sm text-secondary">
           {hint}
         </p>
       ) : null}

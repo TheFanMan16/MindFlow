@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { snappy, reduced } from '../../motion/transitions';
 
 /**
- * Anchored popover menu. bg-elevated, soft border, the modal shadow,
+ * Anchored popover menu. bg-raised, soft border, the modal shadow,
  * fadeScale entrance from its anchor edge. Closes on outside click, Escape,
  * or item selection.
  *
@@ -62,7 +62,7 @@ export const Popover = ({ trigger, children, side = 'bottom', align = 'start', c
                 : { opacity: 1, scale: 1, y: 0, transition: snappy }
             }
             exit={{ opacity: 0, transition: reduced }}
-            className={`absolute z-40 min-w-[180px] rounded-card border border-soft bg-elevated p-1 shadow-modal ${pos}`}
+            className={`absolute z-40 min-w-[180px] rounded-lg border border-line bg-raised p-1 shadow-raised ${pos}`}
             onClick={close}
           >
             {children}
@@ -80,10 +80,10 @@ export const PopoverItem = ({ children, onSelect, danger = false, className = ''
     role="menuitem"
     onClick={onSelect}
     className={[
-      'flex w-full items-center gap-2.5 rounded-[4px] px-2.5 py-2 text-left text-small',
+      'flex w-full items-center gap-2.5 rounded-[4px] px-2.5 py-2 text-left text-body-sm',
       'transition-colors duration-150',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
-      danger ? 'text-danger hover:bg-danger-wash' : 'text-primary hover:bg-subtle',
+      danger ? 'text-danger hover:bg-danger-wash' : 'text-primary hover:bg-hover',
       className,
     ].join(' ')}
   >
@@ -93,7 +93,7 @@ export const PopoverItem = ({ children, onSelect, danger = false, className = ''
 
 /** Hairline separator between menu groups. */
 export const PopoverSeparator = () => (
-  <div role="separator" className="mx-1 my-1 h-px" style={{ backgroundColor: 'var(--border-soft)' }} />
+  <div role="separator" className="mx-1 my-1 h-px" style={{ backgroundColor: 'var(--border-line)' }} />
 );
 
 export default Popover;

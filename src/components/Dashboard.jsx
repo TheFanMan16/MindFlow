@@ -52,7 +52,7 @@ const MasteryMeter = ({ value, tone }) => {
         <span
           key={i}
           className="h-3 w-[3px]"
-          style={{ backgroundColor: i < filled ? tone : 'var(--border-soft)' }}
+          style={{ backgroundColor: i < filled ? tone : 'var(--border-line)' }}
         />
       ))}
     </div>
@@ -60,7 +60,7 @@ const MasteryMeter = ({ value, tone }) => {
 };
 
 const masteryTone = (m) =>
-  m >= 70 ? 'var(--success)' : m >= 40 ? 'var(--warning)' : 'var(--danger)';
+  m >= 70 ? 'var(--positive)' : m >= 40 ? 'var(--warning)' : 'var(--negative)';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -317,14 +317,14 @@ const Dashboard = () => {
   const heroSecond = 'Remember it on exam day.';
 
   return (
-    <div className="min-h-full w-full bg-base">
+    <div className="min-h-full w-full bg-canvas">
       <div className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-8 md:py-10">
         {/* ---------------------------------------------------- header ---- */}
         <Breadcrumb
           trail={['MindFlow', 'Dashboard']}
           right={
             <>
-              <span className="font-mono text-micro text-secondary">
+              <span className="text-label-sm text-secondary">
                 {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
               </span>
               {user ? (
@@ -371,7 +371,7 @@ const Dashboard = () => {
           {loading && user ? (
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-[104px] rounded-card" />
+                <Skeleton key={i} className="h-[104px] rounded-lg" />
               ))}
             </div>
           ) : (
@@ -383,9 +383,9 @@ const Dashboard = () => {
                 <StatTile label="Cards due" value={dueCards.length} countUp />
               </Stagger.Item>
               <Stagger.Item>
-                <div className="rounded-card border border-soft bg-subtle p-4">
+                <div className="rounded-lg border border-line bg-surface p-4">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-micro uppercase text-secondary">Streak</span>
+                    <span className="text-label-sm text-secondary">Streak</span>
                     {streakValue > 0 ? (
                       // One springy pop on mount - the overshoot IS the pop.
                       <motion.span
@@ -399,8 +399,8 @@ const Dashboard = () => {
                     ) : null}
                   </div>
                   <div className="mt-2 flex items-baseline gap-1.5">
-                    <AnimatedNumber value={streakValue} countUp className="text-h1 text-primary" />
-                    <span className="font-mono text-small text-secondary">d</span>
+                    <AnimatedNumber value={streakValue} countUp className="text-display-sm text-primary" />
+                    <span className="text-body-sm text-secondary">d</span>
                   </div>
                 </div>
               </Stagger.Item>
@@ -419,17 +419,17 @@ const Dashboard = () => {
         {/* ------------------------------------------------- first run ---- */}
         {isFirstRun ? (
           <Card className="mt-12 border-accent-line bg-accent-wash p-7 md:p-9">
-            <p className="font-mono text-micro uppercase text-accent">Start here</p>
-            <h2 className="mt-3 text-h1 text-primary">Feel the loop in 60 seconds</h2>
+            <p className="text-label-sm text-accent">Start here</p>
+            <h2 className="mt-3 text-display-sm text-primary">Feel the loop in 60 seconds</h2>
             <p className="mt-3 max-w-[56ch] text-body text-secondary">
               Paste any notes, blurt what you remember, and watch the AI find your gaps and turn
               them into flashcards that resurface right before you would forget them.
             </p>
-            <ol className="mt-6 grid grid-cols-1 gap-px overflow-hidden rounded-input border border-soft bg-elevated sm:grid-cols-3">
+            <ol className="mt-6 grid grid-cols-1 gap-px overflow-hidden rounded-sm border border-line bg-raised sm:grid-cols-3">
               {['Paste your notes', 'Test yourself', 'Misses become cards'].map((step, i) => (
-                <li key={step} className="bg-subtle p-4">
-                  <span className="font-mono text-micro text-accent">{`0${i + 1}`}</span>
-                  <p className="mt-1.5 text-small text-primary">{step}</p>
+                <li key={step} className="bg-surface p-4">
+                  <span className="text-label-sm text-accent">{`0${i + 1}`}</span>
+                  <p className="mt-1.5 text-body-sm text-primary">{step}</p>
                 </li>
               ))}
             </ol>
@@ -444,13 +444,13 @@ const Dashboard = () => {
 
         {/* ----------------------------------------------- today's plan --- */}
         {user && loading ? (
-          <Skeleton className="mt-12 h-[168px] rounded-card" />
+          <Skeleton className="mt-12 h-[168px] rounded-lg" />
         ) : user && (dueCards.length > 0 || topicMastery.length > 0) ? (
           <Card className="mt-12 p-6 md:p-8">
             <div className="flex flex-wrap items-start justify-between gap-6">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-3">
-                  <p className="font-mono text-micro uppercase text-secondary">Today&rsquo;s plan</p>
+                  <p className="text-label-sm text-secondary">Today&rsquo;s plan</p>
                   {soonestExam !== null ? (
                     // One pulse on mount - scale 1 -> 1.04 -> 1, never looping.
                     <motion.span
@@ -465,10 +465,10 @@ const Dashboard = () => {
                     </motion.span>
                   ) : null}
                 </div>
-                <h2 className="mt-2 text-h1 text-primary">
+                <h2 className="mt-2 text-display-sm text-primary">
                   {dueCards.length > 0 ? (
                     <>
-                      <AnimatedNumber value={dueCards.length} countUp className="text-h1" /> card
+                      <AnimatedNumber value={dueCards.length} countUp className="text-display-sm" /> card
                       {dueCards.length === 1 ? '' : 's'} due
                     </>
                   ) : (
@@ -486,23 +486,23 @@ const Dashboard = () => {
             </div>
 
             {topicMastery.length > 0 ? (
-              <div className="mt-6 border-t border-soft">
+              <div className="mt-6 border-t border-line">
                 {topicMastery.slice(0, 6).map(({ topic, mastery }) => {
                   const examDays = daysUntilExam(topic.exam_date);
                   const tone = masteryTone(mastery);
                   return (
                     <div
                       key={topic.id}
-                      className="grid grid-cols-2 items-center gap-4 border-b border-soft py-3.5
-                                 transition-colors duration-150 hover:bg-elevated md:grid-cols-12"
+                      className="grid grid-cols-2 items-center gap-4 border-b border-line py-3.5
+                                 transition-colors duration-150 hover:bg-hover md:grid-cols-12"
                     >
                       <div className="col-span-2 min-w-0 md:col-span-6">
                         <p className="truncate text-body font-medium text-primary">{topic.name}</p>
                         {examDays !== null && examDays >= 0 ? (
-                          <p className="mt-0.5 font-mono text-micro text-secondary">
+                          <p className="mt-0.5 text-label-sm text-secondary">
                             {examDays === 0 ? 'Exam today' : `T-minus ${examDays}d`}
                             <span className="mx-1.5">/</span>
-                            <span style={{ color: mastery >= 60 ? 'var(--success)' : 'var(--danger)' }}>
+                            <span style={{ color: mastery >= 60 ? 'var(--positive)' : 'var(--negative)' }}>
                               {mastery >= 60 ? 'on track' : 'behind'}
                             </span>
                           </p>
@@ -510,7 +510,7 @@ const Dashboard = () => {
                       </div>
                       <div className="col-span-1 flex items-center gap-3 md:col-span-3">
                         <MasteryMeter value={mastery} tone={tone} />
-                        <span className="font-mono text-small tabular-nums" style={{ color: tone }}>
+                        <span className="text-body-sm tabular-nums" style={{ color: tone }}>
                           {mastery}%
                         </span>
                       </div>
@@ -521,8 +521,8 @@ const Dashboard = () => {
                           onChange={(e) => handleSetExamDate(topic.id, e.target.value)}
                           aria-label={`Exam date for ${topic.name}`}
                           title="Set exam date"
-                          className="w-full cursor-pointer rounded-input border border-transparent bg-transparent
-                                     px-1.5 py-1 font-mono text-micro text-secondary transition-colors
+                          className="w-full cursor-pointer rounded-sm border border-transparent bg-transparent
+                                     px-1.5 py-1 text-label-sm text-secondary transition-colors
                                      duration-150 hover:border-strong hover:text-primary [color-scheme:dark]"
                         />
                       </div>
@@ -549,7 +549,7 @@ const Dashboard = () => {
         {/* The sanctioned in-view reveal: Stagger's hardened inView mode
             falls back to visible after 1.2s even if the observer never fires. */}
         <section className="mt-16">
-          <p className="font-mono text-micro uppercase text-secondary">The loop</p>
+          <p className="text-label-sm text-secondary">The loop</p>
           <Stagger inView className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-12">
             {modes.map((mode) => {
               const last = formatTimeAgo(getLastActivityAt(mode.id));
@@ -568,24 +568,24 @@ const Dashboard = () => {
                         4px right on hover. */}
                     <span
                       aria-hidden="true"
-                      className="pointer-events-none absolute -top-4 right-4 select-none font-mono
+                      className="pointer-events-none absolute -top-4 right-4 select-none
                                  text-[96px] font-bold leading-none text-tertiary opacity-20
                                  transition-transform duration-150 ease-mech group-hover:translate-x-1"
                     >
                       {mode.index}
                     </span>
 
-                    <h3 className="relative z-10 text-h2 text-primary">{mode.title}</h3>
-                    <p className="relative z-10 mt-2 max-w-[48ch] flex-1 text-small leading-relaxed text-secondary">
+                    <h3 className="relative z-10 text-title text-primary">{mode.title}</h3>
+                    <p className="relative z-10 mt-2 max-w-[48ch] flex-1 text-body-sm leading-relaxed text-secondary">
                       {mode.description}
                     </p>
 
                     <div className="relative z-10 mt-6 flex items-center justify-between gap-4">
-                      <span className="font-mono text-micro text-secondary">
+                      <span className="text-label-sm text-secondary">
                         {last ? `Last session ${last}` : 'Not started'}
                       </span>
                       <span
-                        className="inline-flex items-center gap-1.5 font-mono text-micro uppercase
+                        className="inline-flex items-center gap-1.5 text-label-sm
                                    text-secondary transition-all duration-150 ease-mech
                                    group-hover:gap-2.5 group-hover:text-accent"
                       >
@@ -601,8 +601,8 @@ const Dashboard = () => {
         </section>
 
         {/* ------------------------------------------------------ footer -- */}
-        <footer className="mt-16 flex flex-wrap items-center justify-between gap-4 border-t border-soft pt-5">
-          <span className="font-mono text-micro text-tertiary">© {new Date().getFullYear()} MindFlow</span>
+        <footer className="mt-16 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-5">
+          <span className="text-label-sm text-tertiary">© {new Date().getFullYear()} MindFlow</span>
           <nav className="flex flex-wrap gap-5">
             {[
               ['About', '/about'],
@@ -613,7 +613,7 @@ const Dashboard = () => {
               <a
                 key={label}
                 href={href}
-                className="font-mono text-micro uppercase text-secondary transition-colors duration-150 hover:text-primary"
+                className="text-label-sm text-secondary transition-colors duration-150 hover:text-primary"
               >
                 {label}
               </a>

@@ -9,7 +9,7 @@ export const CONTACT_EMAIL = 'hannajohn37@gmail.com';
 export const LegalLayout = ({ title, updated, children }) => {
   const navigate = useNavigate();
   return (
-    <div className="min-h-full bg-base px-6 py-12">
+    <div className="min-h-full bg-canvas px-6 py-12">
       <div className="mx-auto max-w-[65ch]">
         <Button
           variant="ghost"
@@ -21,8 +21,8 @@ export const LegalLayout = ({ title, updated, children }) => {
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
           Back to MindFlow
         </Button>
-        <h1 className="text-h1 text-primary">{title}</h1>
-        <p className="mb-8 mt-2 font-mono text-micro uppercase text-secondary">
+        <h1 className="text-display-sm text-primary">{title}</h1>
+        <p className="mb-8 mt-2 text-label-sm text-secondary">
           Last updated: {updated}
         </p>
         <div className="text-body leading-relaxed text-secondary [&_p]:mb-4 [&_strong]:font-medium [&_strong]:text-primary">
@@ -34,7 +34,7 @@ export const LegalLayout = ({ title, updated, children }) => {
 };
 
 const H2 = ({ children }) => (
-  <h2 className="mb-3 mt-8 text-h2 text-primary">{children}</h2>
+  <h2 className="mb-3 mt-8 text-title text-primary">{children}</h2>
 );
 
 /** In-copy mailto link, accent-toned with a visible focus ring. */
@@ -97,12 +97,12 @@ export const PrivacyPage = () => (
 export const AboutPage = () => (
   <LegalLayout title="About MindFlow" updated="August 6, 2026">
     <div className="mb-7 flex items-center gap-5">
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-pill bg-accent-wash font-mono text-h2 text-accent">
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-pill bg-accent-wash text-title text-accent">
         JH
       </div>
       <div>
         <div className="text-body font-medium text-primary">John Hanna</div>
-        <div className="text-small text-secondary">Builder of MindFlow</div>
+        <div className="text-body-sm text-secondary">Builder of MindFlow</div>
       </div>
     </div>
 

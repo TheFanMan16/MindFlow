@@ -24,7 +24,7 @@ import {
  * subtle surface - matches the system's "ghost control" treatment.
  */
 const KeyHint = ({ children }) => (
-  <kbd className="rounded-input border border-soft bg-subtle px-1.5 py-0.5 font-mono text-micro uppercase text-secondary">
+  <kbd className="rounded-sm border border-line bg-surface px-1.5 py-0.5 text-label-sm text-secondary">
     {children}
   </kbd>
 );
@@ -729,7 +729,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="font-mono text-micro uppercase text-secondary">Loading flashcards</div>
+          <div className="text-label-sm text-secondary">Loading flashcards</div>
           <Progress value={0.3} label="Loading" className="w-40" />
         </div>
       </div>
@@ -773,15 +773,15 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
         <Card className="w-full max-w-xl p-8 sm:p-10">
           <Stagger>
             <Stagger.Item>
-              <div className="font-mono text-micro uppercase text-secondary">Session complete</div>
-              <h2 className="mt-2 text-h1 text-primary">Deck reviewed.</h2>
+              <div className="text-label-sm text-secondary">Session complete</div>
+              <h2 className="mt-2 text-display-sm text-primary">Deck reviewed.</h2>
             </Stagger.Item>
 
             <Stagger.Item className="mt-8 flex justify-center">
               <CountRing value={mastery / 100} size={168} strokeWidth={8} tone="accent">
                 <div className="text-center">
-                  <div className="font-mono text-h1 text-primary">{mastery}%</div>
-                  <div className="mt-1 font-mono text-micro uppercase text-secondary">Mastery</div>
+                  <div className="text-display-sm text-primary">{mastery}%</div>
+                  <div className="mt-1 text-label-sm text-secondary">Mastery</div>
                 </div>
               </CountRing>
             </Stagger.Item>
@@ -791,13 +791,13 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
               <StatTile label="Accuracy" value={accuracy} unit="%" countUp />
             </Stagger.Item>
 
-            <Stagger.Item className="mt-3 rounded-card border border-soft bg-subtle p-4">
-              <div className="font-mono text-micro uppercase text-secondary">Next due</div>
-              <div className="mt-2 flex items-center justify-between text-small text-secondary">
+            <Stagger.Item className="mt-3 rounded-lg border border-line bg-surface p-4">
+              <div className="text-label-sm text-secondary">Next due</div>
+              <div className="mt-2 flex items-center justify-between text-body-sm text-secondary">
                 <span>Returning soon</span>
                 <span className="font-mono text-primary">{dueSoon}</span>
               </div>
-              <div className="mt-1 flex items-center justify-between text-small text-secondary">
+              <div className="mt-1 flex items-center justify-between text-body-sm text-secondary">
                 <span>Scheduled ahead</span>
                 <span className="font-mono text-primary">{scheduledAhead}</span>
               </div>
@@ -819,7 +819,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             </Stagger.Item>
 
             {isGestureMode && (
-              <Stagger.Item className="mt-4 text-center font-mono text-micro uppercase text-secondary">
+              <Stagger.Item className="mt-4 text-center text-label-sm text-secondary">
                 Gestures active: 👍 keep studying · 👎 back
               </Stagger.Item>
             )}
@@ -885,14 +885,14 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           Back to Library
         </Button>
 
-        <div className="pointer-events-none font-mono text-micro uppercase text-secondary">
+        <div className="pointer-events-none text-label-sm text-secondary">
           Card <span className="text-primary">{displayIndex}</span>
           <span className="mx-1 text-tertiary">/</span>
           <span className="text-primary">{flashcards.length}</span>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <span className="text-small text-secondary">Enable Gestures</span>
+          <span className="text-body-sm text-secondary">Enable Gestures</span>
           <Switch
             checked={isGestureMode}
             onChange={() => setIsGestureMode(!isGestureMode)}
@@ -911,8 +911,8 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             transition={reduce ? reduced : smooth}
             className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60"
           >
-            <div className="flex flex-col items-center gap-5 rounded-modal border border-soft bg-elevated p-8 shadow-modal">
-              <div className="text-h2 text-primary">Gesture Controls</div>
+            <div className="flex flex-col items-center gap-5 rounded-lg border border-line bg-raised p-8 shadow-raised">
+              <div className="text-title text-primary">Gesture Controls</div>
               <div className="flex flex-col items-start gap-3">
                 <div className="flex items-center gap-3 text-body text-secondary">
                   <span aria-hidden="true">🖐️</span>
@@ -927,7 +927,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
                   <span>Thumbs Down: Review Later (Left)</span>
                 </div>
               </div>
-              <div className="font-mono text-micro uppercase text-accent">Gestures Active</div>
+              <div className="text-label-sm text-accent">Gestures Active</div>
             </div>
           </motion.div>
         )}
@@ -966,7 +966,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
               variants={exitVariants}
               exit="exit"
               transition={cardTransition}
-              className="absolute inset-0 z-10 rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+              className="absolute inset-0 z-10 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
               role="button"
               tabIndex={0}
               aria-label="Flashcard. Click or press Space to flip"
@@ -977,18 +977,18 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
                 onFlip={handleFlip}
                 front={
                   <CardFace>
-                    <div className="text-h2 text-primary">
+                    <div className="text-title text-primary">
                       {currentCard?.front || currentCard?.question || 'No question available'}
                     </div>
                   </CardFace>
                 }
                 back={
                   <CardFace>
-                    <div className="text-h2 text-primary">
+                    <div className="text-title text-primary">
                       {currentCard?.back || currentCard?.answer || 'No answer available'}
                     </div>
                     {currentCard?.explanation && (
-                      <div className="mt-4 w-full border-t border-soft pt-4 text-small text-secondary">
+                      <div className="mt-4 w-full border-t border-line pt-4 text-body-sm text-secondary">
                         {currentCard.explanation}
                       </div>
                     )}
@@ -1008,7 +1008,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           onClick={() => handleGrade('again')}
           aria-label="Grade 1: Again"
         >
-          <span aria-hidden="true" className="font-mono text-micro text-tertiary">1</span>
+          <span aria-hidden="true" className="text-label-sm text-tertiary">1</span>
           Again
         </Button>
         <Button
@@ -1017,7 +1017,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           onClick={() => handleGrade('hard')}
           aria-label="Grade 2: Hard"
         >
-          <span aria-hidden="true" className="font-mono text-micro text-tertiary">2</span>
+          <span aria-hidden="true" className="text-label-sm text-tertiary">2</span>
           Hard
         </Button>
         <Button
@@ -1026,7 +1026,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           onClick={() => handleGrade('good')}
           aria-label="Grade 3: Good"
         >
-          <span aria-hidden="true" className="font-mono text-micro text-tertiary">3</span>
+          <span aria-hidden="true" className="text-label-sm text-tertiary">3</span>
           Good
         </Button>
         <Button
@@ -1035,13 +1035,13 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           onClick={() => handleGrade('easy')}
           aria-label="Grade 4: Easy"
         >
-          <span aria-hidden="true" className="font-mono text-micro text-tertiary">4</span>
+          <span aria-hidden="true" className="text-label-sm text-tertiary">4</span>
           Easy
         </Button>
       </div>
 
       {/* Keyboard hint row */}
-      <div className="relative z-10 mt-4 flex items-center gap-2 font-mono text-micro uppercase text-secondary">
+      <div className="relative z-10 mt-4 flex items-center gap-2 text-label-sm text-secondary">
         <KeyHint>space</KeyHint>
         <span>flip</span>
         <span aria-hidden="true" className="text-tertiary">·</span>
@@ -1051,9 +1051,9 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
       {/* Webcam HUD - Bottom Right (only when gesture mode is enabled) */}
       {isGestureMode && (
-        <div className="absolute bottom-6 right-6 z-50 h-[225px] w-[300px] overflow-hidden rounded-card border border-soft bg-black shadow-modal">
+        <div className="absolute bottom-6 right-6 z-50 h-[225px] w-[300px] overflow-hidden rounded-lg border border-line bg-black shadow-raised">
           {/* Debug Overlay */}
-          <div className="absolute left-2.5 top-2.5 z-10 rounded-input border border-soft px-3 py-2 font-mono text-micro bg-black/60">
+          <div className="absolute left-2.5 top-2.5 z-10 rounded-sm border border-line px-3 py-2 text-label-sm bg-black/60">
             <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>Status: {debugStatus}</div>
             <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>Detected: {debugGesture}</div>
             <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>
@@ -1063,7 +1063,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
           {/* Gesture Label Overlay */}
           {gestureLabel && (
-            <div className="absolute bottom-2.5 right-2.5 z-10 rounded-input px-4 py-3 text-h2 text-primary bg-black/60">
+            <div className="absolute bottom-2.5 right-2.5 z-10 rounded-sm px-4 py-3 text-title text-primary bg-black/60">
               {gestureLabel}
             </div>
           )}
@@ -1072,7 +1072,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           {isCooldownVisual && (
             <div
               className="absolute right-2.5 top-2.5 z-10 h-3 w-3 rounded-pill"
-              style={{ backgroundColor: 'var(--danger)' }}
+              style={{ backgroundColor: 'var(--negative)' }}
             />
           )}
 
@@ -1087,13 +1087,13 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
           {/* Loading/Error Overlay */}
           {isLoadingGesture && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center text-small text-secondary bg-black/60">
+            <div className="absolute inset-0 z-20 flex items-center justify-center text-body-sm text-secondary bg-black/60">
               Initializing camera...
             </div>
           )}
 
           {gestureError && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center p-4 text-center text-small text-danger bg-black/60">
+            <div className="absolute inset-0 z-20 flex items-center justify-center p-4 text-center text-body-sm text-danger bg-black/60">
               {gestureError}
             </div>
           )}

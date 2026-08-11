@@ -14,7 +14,7 @@ import { motion, useReducedMotion, Stagger, shake } from '../motion';
 const Wordmark = () => (
   <span className="inline-flex items-center gap-1.5">
     <Lightbulb size={16} strokeWidth={1.5} className="text-accent" aria-hidden="true" />
-    <span className="text-small font-semibold text-primary">MindFlow</span>
+    <span className="text-body-sm font-semibold text-primary">MindFlow</span>
   </span>
 );
 
@@ -176,7 +176,7 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-base p-6">
+    <div className="flex min-h-screen w-full items-center justify-center bg-canvas p-6">
       <motion.div
         key={shakeCount}
         animate={reduce ? undefined : shakeCount ? shake : undefined}
@@ -187,15 +187,15 @@ const Login = () => {
             <Stagger.Item className="mb-8 flex flex-col items-center gap-4 text-center">
               <Wordmark />
               <div>
-                <h1 className="text-h2 text-primary">Welcome to MindFlow</h1>
-                <p className="mt-1 text-small text-secondary">Sign in to continue</p>
+                <h1 className="text-title text-primary">Welcome to MindFlow</h1>
+                <p className="mt-1 text-body-sm text-secondary">Sign in to continue</p>
               </div>
             </Stagger.Item>
 
             {error && (
               <div
                 role="alert"
-                className="mb-4 rounded-card border border-danger-line bg-danger-wash px-4 py-3 text-small text-danger"
+                className="mb-4 rounded-lg border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger"
               >
                 {error}
               </div>
@@ -268,7 +268,7 @@ const Login = () => {
             </Stagger.Item>
 
             <Stagger.Item>
-              <p className="mt-6 text-center text-small text-secondary">
+              <p className="mt-6 text-center text-body-sm text-secondary">
                 By signing in, you agree to our Terms of Service and Privacy Policy.
                 <br />
                 Accounts with the same email address are automatically linked.

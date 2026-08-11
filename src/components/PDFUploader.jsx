@@ -139,16 +139,16 @@ const PDFUploader = ({ onTextExtracted }) => {
   if (selectedFile && !isProcessing) {
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-4 rounded-card border border-soft bg-subtle px-4 py-3.5">
+        <div className="flex items-center gap-4 rounded-lg border border-line bg-surface px-4 py-3.5">
           {/* PDF icon tile */}
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input border border-soft bg-elevated">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-line bg-raised">
             <FileText className="h-5 w-5 text-secondary" strokeWidth={1.5} aria-hidden="true" />
           </div>
 
           {/* Filename + size */}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-small font-medium text-primary">{selectedFile.name}</div>
-            <div className="mt-0.5 font-mono text-micro tabular-nums text-secondary">
+            <div className="truncate text-body-sm font-medium text-primary">{selectedFile.name}</div>
+            <div className="mt-0.5 text-label-sm tabular-nums text-secondary">
               {(selectedFile.size / 1024).toFixed(1)} KB
             </div>
           </div>
@@ -162,7 +162,7 @@ const PDFUploader = ({ onTextExtracted }) => {
               clearFile();
             }}
             className={[
-              'flex h-8 w-8 shrink-0 items-center justify-center rounded-input border border-soft text-secondary',
+              'flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-line text-secondary',
               'transition-colors duration-150 hover:border-danger-line hover:bg-danger-wash hover:text-danger',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
             ].join(' ')}
@@ -172,7 +172,7 @@ const PDFUploader = ({ onTextExtracted }) => {
         </div>
 
         {error && (
-          <div className="rounded-input border border-danger-line bg-danger-wash px-4 py-3 text-small text-danger">
+          <div className="rounded-sm border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger">
             {error}
           </div>
         )}
@@ -198,12 +198,12 @@ const PDFUploader = ({ onTextExtracted }) => {
         }
       }}
       className={[
-        'flex min-h-[200px] flex-col items-center justify-center rounded-card border border-dashed px-8 py-12 text-center',
+        'flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed px-8 py-12 text-center',
         'transition-colors duration-150',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
         isDragActive
           ? 'border-accent-line bg-accent-wash'
-          : 'border-soft bg-subtle hover:border-strong hover:bg-elevated',
+          : 'border-line bg-surface hover:border-strong hover:bg-hover',
         isProcessing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
       ].join(' ')}
     >
@@ -231,12 +231,12 @@ const PDFUploader = ({ onTextExtracted }) => {
           <div className={`text-body font-medium transition-colors duration-150 ${isDragActive ? 'text-accent' : 'text-primary'}`}>
             {isDragActive ? 'Drop your PDF here' : 'Drag & Drop your Lecture Slides (PDF) here'}
           </div>
-          <div className="mt-1 text-small text-secondary">or click to browse</div>
+          <div className="mt-1 text-body-sm text-secondary">or click to browse</div>
         </>
       )}
 
       {error && (
-        <div className="mt-4 rounded-input border border-danger-line bg-danger-wash px-4 py-3 text-small text-danger">
+        <div className="mt-4 rounded-sm border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger">
           {error}
         </div>
       )}

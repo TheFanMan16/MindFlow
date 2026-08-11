@@ -1,81 +1,105 @@
 /**
- * MindFlow design tokens - the single source of truth for color, radius,
- * shadow and font stacks. Tailwind mirrors these variables in
- * tailwind.config.js; components consume Tailwind classes (or var() refs in
- * the rare inline-style case) and NEVER hardcode a color. scripts/
- * check-colors.mjs enforces that for the foundation directories.
+ * MindFlow design tokens - the single source of truth. Tailwind mirrors
+ * these; scripts/check-colors.mjs enforces that no other file carries a hex.
  *
- * Direction: Linear/Vercel/Raycast-grade discipline. One neutral ramp, one
- * accent, semantic status colors, and feature hues that survive only as 8%
- * tints for icons and badges - never as fills, never as glows.
+ * Direction: warm amber accent on cool near-black. Elevation = lightness,
+ * not shadow. Hairlines are opaque and come in three deliberate weights.
+ * Contrast figures below are measured against --bg-surface and verified -
+ * do not "improve" them by darkening any text token.
  *
- * The app is deliberately single-theme (near-black). That is a product
- * decision, not an omission - there is no light mode to mirror.
+ * THE GOVERNING RULE: the accent has exactly one job per screen - the
+ * single most important action plus the one number it operates on.
+ * Hierarchy comes from density, surface layering and type weight, never
+ * from color variety.
  */
 :root {
-  /* --------------------------------------------------------- surfaces -- */
-  --bg-base: #08090A;      /* app background */
-  --bg-subtle: #0E0F11;    /* raised surfaces: cards, sidebar */
-  --bg-elevated: #16181B;  /* modals, popovers, hover states */
+  /* ------------------------------------------------------- surfaces --- */
+  /* Cool near-black, layered. Never pure #000. */
+  --bg-canvas: #0A0C0E;
+  --bg-inset: #07080A;   /* wells, input fills - darker than canvas */
+  --bg-surface: #111417; /* standard panel */
+  --bg-raised: #171B1F;  /* nested / emphasized panel */
+  --bg-hover: #1C2126;
+  --bg-active: #232A30;
 
-  /* ---------------------------------------------------------- borders -- */
-  --border-soft: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  /* ------------------------------------------------------ hairlines --- */
+  --line-faint: #191D21;  /* internal dividers */
+  --line: #262C32;        /* panel edges */
+  --line-strong: #363E45; /* focused / selected edges */
 
-  /* ------------------------------------------------------------- text -- */
-  --text-primary: #EDEEF0;   /* 17.0:1 on --bg-base */
-  --text-secondary: #8A8F98; /*  7.0:1 on --bg-base */
-  /* 3.10:1 on --bg-base: FAILS WCAG AA for essential text. Reserved for
-     decorative/disabled/duplicated content only (ghosted numerals, disabled
-     labels, icons that repeat an adjacent label). Anything a user must read
-     uses secondary (6.13:1) or better. */
-  --text-tertiary: #5A5F66;
+  /* ----------------------------------------------------------- text --- */
+  /* Never pure white - halation on dark is a tell.
+     vs --bg-surface: primary 15.43 / secondary 7.05 / tertiary 4.74. */
+  --text-primary: #E8EBED;
+  --text-secondary: #98A1A9;
+  --text-tertiary: #7A828A;
+  --text-disabled: #454C53; /* exempt from contrast rules - disabled only */
 
-  /* ----------------------------------------------------------- accent -- */
-  /* The ONE brand accent. Primary CTA, active nav, focus rings, key numbers.
-     If a second accent appears anywhere, that is a bug. */
-  --accent: #6E79FF;
-  --accent-hover: #828CFF;
-  --accent-ring: rgba(110, 121, 255, 0.4);   /* focus rings */
-  --accent-wash: rgba(110, 121, 255, 0.10);  /* selected/active fills */
-  --accent-line: rgba(110, 121, 255, 0.32);  /* accent-tinted borders */
-  /* Label color on an accent fill. Near-black, not white: the dark label on
-     the accent measures 5.54:1 (passes AA); white measures 3.59:1 (fails). */
-  --on-accent: #08090A;
+  /* --------------------------------------------------------- accent --- */
+  /* Warm amber on cool ground. accent 9.02 on surface; accent-ink 9.16
+     on accent fills. */
+  --accent: #E9A94D;
+  --accent-hover: #F4B85F;
+  --accent-press: #D6963C;
+  --accent-ink: #16110A; /* text on accent fills */
+  --accent-wash: rgba(233, 169, 77, 0.10);
+  --accent-line: rgba(233, 169, 77, 0.28);
 
-  /* ----------------------------------------------------------- status -- */
-  --success: #4CC38A;
-  --danger: #F2555A;
-  --warning: #F2A85C;
-  --success-wash: rgba(76, 195, 138, 0.08);
-  --danger-wash: rgba(242, 85, 90, 0.08);
-  --warning-wash: rgba(242, 168, 92, 0.08);
-  --danger-line: rgba(242, 85, 90, 0.32);
+  /* ------------------------------------------------------- semantic --- */
+  /* Muted, never saturated. positive 6.01 / negative 4.78 on surface. */
+  --positive: #6E9E78;
+  --negative: #C9635E;
+  --negative-wash: rgba(201, 99, 94, 0.10);
+  --positive-wash: rgba(110, 158, 120, 0.10);
 
-  /* -------------------------------------------------- feature identity -- */
-  /* Desaturated feature hues. Allowed ONLY as icon/badge tints on their 8%
-     wash - never button fills, never glows, never headings. */
-  --tint-focus: #7AA7FF;
-  --tint-recall: #B08CFF;
-  --tint-feynman: #F2A85C;
-  --tint-flashcards: #4CC38A;
-  --tint-focus-wash: rgba(122, 167, 255, 0.08);
-  --tint-recall-wash: rgba(176, 140, 255, 0.08);
-  --tint-feynman-wash: rgba(242, 168, 92, 0.08);
-  --tint-flashcards-wash: rgba(76, 195, 138, 0.08);
+  /* ------------------------------------------------------ elevation --- */
+  /* On dark, elevation is a top edge highlight, not a drop shadow.
+     --shadow-raised is reserved for elements that genuinely float. */
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.55), 0 8px 24px -12px rgba(0, 0, 0, 0.7);
 
-  /* ------------------------------------------------------------ shape -- */
-  /* 4px grid. Three radii, by surface class - not per-component whim. */
-  --radius-input: 6px;   /* inputs, buttons, small controls */
-  --radius-card: 10px;   /* cards, panels */
-  --radius-modal: 16px;  /* modals, large popovers */
+  /* --------------------------------------------------------- radius --- */
+  /* NESTED RULE: inner radius = outer radius minus inner padding.
+     Never the same radius on a parent and its child. */
+  --r-sm: 6px;    /* controls, chips */
+  --r-md: 10px;   /* inner panels */
+  --r-lg: 14px;   /* outer cards, floating panels */
+  --r-full: 999px; /* status pills ONLY */
 
-  /* ---------------------------------------------------------- shadows -- */
-  /* The ONLY shadow in the system. Cards elevate by border+background
-     change, never by shadow. */
-  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.5);
+  /* --------------------------------------------------------- motion --- */
+  --dur-micro: 120ms;
+  --dur-base: 180ms;
+  --dur-enter: 260ms;
+  --dur-layout: 380ms;
+  --ease-out: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-std: cubic-bezier(0.2, 0, 0, 1);
 
-  /* ------------------------------------------------------------ fonts -- */
-  --font-sans: 'Geist', 'Geist Fallback', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, SFMono-Regular, monospace;
+  /* ---------------------------------------------------------- fonts --- */
+  --font-sans: 'Geist', 'Geist Fallback', 'Instrument Sans', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, monospace;
+
+  /* ----------------------------------------------- legacy aliases ----- */
+  /* Old semantic names still referenced by components resolve to the new
+     tokens, keeping this file the single source. Do not use in new code. */
+  --on-accent: var(--accent-ink);
+  --accent-ring: var(--accent-line);
+  --success: var(--positive);
+  --success-wash: var(--positive-wash);
+  --danger: var(--negative);
+  --danger-wash: var(--negative-wash);
+  --danger-line: rgba(201, 99, 94, 0.28);
+  /* NO TOKEN EQUIVALENT in the new spec - flagged in the migration report:
+     warning collapses into the accent family (amber IS the warning hue
+     here); feature identity tints have no home and go neutral. */
+  --warning: var(--accent);
+  --warning-wash: var(--accent-wash);
+  --tint-focus: var(--text-secondary);
+  --tint-recall: var(--text-secondary);
+  --tint-feynman: var(--text-secondary);
+  --tint-flashcards: var(--text-secondary);
+  --tint-focus-wash: var(--bg-raised);
+  --tint-recall-wash: var(--bg-raised);
+  --tint-feynman-wash: var(--bg-raised);
+  --tint-flashcards-wash: var(--bg-raised);
 }

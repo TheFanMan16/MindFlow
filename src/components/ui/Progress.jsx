@@ -8,8 +8,8 @@ import React from 'react';
  */
 const TONES = {
   accent: 'var(--accent)',
-  success: 'var(--success)',
-  danger: 'var(--danger)',
+  success: 'var(--positive)',
+  danger: 'var(--negative)',
   warning: 'var(--warning)',
 };
 
@@ -23,7 +23,7 @@ export const Progress = ({ value = 0, tone = 'accent', className = '', label }) 
       aria-valuenow={Math.round(clamped * 100)}
       aria-label={label}
       className={`h-0.5 w-full overflow-hidden ${className}`}
-      style={{ backgroundColor: 'var(--border-soft)' }}
+      style={{ backgroundColor: 'var(--border-line)' }}
     >
       <div
         className="h-full w-full origin-left"

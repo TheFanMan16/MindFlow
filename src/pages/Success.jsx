@@ -55,7 +55,7 @@ const Success = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-1 items-center justify-center bg-base p-6 md:p-12">
+    <div className="flex min-h-screen flex-1 items-center justify-center bg-canvas p-6 md:p-12">
       <motion.div
         initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -67,16 +67,16 @@ const Success = () => {
             <Check className="h-8 w-8 text-success" strokeWidth={1.5} aria-hidden="true" />
           </div>
 
-          <h1 className="text-h1 text-primary">Payment successful</h1>
+          <h1 className="text-display-sm text-primary">Payment successful</h1>
 
           <p className="mt-3 text-body text-secondary">
             You are now a <span className="font-medium text-primary">Pro member</span>.
           </p>
 
           {sessionId && (
-            <div className="mt-6 w-full rounded-input border border-soft bg-base px-4 py-3">
-              <div className="font-mono text-micro uppercase text-secondary">Session ID</div>
-              <div className="mt-1 break-all font-mono text-small text-secondary">
+            <div className="mt-6 w-full rounded-sm border border-line bg-canvas px-4 py-3">
+              <div className="text-label-sm text-secondary">Session ID</div>
+              <div className="mt-1 break-all text-body-sm text-secondary">
                 {sessionId.substring(0, 20)}...
               </div>
             </div>

@@ -21,7 +21,7 @@ export const Switch = ({ checked = false, onChange, label, disabled = false, cla
         'relative inline-flex h-5 w-9 shrink-0 items-center rounded-pill border transition-colors duration-150',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
         'disabled:pointer-events-none disabled:opacity-50',
-        checked ? 'border-transparent bg-accent' : 'border-strong bg-elevated',
+        checked ? 'border-transparent bg-accent' : 'border-strong bg-raised',
         className,
       ].join(' ')}
     >
@@ -30,7 +30,7 @@ export const Switch = ({ checked = false, onChange, label, disabled = false, cla
         animate={{ x: checked ? 18 : 2 }}
         transition={reduce ? { duration: 0 } : snappy}
         className="h-3.5 w-3.5 rounded-pill"
-        style={{ backgroundColor: checked ? 'var(--on-accent)' : 'var(--text-secondary)' }}
+        style={{ backgroundColor: checked ? 'var(--accent-ink)' : 'var(--text-secondary)' }}
       />
     </button>
   );

@@ -29,13 +29,13 @@ const SentryModal = ({ onResume }) => {
             ? { opacity: 1, transition: reduced }
             : { opacity: 1, scale: 1, y: 0, transition: smooth }
         }
-        className="relative w-full max-w-md rounded-modal border border-danger-line bg-elevated p-8 text-center shadow-modal"
+        className="relative w-full max-w-md rounded-lg border border-danger-line bg-raised p-8 text-center shadow-raised"
       >
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-card border border-danger-line bg-danger-wash">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg border border-danger-line bg-danger-wash">
           <AlertTriangle className="h-6 w-6 text-danger" strokeWidth={1.5} aria-hidden="true" />
         </div>
 
-        <h2 className="text-h2 text-danger">Focus Broken</h2>
+        <h2 className="text-title text-danger">Focus Broken</h2>
 
         <p className="mx-auto mt-3 max-w-xs text-body text-secondary">
           You left the app while Sentry Mode was active.

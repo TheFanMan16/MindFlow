@@ -20,11 +20,11 @@ export const Ticker = ({ value, className = '' }) => {
   const text = String(value);
 
   if (reduce) {
-    return <span className={`font-mono tabular-nums ${className}`}>{text}</span>;
+    return <span className={`tabular-nums ${className}`}>{text}</span>;
   }
 
   return (
-    <span className={`inline-flex font-mono tabular-nums ${className}`} aria-label={text} role="text">
+    <span className={`inline-flex tabular-nums ${className}`} aria-label={text} role="text">
       {text.split('').map((ch, i) => (
         <span
           key={i}

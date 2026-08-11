@@ -5,10 +5,10 @@
  * consistent to read as personality rather than noise.
  */
 
-/** Buttons, toggles, tab pills, small UI. Arrives fast, settles hard. */
-export const snappy = { type: 'spring', stiffness: 500, damping: 35 };
+/** Press feedback - buttons, toggles, tab pills. (spec: spring-press) */
+export const snappy = { type: 'spring', stiffness: 420, damping: 32, mass: 0.7 };
 
-/** Cards, panels, layout moves, flips. */
+/** Layout moves - cards, panels, flips. (spec: spring-layout) */
 export const smooth = { type: 'spring', stiffness: 260, damping: 30 };
 
 /** Page and section reveals. */

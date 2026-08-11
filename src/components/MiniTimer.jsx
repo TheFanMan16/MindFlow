@@ -42,12 +42,12 @@ const MiniTimer = () => {
   // position:fixed - so the pill portals to document.body like other overlays.
   return createPortal(
     <div
-      className="fixed flex items-center gap-3 rounded-pill border border-soft bg-elevated py-2 pl-4 pr-3 shadow-modal"
+      className="fixed flex items-center gap-3 rounded-pill border border-line bg-raised py-2 pl-4 pr-3 shadow-raised"
       style={{ top: '20px', right: '20px', zIndex: 1000 }}
     >
       <div className="flex flex-col gap-0.5">
-        <div className="font-mono text-micro uppercase text-secondary">{getModeLabel()}</div>
-        <div className="font-mono text-body tabular-nums text-primary">{getDisplayTime()}</div>
+        <div className="text-label-sm text-secondary">{getModeLabel()}</div>
+        <div className="text-body tabular-nums text-primary">{getDisplayTime()}</div>
       </div>
       <span className="h-2 w-2 rounded-pill bg-success" aria-hidden="true" />
     </div>,

@@ -805,8 +805,8 @@ const FlashcardDashboard = () => {
   const menuTriggerClasses = (extra) =>
     [
       extra,
-      'flex h-7 w-7 shrink-0 items-center justify-center rounded-input text-secondary',
-      'transition-colors duration-150 hover:bg-elevated hover:text-primary',
+      'flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-secondary',
+      'transition-colors duration-150 hover:bg-hover hover:text-primary',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
     ].join(' ');
 
@@ -846,7 +846,7 @@ const FlashcardDashboard = () => {
         }}
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-input border border-soft bg-base text-secondary">
+          <span className="flex h-8 w-8 items-center justify-center rounded-sm border border-line bg-canvas text-secondary">
             <Folder size={16} strokeWidth={1.5} />
           </span>
           <div className="flex items-center gap-1.5">
@@ -873,7 +873,7 @@ const FlashcardDashboard = () => {
         </h3>
 
         <div className="mt-auto flex items-center justify-between gap-2">
-          <span className="font-mono text-micro uppercase text-secondary">
+          <span className="text-label-sm text-secondary">
             {itemCount > 99 ? '99+' : itemCount} {itemCount === 1 ? 'item' : 'items'}
           </span>
         </div>
@@ -883,7 +883,7 @@ const FlashcardDashboard = () => {
           <div
             ref={menuRef}
             role="menu"
-            className="folder-menu-dropdown absolute right-3 top-11 z-50 min-w-[160px] rounded-card border border-soft bg-elevated p-1 shadow-modal"
+            className="folder-menu-dropdown absolute right-3 top-11 z-50 min-w-[160px] rounded-lg border border-line bg-raised p-1 shadow-raised"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -932,7 +932,7 @@ const FlashcardDashboard = () => {
         }}
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-input border border-soft bg-base text-secondary">
+          <span className="flex h-8 w-8 items-center justify-center rounded-sm border border-line bg-canvas text-secondary">
             <Layers size={16} strokeWidth={1.5} />
           </span>
           <div className="flex items-center gap-1.5">
@@ -981,7 +981,7 @@ const FlashcardDashboard = () => {
         )}
 
         <div className="mt-auto flex items-center justify-between gap-2">
-          <span className="font-mono text-micro uppercase text-secondary">
+          <span className="text-label-sm text-secondary">
             {deck.card_count ?? 0} cards
           </span>
           {cardsDue > 0 && (
@@ -994,7 +994,7 @@ const FlashcardDashboard = () => {
           <div
             ref={menuRef}
             role="menu"
-            className="menu-dropdown absolute right-3 top-11 z-50 min-w-[180px] rounded-card border border-soft bg-elevated p-1 shadow-modal"
+            className="menu-dropdown absolute right-3 top-11 z-50 min-w-[180px] rounded-lg border border-line bg-raised p-1 shadow-raised"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -1057,7 +1057,7 @@ const FlashcardDashboard = () => {
     const previewCount = parseAnkiText(importText).length;
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-small text-secondary">
+        <p className="text-body-sm text-secondary">
           In Anki: File → Export → "Notes in Plain Text (.txt)". Upload that file
           or paste its contents below. Semicolon CSVs (like MindFlow's own export) work too.
         </p>
@@ -1075,15 +1075,15 @@ const FlashcardDashboard = () => {
             onChange={(e) => setImportText(e.target.value)}
             placeholder={'Front of card\tBack of card\n…'}
             rows={7}
-            className="font-mono text-small"
+            className="text-body-sm"
           />
         </Field>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <label
             className={[
-              'inline-flex h-8 cursor-pointer select-none items-center gap-2 rounded-input border border-soft',
-              'bg-transparent px-3 text-small font-medium text-primary',
-              'transition-colors duration-150 hover:border-strong hover:bg-elevated',
+              'inline-flex h-8 cursor-pointer select-none items-center gap-2 rounded-sm border border-line',
+              'bg-transparent px-3 text-body-sm font-medium text-primary',
+              'transition-colors duration-150 hover:border-strong hover:bg-hover',
               'focus-within:ring-2 focus-within:ring-accent-ring',
             ].join(' ')}
           >
@@ -1139,12 +1139,12 @@ const FlashcardDashboard = () => {
     }
 
     content = (
-      <div className="min-h-full bg-base">
+      <div className="min-h-full bg-canvas">
         <div className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-8">
           <Breadcrumb
             trail={['MindFlow', 'Library']}
             right={
-              <span className="font-mono text-micro uppercase text-secondary">
+              <span className="text-label-sm text-secondary">
                 {decks.length} {decks.length === 1 ? 'deck' : 'decks'}
               </span>
             }
@@ -1159,7 +1159,7 @@ const FlashcardDashboard = () => {
                   Back to Library
                 </Button>
               )}
-              <h1 className="text-h1 text-primary">{headerTitle}</h1>
+              <h1 className="text-display-sm text-primary">{headerTitle}</h1>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1282,7 +1282,7 @@ const FlashcardDashboard = () => {
                 renderAnkiImportForm(() => setShowNewDeckModal(false))
               ) : (
                 <>
-                  <p className="text-small text-secondary">
+                  <p className="text-body-sm text-secondary">
                     {newDeckTab === 'pdf'
                       ? 'Upload a PDF and MindFlow turns it into flashcards.'
                       : 'Paste notes or a summary and MindFlow turns them into flashcards.'}
@@ -1366,9 +1366,9 @@ const FlashcardDashboard = () => {
                 type="button"
                 onClick={handleMoveDeckToRoot}
                 className={[
-                  'flex w-full items-center gap-2.5 rounded-input border border-soft bg-base px-3 py-2.5',
-                  'text-left text-small font-medium text-primary',
-                  'transition-colors duration-150 hover:border-strong hover:bg-elevated',
+                  'flex w-full items-center gap-2.5 rounded-sm border border-line bg-canvas px-3 py-2.5',
+                  'text-left text-body-sm font-medium text-primary',
+                  'transition-colors duration-150 hover:border-strong hover:bg-hover',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
                 ].join(' ')}
               >
@@ -1383,9 +1383,9 @@ const FlashcardDashboard = () => {
                   type="button"
                   onClick={() => handleMoveDeckToFolder(folder.id)}
                   className={[
-                    'flex w-full items-center gap-2.5 rounded-input border border-soft bg-base px-3 py-2.5',
-                    'text-left text-small font-medium text-primary',
-                    'transition-colors duration-150 hover:border-strong hover:bg-elevated',
+                    'flex w-full items-center gap-2.5 rounded-sm border border-line bg-canvas px-3 py-2.5',
+                    'text-left text-body-sm font-medium text-primary',
+                    'transition-colors duration-150 hover:border-strong hover:bg-hover',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
                   ].join(' ')}
                 >
@@ -1395,7 +1395,7 @@ const FlashcardDashboard = () => {
               ))}
 
               {items.filter(item => item.type === 'folder').length === 0 && (
-                <p className="py-4 text-center text-small text-secondary">
+                <p className="py-4 text-center text-body-sm text-secondary">
                   No folders available. Create a folder first.
                 </p>
               )}
@@ -1406,7 +1406,7 @@ const FlashcardDashboard = () => {
     );
   } else if (view === 'create') {
     content = (
-      <div className="min-h-full bg-base">
+      <div className="min-h-full bg-canvas">
         <div className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-8">
           <Breadcrumb trail={['MindFlow', 'Library']} />
 
@@ -1415,7 +1415,7 @@ const FlashcardDashboard = () => {
               <ChevronLeft size={16} strokeWidth={1.5} />
               Cancel
             </Button>
-            <h1 className="text-h1 text-primary">Create New Deck</h1>
+            <h1 className="text-display-sm text-primary">Create New Deck</h1>
           </div>
 
           <PDFToFlashcardUploader

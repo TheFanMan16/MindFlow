@@ -24,7 +24,7 @@ export const StepRail = ({ steps, active, className = '' }) => {
         return (
           <li key={step.id} className="relative pb-2">
             <span
-              className={`font-mono text-micro uppercase ${
+              className={`text-label-sm ${
                 isActive ? 'text-primary' : isDone ? 'text-secondary' : 'text-tertiary'
               }`}
               aria-current={isActive ? 'step' : undefined}

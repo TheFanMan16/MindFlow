@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 /**
  * react-activity-calendar needs concrete color strings, so the 5-step scale
  * is resolved from the design tokens at runtime: level 0 is the computed
- * --border-soft value (an empty cell reads as a faint outline-tone block on
+ * --border-line value (an empty cell reads as a faint outline-tone block on
  * the card surface), levels 1-4 are the computed --accent at 28% / 52% /
  * 76% / 100% alpha. No color literals live in this file; if the tokens
  * cannot be read or parsed (e.g. jsdom), it falls back to color-mix()
@@ -36,7 +36,7 @@ const parseToRgb = (value) => {
 const useHeatmapScale = () =>
   useMemo(() => {
     const accentRgb = parseToRgb(readToken('--accent'));
-    const borderSoft = readToken('--border-soft');
+    const borderSoft = readToken('--border-line');
 
     const empty = borderSoft || 'color-mix(in srgb, var(--text-primary) 7%, transparent)';
     const steps = [0.28, 0.52, 0.76, 1];
@@ -131,7 +131,7 @@ const ProgressHeatmap = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-3 text-center text-small text-secondary">
+      <div className="flex items-center justify-center p-3 text-center text-body-sm text-secondary">
         Loading activity...
       </div>
     );
@@ -139,7 +139,7 @@ const ProgressHeatmap = () => {
 
   if (!activityData || activityData.length === 0) {
     return (
-      <div className="flex items-center justify-center p-3 text-center text-small text-secondary">
+      <div className="flex items-center justify-center p-3 text-center text-body-sm text-secondary">
         No activity data yet. Start a timer to see your progress!
       </div>
     );
@@ -152,7 +152,7 @@ const ProgressHeatmap = () => {
 
   return (
     <div
-      className="mt-2 w-full overflow-x-auto rounded-input border border-soft p-3 font-mono"
+      className="mt-2 w-full overflow-x-auto rounded-sm border border-line p-3 font-mono"
       style={{ color: 'var(--text-secondary)' }}
     >
       <ActivityCalendar

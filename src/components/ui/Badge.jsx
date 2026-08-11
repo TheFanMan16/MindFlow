@@ -13,9 +13,9 @@ const FEATURE = {
 };
 
 const STATUS = {
-  neutral: { color: 'var(--text-secondary)', background: 'var(--bg-elevated)' },
-  success: { color: 'var(--success)', background: 'var(--success-wash)' },
-  danger: { color: 'var(--danger)', background: 'var(--danger-wash)' },
+  neutral: { color: 'var(--text-secondary)', background: 'var(--bg-raised)' },
+  success: { color: 'var(--positive)', background: 'var(--positive-wash)' },
+  danger: { color: 'var(--negative)', background: 'var(--negative-wash)' },
   warning: { color: 'var(--warning)', background: 'var(--warning-wash)' },
   accent: { color: 'var(--accent)', background: 'var(--accent-wash)' },
 };
@@ -26,8 +26,8 @@ export const Badge = ({ children, variant = 'neutral', feature, className = '' }
     <span
       style={tone}
       className={[
-        'inline-flex items-center gap-1.5 rounded-[4px] border border-soft px-2 py-0.5',
-        'font-mono text-micro uppercase',
+        'inline-flex items-center gap-1.5 rounded-[4px] border border-line px-2 py-0.5',
+        'text-label-sm',
         className,
       ].join(' ')}
     >

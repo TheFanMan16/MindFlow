@@ -1274,7 +1274,7 @@ const TimerMode = () => {
   });
 
   return (
-    <div className="min-h-full w-full bg-base">
+    <div className="min-h-full w-full bg-canvas">
       <div className="mx-auto w-full max-w-[1200px] px-5 py-6 md:px-8 md:py-8">
         {/* ---------------------------------------------------- header ---- */}
         <Breadcrumb
@@ -1283,12 +1283,12 @@ const TimerMode = () => {
             <>
               {/* Sentry toggle. Free users route to Settings (billing). */}
               <div className="flex items-center gap-2.5">
-                <span className="font-mono text-micro uppercase text-secondary">Sentry</span>
+                <span className="text-label-sm text-secondary">Sentry</span>
                 {isPro && isSentryActive ? (
                   <span
                     aria-hidden="true"
                     className="h-1.5 w-1.5 rounded-pill"
-                    style={{ backgroundColor: isUserPresent ? 'var(--success)' : 'var(--danger)' }}
+                    style={{ backgroundColor: isUserPresent ? 'var(--positive)' : 'var(--negative)' }}
                   />
                 ) : null}
                 <Switch
@@ -1319,7 +1319,7 @@ const TimerMode = () => {
         {/* Camera error */}
         {cameraError ? (
           <Card className="mt-4 border-danger-line bg-danger-wash p-3.5">
-            <p className="flex items-center gap-2 text-small text-danger">
+            <p className="flex items-center gap-2 text-body-sm text-danger">
               <AlertTriangle size={15} strokeWidth={1.5} />
               Camera error: {cameraError}. Check permissions.
             </p>
@@ -1351,7 +1351,7 @@ const TimerMode = () => {
             <motion.div {...chrome(-4)} className="mt-6 w-full max-w-xl">
               {isRunning ? (
                 <Card className="p-4">
-                  <p className="font-mono text-micro uppercase text-secondary">Current task</p>
+                  <p className="text-label-sm text-secondary">Current task</p>
                   <p className="mt-1 truncate text-body font-medium text-primary">
                     {focusIntent || 'No task specified'}
                   </p>
@@ -1383,8 +1383,8 @@ const TimerMode = () => {
                     transition={{ duration: 1, ease: 'linear' }}
                   >
                     <div className="flex flex-col items-center">
-                      <Ticker value={getDisplayTime()} className="text-timer text-primary" />
-                      <p className="mt-2 font-mono text-micro uppercase text-secondary">
+                      <Ticker value={getDisplayTime()} className="text-metric text-primary" />
+                      <p className="mt-2 text-label-sm text-secondary">
                         {MODE_LABELS[mode]}
                       </p>
                     </div>
@@ -1392,8 +1392,8 @@ const TimerMode = () => {
                 </motion.div>
               ) : (
                 <div className="flex flex-col items-center py-6">
-                  <Ticker value={getDisplayTime()} className="text-timer text-primary" />
-                  <p className="mt-2 font-mono text-micro uppercase text-secondary">
+                  <Ticker value={getDisplayTime()} className="text-metric text-primary" />
+                  <p className="mt-2 text-label-sm text-secondary">
                     {MODE_LABELS[mode]}
                   </p>
                 </div>
@@ -1407,7 +1407,7 @@ const TimerMode = () => {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1, transition: reduce ? reduced : { duration: 0.4 } }}
                       exit={{ opacity: 0, transition: reduced }}
-                      className="font-mono text-micro uppercase tracking-[0.16em] text-accent"
+                      className="text-label-sm text-accent"
                     >
                       Focusing
                     </motion.p>
@@ -1455,7 +1455,7 @@ const TimerMode = () => {
               </div>
 
               {(mode === 'shortBreak' || mode === 'longBreak') && !isRunning ? (
-                <p className="mt-5 text-small text-secondary">
+                <p className="mt-5 text-body-sm text-secondary">
                   Take a well-deserved break. Rest your mind.
                 </p>
               ) : null}
@@ -1463,8 +1463,8 @@ const TimerMode = () => {
 
             {/* Soundscapes */}
             <motion.div {...chrome(8)} className="mt-10 w-full max-w-xl">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-soft bg-subtle px-4 py-3">
-                <span className="font-mono text-micro uppercase text-secondary">Soundscapes</span>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3">
+                <span className="text-label-sm text-secondary">Soundscapes</span>
                 <Tabs
                   items={[
                     { value: 'off', label: 'Off' },
@@ -1487,13 +1487,13 @@ const TimerMode = () => {
           >
             {sessionHistory.length > 0 ? (
               <Card className="flex max-h-[calc(100vh-160px)] flex-col overflow-hidden lg:sticky lg:top-6">
-                <div className="border-b border-soft px-4 py-3">
-                  <p className="font-mono text-micro uppercase text-secondary">Session log</p>
+                <div className="border-b border-line px-4 py-3">
+                  <p className="text-label-sm text-secondary">Session log</p>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2">
                   {logGroups.map((group, gi) => (
                     <div key={group.label} className={gi > 0 ? 'mt-3' : ''}>
-                      <p className="px-2 pb-1 pt-2 font-mono text-micro uppercase text-secondary">
+                      <p className="px-2 pb-1 pt-2 text-label-sm text-secondary">
                         {group.label}
                       </p>
                       {group.sessions.map((session, si) => (
@@ -1506,19 +1506,19 @@ const TimerMode = () => {
                           }
                           animate={{ opacity: 1, y: 0 }}
                           transition={snappy}
-                          className="flex items-center justify-between gap-3 rounded-input px-2 py-2
-                                     transition-colors duration-150 hover:bg-elevated"
+                          className="flex items-center justify-between gap-3 rounded-sm px-2 py-2
+                                     transition-colors duration-150 hover:bg-hover"
                         >
                           <div className="min-w-0">
-                            <p className="truncate text-small font-medium text-primary">
+                            <p className="truncate text-body-sm font-medium text-primary">
                               {session.task}
                             </p>
-                            <p className="font-mono text-micro text-secondary">
+                            <p className="font-mono text-label-sm text-secondary">
                               {timeLabel(session.timestamp)}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
-                            <span className="font-mono text-small tabular-nums text-secondary">
+                            <span className="text-body-sm tabular-nums text-secondary">
                               {Math.floor(session.duration / 60)}m
                             </span>
                             <Badge variant={session.mode === 'pomodoro' ? 'accent' : 'neutral'}>
@@ -1557,11 +1557,11 @@ const TimerMode = () => {
               exit={{ opacity: 0, transition: reduced }}
               className="fixed inset-x-0 top-4 z-50 flex justify-center px-4"
             >
-              <div className="flex items-center gap-3 rounded-card border border-danger-line bg-elevated px-4 py-3 shadow-modal">
+              <div className="flex items-center gap-3 rounded-lg border border-danger-line bg-raised px-4 py-3 shadow-raised">
                 <AlertTriangle size={17} strokeWidth={1.5} className="shrink-0 text-danger" />
                 <div>
-                  <p className="text-small font-medium text-primary">Focus broken</p>
-                  <p className="font-mono text-micro text-secondary">You left the app. Timer paused.</p>
+                  <p className="text-body-sm font-medium text-primary">Focus broken</p>
+                  <p className="text-label-sm text-secondary">You left the app. Timer paused.</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -1586,25 +1586,25 @@ const TimerMode = () => {
                 type="button"
                 onClick={() => setIsVideoMinimized(false)}
                 className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-pill border
-                           border-soft bg-elevated px-3.5 py-2 shadow-modal transition-colors
+                           border-line bg-raised px-3.5 py-2 shadow-raised transition-colors
                            duration-150 hover:border-strong"
               >
                 <span
                   aria-hidden="true"
                   className="h-1.5 w-1.5 rounded-pill"
-                  style={{ backgroundColor: isUserPresent ? 'var(--success)' : 'var(--danger)' }}
+                  style={{ backgroundColor: isUserPresent ? 'var(--positive)' : 'var(--negative)' }}
                 />
                 <Video size={14} strokeWidth={1.5} className="text-secondary" />
-                <span className="font-mono text-micro uppercase text-primary">Sentry</span>
+                <span className="text-label-sm text-primary">Sentry</span>
               </button>
             ) : (
-              <div className="fixed bottom-4 right-4 z-40 w-48 overflow-hidden rounded-card border border-soft bg-elevated shadow-modal">
+              <div className="fixed bottom-4 right-4 z-40 w-48 overflow-hidden rounded-lg border border-line bg-raised shadow-raised">
                 <button
                   type="button"
                   onClick={() => setIsVideoMinimized(true)}
                   aria-label="Minimize Sentry video"
                   className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center
-                             rounded-input border border-soft bg-subtle text-secondary
+                             rounded-sm border border-line bg-surface text-secondary
                              transition-colors duration-150 hover:text-primary"
                 >
                   <Minus size={12} strokeWidth={1.5} />
@@ -1630,15 +1630,15 @@ const TimerMode = () => {
                       objectFit: 'cover',
                     }}
                   />
-                  <div className="absolute bottom-1.5 left-1.5 right-1.5 z-[2] rounded-input bg-base/80 px-2 py-1 text-center">
-                    <p className="font-mono text-micro text-primary">Faces: {faceCount}</p>
+                  <div className="absolute bottom-1.5 left-1.5 right-1.5 z-[2] rounded-sm bg-canvas/80 px-2 py-1 text-center">
+                    <p className="text-label-sm text-primary">Faces: {faceCount}</p>
                     <p
-                      className="font-mono text-[10px]"
+                      className="text-label-xs"
                       style={{
                         color: isUserPresent
-                          ? 'var(--success)'
+                          ? 'var(--positive)'
                           : faceDetectorStatus.includes('Error')
-                            ? 'var(--danger)'
+                            ? 'var(--negative)'
                             : 'var(--warning)',
                       }}
                     >
@@ -1646,7 +1646,7 @@ const TimerMode = () => {
                     </p>
                   </div>
                 </div>
-                <p className="border-t border-soft px-3 py-2 text-center font-mono text-[10px] text-secondary">
+                <p className="border-t border-line px-3 py-2 text-center text-label-xs text-secondary">
                   Running locally. No video leaves this device.
                 </p>
               </div>
@@ -1659,10 +1659,10 @@ const TimerMode = () => {
       {isSentryActive && !isUserPresent
         ? createPortal(
             <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 px-6 text-center">
-              <p className="font-mono text-micro uppercase tracking-[0.16em] text-danger">
+              <p className="text-label-sm text-danger">
                 Sentry
               </p>
-              <p className="mt-3 text-h1 text-danger">User missing — paused</p>
+              <p className="mt-3 text-display-sm text-danger">User missing — paused</p>
               <p className="mt-2 max-w-[40ch] text-body text-secondary">
                 Return to your desk to resume the timer.
               </p>
@@ -1681,7 +1681,7 @@ const TimerMode = () => {
               exit={{ opacity: 0, transition: reduced }}
               className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4"
             >
-              <div className="w-full max-w-md rounded-modal border border-accent-line bg-elevated p-5 shadow-modal">
+              <div className="w-full max-w-md rounded-lg border border-accent-line bg-raised p-5 shadow-raised">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <motion.span
@@ -1693,13 +1693,13 @@ const TimerMode = () => {
                       <Flame size={18} strokeWidth={1.5} />
                     </motion.span>
                     <div>
-                      <p className="text-small font-medium text-primary">
+                      <p className="text-body-sm font-medium text-primary">
                         Session saved
                         {recallHandoff.topicName !== 'Untitled Session'
                           ? ` — ${recallHandoff.topicName}`
                           : ''}
                       </p>
-                      <p className="mt-0.5 font-mono text-micro text-secondary">
+                      <p className="mt-0.5 text-label-sm text-secondary">
                         {Math.max(1, Math.floor((recallHandoff.duration || 0) / 60))}m ·{' '}
                         {MODE_LABELS[recallHandoff.mode] || recallHandoff.mode}
                       </p>
@@ -1714,7 +1714,7 @@ const TimerMode = () => {
                     <X size={14} strokeWidth={1.5} />
                   </Button>
                 </div>
-                <p className="mt-3 text-small text-secondary">
+                <p className="mt-3 text-body-sm text-secondary">
                   The best moment to test yourself is right now.
                 </p>
                 <div className="mt-4">

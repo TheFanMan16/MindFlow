@@ -72,7 +72,7 @@ const RotatingStatus = ({ message }) => {
   const reduce = useReducedMotion();
   if (reduce) {
     return (
-      <p aria-live="polite" className="font-mono text-micro uppercase text-secondary">
+      <p aria-live="polite" className="text-label-sm text-secondary">
         {message}
       </p>
     );
@@ -86,7 +86,7 @@ const RotatingStatus = ({ message }) => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={entrance}
-          className="absolute inset-0 font-mono text-micro uppercase text-secondary"
+          className="absolute inset-0 text-label-sm text-secondary"
         >
           {message}
         </motion.p>
@@ -258,13 +258,13 @@ const FeynmanMode = () => {
         onClose={() => setShowUpgradeModal(false)}
         message={upgradeMessage}
       />
-      <div className="flex flex-1 flex-col overflow-y-auto bg-base px-4 py-6 sm:px-8">
+      <div className="flex flex-1 flex-col overflow-y-auto bg-canvas px-4 py-6 sm:px-8">
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
           <Breadcrumb
             trail={['MindFlow', 'Feynman']}
             right={
               !isPro ? (
-                <span className="font-mono text-micro uppercase text-secondary">
+                <span className="text-label-sm text-secondary">
                   Daily credits{' '}
                   <span className="tabular-nums text-primary">{aiUsageCount}/5</span>
                 </span>
@@ -273,7 +273,7 @@ const FeynmanMode = () => {
           />
 
           <header className="mb-8 mt-6">
-            <h1 className="text-h1 text-primary">Feynman Method</h1>
+            <h1 className="text-display-sm text-primary">Feynman Method</h1>
             <p className="mt-1 text-body text-secondary">
               Explain concepts in simple terms. Get feedback on clarity and jargon.
             </p>
@@ -314,7 +314,7 @@ const FeynmanMode = () => {
             {/* Right: feedback */}
             <Card className="flex min-h-[420px] flex-col p-6">
               <div className="mb-5 flex items-center justify-between gap-3">
-                <h2 className="text-h2 text-primary">Feedback</h2>
+                <h2 className="text-title text-primary">Feedback</h2>
                 {isAnalyzing ? (
                   <Button variant="ghost" size="sm" mono onClick={cancelAnalysis}>
                     Cancel
@@ -349,7 +349,7 @@ const FeynmanMode = () => {
                 <Stagger className="flex flex-col gap-6">
                   {/* Score */}
                   <Stagger.Item>
-                    <div className="flex flex-wrap items-center gap-6 rounded-card border border-soft bg-base p-5">
+                    <div className="flex flex-wrap items-center gap-6 rounded-lg border border-line bg-canvas p-5">
                       <CountRing
                         value={Math.max(0, Math.min(1, feedback.score / 100))}
                         size={104}
@@ -359,11 +359,11 @@ const FeynmanMode = () => {
                         <AnimatedNumber
                           value={feedback.score}
                           countUp
-                          className={`text-h2 ${scoreTextClass(feedback.score)}`}
+                          className={`text-title ${scoreTextClass(feedback.score)}`}
                         />
                       </CountRing>
                       <div className="min-w-[12rem] flex-1">
-                        <div className="font-mono text-micro uppercase text-secondary">
+                        <div className="text-label-sm text-secondary">
                           Overall Score
                         </div>
                         <p className="mt-2 text-body text-primary">{feedback.feedback}</p>
@@ -374,14 +374,14 @@ const FeynmanMode = () => {
                   {/* Missing concepts */}
                   {feedback.missing_concepts && feedback.missing_concepts.length > 0 && (
                     <Stagger.Item>
-                      <div className="mb-3 font-mono text-micro uppercase text-secondary">
+                      <div className="mb-3 text-label-sm text-secondary">
                         What You Missed
                       </div>
                       <ul className="flex list-none flex-col gap-2">
                         {feedback.missing_concepts.map((item, index) => (
                           <li
                             key={index}
-                            className="flex items-start gap-3 rounded-input border border-soft bg-base p-3"
+                            className="flex items-start gap-3 rounded-sm border border-line bg-canvas p-3"
                           >
                             <X
                               size={16}
@@ -390,13 +390,13 @@ const FeynmanMode = () => {
                               aria-hidden="true"
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="text-small font-medium text-primary">
+                              <div className="text-body-sm font-medium text-primary">
                                 <JargonTerm>
                                   {typeof item === 'string' ? item : item.concept || item}
                                 </JargonTerm>
                               </div>
                               {typeof item === 'object' && item.explanation && (
-                                <p className="mt-1 text-small text-secondary">
+                                <p className="mt-1 text-body-sm text-secondary">
                                   {item.explanation}
                                 </p>
                               )}
@@ -411,7 +411,7 @@ const FeynmanMode = () => {
                   {feedback.simplification && (
                     <Stagger.Item>
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <span className="font-mono text-micro uppercase text-secondary">
+                        <span className="text-label-sm text-secondary">
                           Simpler Version
                         </span>
                         <Button
@@ -423,7 +423,7 @@ const FeynmanMode = () => {
                           <Copy size={14} strokeWidth={1.5} aria-hidden="true" />
                         </Button>
                       </div>
-                      <div className="rounded-card border border-soft bg-base p-5">
+                      <div className="rounded-lg border border-line bg-canvas p-5">
                         <p className="text-body leading-relaxed text-primary">
                           {feedback.simplification}
                         </p>

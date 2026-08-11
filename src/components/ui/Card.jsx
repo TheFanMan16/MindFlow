@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * The surface. bg-subtle + 1px soft border, 10px radius, NO shadow - cards
+ * The surface. bg-surface + 1px soft border, 10px radius, NO shadow - cards
  * elevate by brightening (border to strong, background to elevated), never
  * by lifting or glowing.
  *
@@ -34,9 +34,9 @@ export const Card = ({ children, interactive = false, as: Tag = 'div', onClick, 
     <Tag
       onClick={onClick}
       className={[
-        'rounded-card border border-soft bg-subtle',
+        'rounded-lg border border-line bg-surface shadow-edge',
         interactive
-          ? 'cursor-pointer transition-colors duration-150 hover:border-strong hover:bg-elevated'
+          ? 'cursor-pointer transition-colors duration-150 hover:border-strong hover:bg-hover'
           : '',
         isControl
           ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring'

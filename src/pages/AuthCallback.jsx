@@ -92,14 +92,14 @@ const AuthCallback = () => {
   }, [navigate]);
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-base p-6">
+    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-canvas p-6">
       {error ? (
         <div
           role="alert"
-          className="w-full max-w-[400px] rounded-card border border-danger-line bg-danger-wash p-6 text-center"
+          className="w-full max-w-[400px] rounded-lg border border-danger-line bg-danger-wash p-6 text-center"
         >
-          <p className="text-small text-danger">{error}</p>
-          <p className="mt-2 font-mono text-micro uppercase text-secondary">
+          <p className="text-body-sm text-danger">{error}</p>
+          <p className="mt-2 text-label-sm text-secondary">
             Redirecting to login...
           </p>
         </div>
@@ -109,10 +109,10 @@ const AuthCallback = () => {
             aria-hidden="true"
             className="h-8 w-8 animate-spin rounded-pill border-2 border-strong border-t-transparent motion-reduce:animate-none"
           />
-          <p className="mt-4 font-mono text-micro uppercase text-secondary">
+          <p className="mt-4 text-label-sm text-secondary">
             Completing sign in...
           </p>
-          <p className="mt-2 text-small text-secondary">
+          <p className="mt-2 text-body-sm text-secondary">
             Please wait while we authenticate you.
           </p>
         </div>

@@ -1,15 +1,15 @@
 import React from 'react';
 
 /**
- * Loading placeholder. A flat elevated block with Tailwind's opacity pulse -
- * no shimmer gradient (gradients are purged, and a sweeping highlight is
- * exactly the kind of ambient motion reduced-motion users asked us to stop).
- * motion-reduce:animate-none kills even the pulse for them.
+ * Loading placeholder. STATIC by rule: nothing in this system loops or
+ * pulses as decoration, and a skeleton that holds still reads as reserved
+ * space rather than activity theater. Shape communicates "content loads
+ * here"; the raised surface against its parent communicates "not yet".
  */
 export const Skeleton = ({ className = '' }) => (
   <div
     aria-hidden="true"
-    className={`animate-pulse rounded-[4px] bg-elevated motion-reduce:animate-none ${className}`}
+    className={`rounded-[4px] bg-raised shadow-edge ${className}`}
   />
 );
 
