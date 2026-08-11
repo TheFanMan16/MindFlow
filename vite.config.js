@@ -6,7 +6,9 @@ import react from '@vitejs/plugin-react';
 // without an image. The canonical host is not knowable at author time, so
 // index.html carries a __SITE_URL__ placeholder that this plugin substitutes at
 // build time. Default keeps the previously hardcoded value.
-const SITE_URL_FALLBACK = 'https://mindflow.app';
+// The deployed frontend. mindflow.app was aspirational and does not resolve,
+// which pointed og:image at a dead host and left every shared link imageless.
+const SITE_URL_FALLBACK = 'https://mind-flow-two-dusky.vercel.app';
 
 function siteUrlPlugin() {
   const siteUrl = (process.env.VITE_PUBLIC_SITE_URL || SITE_URL_FALLBACK).replace(/\/+$/, '');
