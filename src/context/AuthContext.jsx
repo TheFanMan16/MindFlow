@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { identify, captureSignupOnce, resetIdentity } from '../lib/analytics';
 
 const AuthContext = createContext({});
 
@@ -127,6 +128,15 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       console.log('Auth state changed:', event);
+
+      // Funnel identity: tie events to the user; the first-ever sign-in on
+      // this browser is signup_completed.
+      if (event === 'SIGNED_IN' && newSession?.user) {
+        identify(newSession.user.id, { email: newSession.user.email });
+        captureSignupOnce(newSession.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        resetIdentity();
+      }
       
       if (mounted) {
         setSession(newSession);

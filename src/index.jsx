@@ -7,7 +7,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { MotionConfig } from 'framer-motion';
+import { initErrorTracking } from './lib/errors';
 import './index.css';
+
+// Sentry, lazy and DSN-gated: a no-op unless VITE_SENTRY_DSN is set.
+initErrorTracking();
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './context/AuthContext';

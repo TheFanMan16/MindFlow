@@ -1,4 +1,5 @@
 import React from 'react';
+import { reportError } from '../lib/errors';
 
 /**
  * Last-resort crash surface. Deliberately dependency-light: it must render
@@ -19,6 +20,7 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    reportError(error, { componentStack: errorInfo?.componentStack });
     this.setState({
       error: error,
       errorInfo: errorInfo,

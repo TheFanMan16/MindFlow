@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { capture } from '../lib/analytics';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -183,6 +184,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
         // raw error toast.
         const errorData = await response.json().catch(() => ({}));
         setUpgradeMessage(errorData.error || null);
+        capture('quota_hit', { kind: 'pdf_monthly' });
         setShowUpgradeModal(true);
         setIsLoading(false);
         return;

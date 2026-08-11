@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { capture } from '../lib/analytics';
+import { recordActivationMilestone } from '../utils/activation';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { updateCardProgress } from '../utils/spacedRepetition';
@@ -52,6 +54,21 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const [slideDirection, setSlideDirection] = useState(null); // 'left' | 'right' | 'up'
   const [loading, setLoading] = useState(true);
   const [sessionComplete, setSessionComplete] = useState(false);
+
+  // Funnel: fire once on the completion transition, whichever grading path
+  // ended the session. A >=5-card review is the recall half of activation.
+  useEffect(() => {
+    if (!sessionComplete || flashcards.length === 0) return;
+    capture('review_session_completed', {
+      cards: studySessionData.totalCards || flashcards.length,
+      reviewed: studySessionData.reviewed,
+    });
+    if ((studySessionData.reviewed || flashcards.length) >= 5) {
+      recordActivationMilestone('recall', user);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionComplete]);
+
   // Exam Countdown Mode: the deck topic's exam date compresses SRS intervals
   const [examDate, setExamDate] = useState(null);
   const [studySessionData, setStudySessionData] = useState({

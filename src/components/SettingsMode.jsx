@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
+import { capture } from '../lib/analytics';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import ConfirmModal from './ConfirmModal';
@@ -213,6 +214,7 @@ const SettingsMode = () => {
 
   // Account Management Functions
   const handleSubscribe = async () => {
+    capture('checkout_started');
     if (actuallyHasPro) {
       toast.success('You are already a Pro member!');
       return;

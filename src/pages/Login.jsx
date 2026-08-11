@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Lightbulb } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { capture } from '../lib/analytics';
 import toast from 'react-hot-toast';
 import { Button, Card } from '../components/ui';
 import { motion, useReducedMotion, Stagger, shake } from '../motion';
@@ -79,6 +80,7 @@ const Login = () => {
 
   // Handle Google OAuth
   const handleGoogleLogin = async () => {
+    capture('signup_started', { provider: 'google' });
     setError(null);
     setIsLoading(true);
 
@@ -113,6 +115,7 @@ const Login = () => {
 
   // Handle GitHub OAuth
   const handleGitHubLogin = async () => {
+    capture('signup_started', { provider: 'github' });
     setError(null);
     setIsLoading(true);
 
@@ -143,6 +146,7 @@ const Login = () => {
 
   // Handle Discord OAuth
   const handleDiscordLogin = async () => {
+    capture('signup_started', { provider: 'discord' });
     setError(null);
     setIsLoading(true);
 

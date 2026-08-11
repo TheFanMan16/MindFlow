@@ -9,6 +9,8 @@ import { saveGeneratedDeck } from '../utils/deckUtils';
 import { useAuth } from '../context/AuthContext';
 import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
 import { supabase } from '../lib/supabaseClient';
+import { capture } from '../lib/analytics';
+import { recordActivationMilestone } from '../utils/activation';
 import { toast } from 'react-hot-toast';
 import { validateAiInput, MIN_LENGTHS } from '../utils/aiInput';
 import { AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
@@ -220,6 +222,7 @@ const BlurtingMode = () => {
     // Check AI usage limits using current aiUsageCount
     const usage = canUseAI(isPro, aiUsageCount);
     if (!usage.canUse) {
+      capture('quota_hit', { kind: 'ai_daily' });
       setShowUpgradeModal(true);
       return;
     }
@@ -282,6 +285,8 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       const quiz = Array.isArray(parsedResponse.quiz) ? parsedResponse.quiz : [];
 
       setAiScore(score);
+      capture('recall_graded', { score });
+      recordActivationMilestone('recall', user);
       setAiGrade(grade);
       setAiSummary(summary);
       setAiFeedback(missingConcepts);
@@ -340,6 +345,7 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
 
   // One-tap story-format recap image (zero-budget growth loop)
   const handleShareRecap = async (scoreOverride) => {
+    capture('share_clicked', { surface: 'recall_recap' });
     const streak = user?.id ? await getLoopStreak(user.id, { isPro }) : 0;
     downloadRecapImage({
       score: typeof scoreOverride === 'number' ? scoreOverride : (aiScore ?? 0),

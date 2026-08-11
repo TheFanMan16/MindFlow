@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { capture } from '../lib/analytics';
 import { useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +24,12 @@ const Success = () => {
       try {
         // Refresh profile using AuthContext (this will trigger all listeners)
         await refreshProfile();
+        try {
+          if (!localStorage.getItem('mf_checkout_captured')) {
+            localStorage.setItem('mf_checkout_captured', '1');
+            capture('checkout_completed');
+          }
+        } catch { /* no storage, no dedupe - skip */ }
 
         // Also dispatch event for any components listening directly
         window.dispatchEvent(new CustomEvent('profile-updated'));

@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { Lightbulb, Copy, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
+import { capture } from '../lib/analytics';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
 import { validateAiInput } from '../utils/aiInput';
@@ -183,6 +184,7 @@ const FeynmanMode = () => {
       if (response.status === 403) {
         const errorData = await response.json().catch(() => ({}));
         setUpgradeMessage(errorData.error || null);
+        capture('quota_hit', { kind: 'ai_daily' });
         setShowUpgradeModal(true);
         return;
       }

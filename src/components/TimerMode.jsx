@@ -19,6 +19,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useTimer } from '../context/TimerContext';
 import { supabase } from '../lib/supabaseClient';
+import { capture } from '../lib/analytics';
+import { recordActivationMilestone } from '../utils/activation';
 import { useAccurateTimer } from '../hooks/useAccurateTimer';
 import { recordFocusMinutes } from '../utils/focusProgress';
 import { getTopics, findOrCreateTopic, recordFocusSession } from '../utils/studyLoop';
@@ -865,6 +867,16 @@ const TimerMode = () => {
       const totalDuration = pomodoroDuration * 60;
       saveSession('pomodoro', totalDuration);
 
+      // Funnel: every completion, the first ever, and the activation loop.
+      capture('focus_session_completed', { mode: 'pomodoro', minutes: pomodoroDuration });
+      try {
+        if (!localStorage.getItem('mf_first_focus')) {
+          localStorage.setItem('mf_first_focus', '1');
+          capture('first_focus_completed');
+        }
+      } catch { /* no storage, no dedupe - skip */ }
+      recordActivationMilestone('focus', user);
+
       // Ring flash: success stroke for a moment, then back to accent.
       setJustCompleted(true);
       setTimeout(() => setJustCompleted(false), 1600);
@@ -1116,6 +1128,8 @@ const TimerMode = () => {
       if (breakTime > 0) {
         // Save the session before switching
         saveSession('flowmodoro', timeElapsed);
+        capture('focus_session_completed', { mode: 'flowmodoro', minutes: Math.floor(timeElapsed / 60) });
+        recordActivationMilestone('focus', user);
 
         // Stop the timer immediately
         setIsRunning(false);
