@@ -32,12 +32,18 @@
     <meta name="twitter:description" content="MindFlow runs your whole study loop — focus, self-test, and spaced review — so nothing you learn leaks away." />
     <meta name="twitter:image" content="__SITE_URL__/og-image.png" />
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-      // Set the worker locally to avoid "Fake Worker" errors
-      var pdfjsLib = window['pdfjs-dist/build/pdf'];
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
+    <!-- Fonts come from Google; open the connections before the CSS asks. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- pdf.js is only needed once a user uploads a PDF - defer keeps it off
+         the critical path. The worker config waits for it via the script's
+         own load event, since defer breaks the old inline-follows ordering. -->
+    <script
+      defer
+      src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+      onload="var p = window['pdfjs-dist/build/pdf']; if (p) { p.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }"
+    ></script>
   </head>
   <body>
     <div id="root"></div>
