@@ -17,6 +17,8 @@ export {
   pageInitial,
   pageEnter,
   pageExit,
+  shake,
+  stepSlide,
   rFade,
   rStagger,
 } from './variants';
