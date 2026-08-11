@@ -1,21 +1,64 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
-import { RotateCcw, Play, Pause } from 'lucide-react';
+import {
+  RotateCcw,
+  Play,
+  Pause,
+  Settings as SettingsIcon,
+  X,
+  Minus,
+  Flame,
+  ArrowRight,
+  AlertTriangle,
+  Video,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTimer } from '../context/TimerContext';
 import { supabase } from '../lib/supabaseClient';
 import { useAccurateTimer } from '../hooks/useAccurateTimer';
-import { formatSessionTimestamp } from '../utils/lastActivity';
 import { recordFocusMinutes } from '../utils/focusProgress';
 import { getTopics, findOrCreateTopic, recordFocusSession } from '../utils/studyLoop';
 import DurationInput from './DurationInput';
 import { toast } from 'react-hot-toast';
+import { Breadcrumb, Card, Button, Badge, Switch, Modal, Tabs, Input } from './ui';
+import { CountRing, Ticker, motion, AnimatePresence, useReducedMotion } from '../motion';
+import { smooth, snappy, reduced } from '../motion/transitions';
+
+/**
+ * Focus - the timer as centerpiece, rebuilt on the design system.
+ *
+ * The render layer is new; the behavior underneath is carried over intact
+ * per the extraction contract: worker-driven countdowns, flowmodoro count-up,
+ * TimerContext sync for MiniTimer, Sentry Mode's webcam lifecycle and
+ * debounced auto-pause, tab-visibility alarms with distraction accounting,
+ * incremental focus-minute persistence, session history (localStorage
+ * 'timerSessionHistory', 50-entry cap), topic resolution and the
+ * session-to-recall handoff.
+ *
+ * Three deliberate behavior FIXES (not styling):
+ * - Unmount cleanup referenced previousFrameRef, which was never declared -
+ *   a ReferenceError on unmount after any Sentry session. Removed.
+ * - The settings modal committed durations to state only, while a 1s
+ *   localStorage poll (needed for cross-tab sync with the Settings page)
+ *   reverted them within a second. Commits now write the same keys
+ *   SettingsMode writes, so the modal's changes actually stick.
+ * - The Sentry upsell navigated to /subscription, a route that does not
+ *   exist (it 404s). It now goes to /settings, where billing lives.
+ *
+ * Choreography: on start, the chrome (mode switch, task input, soundscapes,
+ * log) dims to 40% and drifts away on the smooth spring while the ring
+ * scales to 1.04 and a mono FOCUSING label fades in; pause reverses it.
+ * Completion flashes the ring to success and springs in a completion card
+ * with the session stats and the recall handoff.
+ */
 
 const TimerMode = () => {
   const navigate = useNavigate();
-  const { isPro, user, setSessionMinutes, sessionMinutes, setSentryTriggered, sentryTriggered } = useAuth();
+  const { isPro, user, setSessionMinutes, setSentryTriggered, sentryTriggered } = useAuth();
   const { updateTimerState, clearTimerState } = useTimer();
+  const reduce = useReducedMotion();
   const [mode, setMode] = useState('pomodoro'); // pomodoro, shortBreak, longBreak, flowmodoro
   const [isRunning, setIsRunning] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(25 * 60); // in seconds
@@ -32,7 +75,9 @@ const TimerMode = () => {
     }
   });
   const [activeSound, setActiveSound] = useState(null); // 'rain', 'forest', 'whitenoise', or null
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // Settings modal state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // Rings the completion flash: set on pomodoro completion, cleared shortly after.
+  const [justCompleted, setJustCompleted] = useState(false);
   // Custom durations (in minutes) - load from localStorage
   const [pomodoroDuration, setPomodoroDuration] = useState(() => {
     try {
@@ -63,7 +108,8 @@ const TimerMode = () => {
   // becomes (or matches) a topic - the spine that links this session to
   // recall tests and flashcard decks.
   const [topics, setTopics] = useState([]);
-  // Set when a session completes: offers "Test what you just studied".
+  // Set when a session completes: drives the completion card with its
+  // "Test what you just studied" handoff.
   const [recallHandoff, setRecallHandoff] = useState(null);
   // Session History - load from localStorage on mount
   const [sessionHistory, setSessionHistory] = useState(() => {
@@ -117,7 +163,6 @@ const TimerMode = () => {
   const tabHiddenAtRef = useRef(null); // When the user left, for "you left for Xs"
   const distractionsRef = useRef([]); // Seconds away per departure, this session
   const intervalRef = useRef(null);
-  const audioRef = useRef(null);
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
   const canvasContextRef = useRef(null);
@@ -176,7 +221,6 @@ const TimerMode = () => {
   );
 
   // Sync worker timer state with component state for countdown modes
-  // Use hook values directly - simpler and less conflict-prone
   useEffect(() => {
     if (isCountdownMode) {
       setTimeRemaining(workerTimeLeft);
@@ -246,17 +290,7 @@ const TimerMode = () => {
 
       switch (mode) {
         case 'pomodoro':
-          setTimeElapsed(0);
-          if (isCountdownMode) {
-            workerReset(initialTime);
-          }
-          break;
         case 'shortBreak':
-          setTimeElapsed(0);
-          if (isCountdownMode) {
-            workerReset(initialTime);
-          }
-          break;
         case 'longBreak':
           setTimeElapsed(0);
           if (isCountdownMode) {
@@ -284,7 +318,6 @@ const TimerMode = () => {
     const initializeMediaPipe = async () => {
       try {
         setFaceDetectorStatus('Loading Google Vision...');
-        console.log('Sentry Mode: Initializing MediaPipe...');
 
         // Imported here rather than at module scope: the vision bundle is by
         // far the heaviest dependency in the app, and Sentry Mode is a Pro
@@ -306,7 +339,6 @@ const TimerMode = () => {
 
         detectorRef.current = detector;
         setFaceDetectorStatus('Guarding');
-        console.log('Sentry Mode: MediaPipe Face Detector loaded successfully');
       } catch (err) {
         console.error('Sentry Mode: MediaPipe initialization error:', err);
         setFaceDetectorStatus(`Error: ${err.message}`);
@@ -406,7 +438,6 @@ const TimerMode = () => {
             if (wasAutoPaused.current && !isRunning) {
               setIsRunning(true);
               wasAutoPaused.current = false;
-              console.log('Sentry: User returned, auto-resuming timer');
             }
           }
         } else {
@@ -422,7 +453,6 @@ const TimerMode = () => {
             if (isRunning) {
               setIsRunning(false);
               wasAutoPaused.current = true;
-              console.log('Sentry: User absent, auto-pausing timer');
             }
           }
         }
@@ -441,9 +471,9 @@ const TimerMode = () => {
             canvas.height = video.videoHeight;
           }
 
-          // Draw red boxes around detected faces
+          // Draw detection boxes around found faces
           if (detectedFaces.length > 0) {
-            ctx.strokeStyle = '#f43f5e';
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--danger') || 'red';
             ctx.lineWidth = 3;
 
             detectedFaces.forEach((detection) => {
@@ -526,10 +556,10 @@ const TimerMode = () => {
         if (topic) {
           setTopics((prev) => (prev.some((t) => t.id === topic.id) ? prev : [topic, ...prev]));
         }
-        setRecallHandoff({ topicId: topic?.id || null, topicName: topic?.name || task });
+        setRecallHandoff({ topicId: topic?.id || null, topicName: topic?.name || task, duration, mode: sessionMode });
       })();
     } else {
-      setRecallHandoff({ topicId: null, topicName: task });
+      setRecallHandoff({ topicId: null, topicName: task, duration, mode: sessionMode });
     }
   }, [focusIntent, user?.id]);
 
@@ -584,32 +614,30 @@ const TimerMode = () => {
           if (updateError) {
             console.error('Error updating total_focus_minutes:', updateError);
           } else {
-            console.log(`✅ Saved ${minutesToSave} minute(s) to database. New total: ${currentTotal + minutesToSave}`);
-
             // Upsert into daily_activity table for heatmap
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
             try {
               // Check if row exists for today
-              const { data: existingRow, error: fetchError } = await supabase
+              const { data: existingRow, error: dailyFetchError } = await supabase
                 .from('daily_activity')
                 .select('minutes_focused')
                 .eq('user_id', user.id)
                 .eq('date', today)
                 .maybeSingle();
 
-              if (fetchError && fetchError.code !== 'PGRST116') {
+              if (dailyFetchError && dailyFetchError.code !== 'PGRST116') {
                 // PGRST116 is "not found" which is fine
-                console.error('Error checking daily_activity:', fetchError);
+                console.error('Error checking daily_activity:', dailyFetchError);
               } else if (existingRow) {
                 // Row exists, increment
-                const { error: updateError } = await supabase
+                const { error: dailyUpdateError } = await supabase
                   .from('daily_activity')
                   .update({ minutes_focused: (existingRow.minutes_focused || 0) + minutesToSave })
                   .eq('user_id', user.id)
                   .eq('date', today);
 
-                if (updateError) {
-                  console.error('Error updating daily_activity:', updateError);
+                if (dailyUpdateError) {
+                  console.error('Error updating daily_activity:', dailyUpdateError);
                 }
               } else {
                 // Row doesn't exist, insert new
@@ -689,7 +717,6 @@ const TimerMode = () => {
         }
 
         // Only reset session start time when actually stopped (not just paused)
-        // Don't reset when paused - we want to preserve the session state for resume
         if (isStopped) {
           sessionStartTimeRef.current = null;
         }
@@ -812,7 +839,7 @@ const TimerMode = () => {
       try {
         new Notification(title, {
           body: message,
-          icon: '/favicon.ico', // You can add a custom icon
+          icon: '/favicon.ico',
           badge: '/favicon.ico',
           tag: 'sentry-alert', // Replace previous notifications with same tag
           requireInteraction: false,
@@ -835,6 +862,10 @@ const TimerMode = () => {
     if (mode === 'pomodoro') {
       const totalDuration = pomodoroDuration * 60;
       saveSession('pomodoro', totalDuration);
+
+      // Ring flash: success stroke for a moment, then back to accent.
+      setJustCompleted(true);
+      setTimeout(() => setJustCompleted(false), 1600);
 
       // End-of-session focus report (Sentry Mode's receipts)
       const distractions = distractionsRef.current;
@@ -963,7 +994,7 @@ const TimerMode = () => {
   const soundUrls = {
     rain: '/sounds/rain.mp3',
     forest: '/sounds/forest.mp3',
-    whitenoise: '/sounds/white-noise.mp3', // Fixed: matches actual filename
+    whitenoise: '/sounds/white-noise.mp3', // key maps to hyphenated filename
   };
 
   // Single audio ref for ambient sounds (useRef holds the current Audio object)
@@ -1017,6 +1048,7 @@ const TimerMode = () => {
     return () => {
       stopAmbientSound();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSound, stopAmbientSound]);
 
   const handleStartPause = () => {
@@ -1088,7 +1120,6 @@ const TimerMode = () => {
         // Stop any ambient sounds
         stopAmbientSound();
         // Set custom break time first, then switch mode
-        // This allows the useEffect to use the custom time instead of the default
         setCustomBreakTime(breakTime);
         setMode('shortBreak');
         setTimeElapsed(0);
@@ -1111,10 +1142,8 @@ const TimerMode = () => {
     return formatTime(timeRemaining);
   };
 
-  const getProgress = () => {
-    if (mode === 'flowmodoro') {
-      return 0; // No progress ring for flowmodoro
-    }
+  const getRingFraction = () => {
+    if (mode === 'flowmodoro') return 0;
     let totalTime;
     switch (mode) {
       case 'pomodoro':
@@ -1129,76 +1158,22 @@ const TimerMode = () => {
       default:
         totalTime = pomodoroDuration * 60;
     }
-    return (timeRemaining / totalTime) * 100;
-  };
-
-  const getModeLabel = () => {
-    switch (mode) {
-      case 'pomodoro':
-        return 'Pomodoro';
-      case 'shortBreak':
-        return 'Short Break';
-      case 'longBreak':
-        return 'Long Break';
-      case 'flowmodoro':
-        return 'Flowmodoro';
-      default:
-        return '';
+    if (customBreakTime !== null && (mode === 'shortBreak' || mode === 'longBreak')) {
+      totalTime = customBreakTime;
     }
+    return totalTime > 0 ? timeRemaining / totalTime : 0;
   };
 
-  const getModeColor = () => {
-    switch (mode) {
-      case 'pomodoro':
-        return {
-          primary: '#3b82f6', // Blue
-          shadow: 'rgba(59, 130, 246, 0.5)',
-          background: 'rgba(59, 130, 246, 0.2)',
-          border: 'rgba(59, 130, 246, 0.4)',
-        };
-      case 'flowmodoro':
-        return {
-          primary: '#22d3ee', // Cyan/Blue
-          shadow: 'rgba(34, 211, 238, 0.5)',
-          background: 'rgba(34, 211, 238, 0.2)',
-          border: 'rgba(34, 211, 238, 0.4)',
-        };
-      case 'shortBreak':
-      case 'longBreak':
-        return {
-          primary: '#10b981', // Emerald/Green
-          shadow: 'rgba(16, 185, 129, 0.5)',
-          background: 'rgba(16, 185, 129, 0.2)',
-          border: 'rgba(16, 185, 129, 0.4)',
-        };
-      default:
-        return {
-          primary: '#a855f7',
-          shadow: 'rgba(168, 85, 247, 0.5)',
-          background: 'rgba(168, 85, 247, 0.2)',
-          border: 'rgba(168, 85, 247, 0.4)',
-        };
-    }
+  const MODE_LABELS = {
+    pomodoro: 'Pomodoro',
+    shortBreak: 'Short break',
+    longBreak: 'Long break',
+    flowmodoro: 'Flowmodoro',
   };
 
-  const handleSoundToggle = (soundType) => {
-    if (activeSound === soundType) {
-      // Toggle off
-      setActiveSound(null);
-    } else {
-      // Toggle on
-      setActiveSound(soundType);
-    }
+  const handleSoundChange = (value) => {
+    setActiveSound(value === 'off' ? null : value);
   };
-
-  // Stop ambient sounds when timer stops (optional - can be removed if sounds should continue)
-  // Uncomment if you want sounds to stop when timer stops:
-  // useEffect(() => {
-  //   if (!isRunning) {
-  //     stopAmbientSound();
-  //     setActiveSound(null);
-  //   }
-  // }, [isRunning, stopAmbientSound]);
 
   // Save session history to localStorage whenever it changes
   useEffect(() => {
@@ -1219,7 +1194,7 @@ const TimerMode = () => {
     }
   }, [focusIntent]);
 
-  // Cleanup on unmount - stops all audio when user leaves the page or closes the app
+  // Cleanup on unmount - stops all audio when user leaves the page
   useEffect(() => {
     return () => {
       // Stop ambient sounds on unmount
@@ -1232,1270 +1207,318 @@ const TimerMode = () => {
         canvasRef.current.parentNode.removeChild(canvasRef.current);
         canvasRef.current = null;
         canvasContextRef.current = null;
-        previousFrameRef.current = null;
       }
     };
   }, [stopAmbientSound]);
 
-  const radius = 144; // 20% larger: 120 * 1.2 = 144
-  const circumference = 2 * Math.PI * radius;
-  const progress = getProgress();
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
-  const modeColor = getModeColor();
+  // Durations committed from the settings modal must ALSO hit localStorage:
+  // the 1s poll above re-reads those keys, and a state-only commit was being
+  // reverted within a second.
+  const commitDuration = (key, setter) => (minutes) => {
+    setter(minutes);
+    try {
+      localStorage.setItem(key, String(minutes));
+    } catch (error) {
+      console.error('Failed to persist duration:', error);
+    }
+  };
+
+  // Day grouping for the session log.
+  const dayLabel = (iso) => {
+    const d = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Today';
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+  };
+  const timeLabel = (iso) =>
+    new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+  const logGroups = [];
+  for (const session of sessionHistory) {
+    const label = dayLabel(session.timestamp);
+    const last = logGroups[logGroups.length - 1];
+    if (last && last.label === label) last.sessions.push(session);
+    else logGroups.push({ label, sessions: [session] });
+  }
+
+  const sentryBlocked = isSentryActive && !isUserPresent;
+  const isDirty = isCountdownMode && workerTimeLeft !== workerDuration;
+
+  // The run-state choreography: chrome recedes, the ring takes the stage.
+  // Explicitly opacity-only under reduced motion - MotionConfig would make
+  // the drift instant anyway, but the gate should not depend on a global.
+  const chrome = (dy) => ({
+    animate: reduce
+      ? { opacity: isRunning ? 0.4 : 1 }
+      : { opacity: isRunning ? 0.4 : 1, y: isRunning ? dy : 0 },
+    transition: reduce ? reduced : smooth,
+  });
 
   return (
-    <div style={{
-      padding: '22px 32px 32px 32px',
-      height: '100%',
-      overflow: 'hidden',
-      position: 'relative',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      gap: '24px',
-    }}>
-      {/* Focus Broken Alert Banner */}
-      {showFocusBrokenAlert && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 1000,
-            backgroundColor: 'rgba(239, 68, 68, 0.95)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            border: '2px solid rgba(239, 68, 68, 1)',
-            borderRadius: '12px',
-            padding: '16px 24px',
-            boxShadow: '0 8px 32px rgba(239, 68, 68, 0.4), 0 0 0 4px rgba(239, 68, 68, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            animation: 'slideDown 0.3s ease-out',
-            maxWidth: '90%',
-          }}
-        >
-          <svg
-            style={{
-              width: '24px',
-              height: '24px',
-              stroke: '#ffffff',
-              fill: 'none',
-              strokeWidth: '2',
-              flexShrink: 0,
-            }}
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-          }}>
-            <div style={{
-              fontSize: '16px',
-              fontWeight: '700',
-              color: '#ffffff',
-              letterSpacing: '0.02em',
-            }}>
-              Focus Broken
-            </div>
-            <div style={{
-              fontSize: '12px',
-              color: 'rgba(255, 255, 255, 0.9)',
-            }}>
-              You left the app. Timer paused.
-            </div>
-          </div>
-          <button
-            onClick={() => setShowFocusBrokenAlert(false)}
-            style={{
-              marginLeft: 'auto',
-              backgroundColor: 'transparent',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '6px',
-              padding: '4px 8px',
-              color: '#ffffff',
-              cursor: 'pointer',
-              fontSize: '12px',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* Gradient blob background */}
-      <div style={{
-        position: 'absolute',
-        top: '-200px',
-        right: '-200px',
-        width: '600px',
-        height: '600px',
-        background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(236, 72, 153, 0.1) 50%, transparent 70%)',
-        borderRadius: '50%',
-        filter: 'blur(60px)',
-        pointerEvents: 'none',
-        zIndex: 0,
-      }} />
-
-      {/* Floating Sentry Video Feed (bottom-right corner) */}
-      {isSentryActive && (
-        <>
-          {isVideoMinimized ? (
-            // Minimized badge
-            <div
-              onClick={() => setIsVideoMinimized(false)}
-              style={{
-                position: 'fixed',
-                bottom: '16px',
-                right: '16px',
-                backgroundColor: 'rgba(16, 185, 129, 0.9)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '24px',
-                padding: '8px 16px',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-                zIndex: 100,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '14px',
-                fontWeight: '600',
-                color: '#ffffff',
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 1)';
-                e.currentTarget.style.transform = 'scale(1.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.9)';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              <span>🟢</span>
-              <span>Sentry Active</span>
-            </div>
-          ) : (
-            // Expanded video feed
-            <div style={{
-              position: 'fixed',
-              bottom: '16px',
-              right: '16px',
-              width: '192px',
-              height: 'auto',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-              backdropFilter: 'blur(10px)',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-              zIndex: 100,
-            }}>
-              {/* Minimize button */}
-              <button
-                onClick={() => setIsVideoMinimized(true)}
-                style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 3,
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
-                }}
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M18 12H6" />
-                </svg>
-              </button>
-
-              {/* Video feed */}
-              <div style={{ position: 'relative', width: '100%', paddingTop: '75%' }}>
-                <Webcam
-                  ref={webcamRef}
-                  audio={false}
-                  width={640}
-                  height={480}
-                  videoConstraints={{
-                    width: 640,
-                    height: 480,
-                    facingMode: 'user',
-                  }}
-                  onUserMediaError={(error) => {
-                    console.error('Camera error:', error);
-                    setCameraError(error.message || 'Failed to access camera');
-                  }}
-                  onUserMedia={() => {
-                    setCameraError(null);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  }}
-                />
-
-                {/* Visual debug overlay */}
-                <div style={{
-                  position: 'absolute',
-                  bottom: '8px',
-                  left: '8px',
-                  right: '8px',
-                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                  color: '#ffffff',
-                  padding: '6px 8px',
-                  borderRadius: '6px',
-                  fontSize: '10px',
-                  fontWeight: '600',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
-                  zIndex: 2,
-                }}>
-                  <div style={{ textAlign: 'center' }}>
-                    Faces: {faceCount}
-                  </div>
-                  <div style={{
-                    textAlign: 'center',
-                    fontSize: '9px',
-                    color: isUserPresent ? '#10b981' : faceDetectorStatus.includes('Error') ? '#f43f5e' : '#f59e0b',
-                    fontWeight: '500',
-                  }}>
-                    {isUserPresent ? 'Present' : faceDetectorStatus.includes('Error') ? 'Error' : 'Away'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Privacy note */}
-              <div style={{
-                padding: '8px 12px',
-                fontSize: '9px',
-                color: 'rgba(255, 255, 255, 0.6)',
-                textAlign: 'center',
-                borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-              }}>
-                🔒 Running locally. No video sent to cloud.
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* User Missing Overlay */}
-      {isSentryActive && !isUserPresent && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-          backdropFilter: 'blur(10px)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            fontSize: '72px',
-            marginBottom: '24px',
-          }}>
-            🔴
-          </div>
-          <div style={{
-            fontSize: '32px',
-            fontWeight: '700',
-            color: '#f43f5e',
-            marginBottom: '12px',
-            textAlign: 'center',
-          }}>
-            USER MISSING - PAUSED
-          </div>
-          <div style={{
-            fontSize: '16px',
-            color: 'rgba(255, 255, 255, 0.7)',
-            textAlign: 'center',
-            maxWidth: '400px',
-          }}>
-            Return to your desk to resume the timer.
-          </div>
-        </div>
-      )}
-
-      {/* Content Main Container - Responsive Grid/Flex */}
-      <div
-        className="flex flex-col lg:flex-row gap-8 w-full max-w-7xl mx-auto items-start h-full"
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {/* LEFT COLUMN: Controls, Timer, Task, Sounds */}
-        <div className="flex flex-col w-full lg:w-2/3 h-full justify-between gap-6 flex-shrink-0">
-
-          {/* TOP SECTION: Header & Modes */}
-          <div className="w-full flex flex-col gap-6">
-
-            {/* Header with Sentry Toggle and Settings */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '12px',
-              flexShrink: 0,
-            }}>
-              {/* Sentry Mode Toggle */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '50px',
-                padding: '8px 16px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                opacity: isPro ? 1 : 0.6,
-                filter: isPro ? 'none' : 'grayscale(1)',
-              }}>
-                <div style={{
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  color: 'rgba(255, 255, 255, 0.7)',
-                }}>
-                  Sentry
-                </div>
-                <button
-                  onClick={() => {
+    <div className="min-h-full w-full bg-base">
+      <div className="mx-auto w-full max-w-[1200px] px-5 py-6 md:px-8 md:py-8">
+        {/* ---------------------------------------------------- header ---- */}
+        <Breadcrumb
+          trail={['MindFlow', 'Focus']}
+          right={
+            <>
+              {/* Sentry toggle. Free users route to Settings (billing). */}
+              <div className="flex items-center gap-2.5">
+                <span className="font-mono text-micro uppercase text-secondary">Sentry</span>
+                {isPro && isSentryActive ? (
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 rounded-pill"
+                    style={{ backgroundColor: isUserPresent ? 'var(--success)' : 'var(--danger)' }}
+                  />
+                ) : null}
+                <Switch
+                  checked={isPro && isSentryActive}
+                  label="Sentry Mode"
+                  onChange={() => {
                     if (!isPro) {
-                      navigate('/subscription');
+                      navigate('/settings');
                       return;
                     }
                     setIsSentryActive(!isSentryActive);
                   }}
-                  style={{
-                    width: '44px',
-                    height: '24px',
-                    borderRadius: '12px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    backgroundColor: isPro
-                      ? (isSentryActive ? '#fb7185' : 'rgba(255, 255, 255, 0.2)')
-                      : 'rgba(107, 114, 128, 0.5)',
-                    transition: 'all 0.3s ease',
-                  }}
-                >
-                  <div style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    backgroundColor: '#ffffff',
-                    position: 'absolute',
-                    top: '2px',
-                    left: isPro && isSentryActive ? '22px' : '2px',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-                  }} />
-                </button>
-                {!isPro && (
-                  <div style={{
-                    backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                    border: '1px solid rgba(168, 85, 247, 0.4)',
-                    borderRadius: '8px',
-                    padding: '4px 8px',
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    color: '#a855f7',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                  }}>
-                    Pro
-                  </div>
-                )}
-                {isPro && isSentryActive && (
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: isUserPresent ? '#10b981' : '#f43f5e',
-                    boxShadow: isUserPresent
-                      ? '0 0 8px rgba(16, 185, 129, 0.6)'
-                      : '0 0 8px rgba(244, 63, 94, 0.6)',
-                  }} />
-                )}
+                />
+                {!isPro ? <Badge variant="accent">Pro</Badge> : null}
               </div>
-
-              {/* Settings Gear Icon */}
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Timer settings"
                 onClick={() => setIsSettingsOpen(true)}
-                style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  backdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '50%',
-                  width: '40px',
-                  height: '40px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                  e.currentTarget.style.transform = 'rotate(15deg)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.transform = 'rotate(0deg)';
-                }}
               >
-                <svg
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    stroke: 'rgba(255, 255, 255, 0.7)',
-                    fill: 'none',
-                    strokeWidth: '2',
-                  }}
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
-            </div>
+                <SettingsIcon size={16} strokeWidth={1.5} />
+              </Button>
+            </>
+          }
+        />
 
-            {/* Camera Error Message */}
-            {cameraError && (
-              <div style={{
-                backgroundColor: 'rgba(244, 63, 94, 0.1)',
-                border: '1px solid rgba(244, 63, 94, 0.3)',
-                borderRadius: '12px',
-                padding: '12px 16px',
-                marginBottom: '24px',
-                textAlign: 'center',
-              }}>
-                <div style={{
-                  fontSize: '12px',
-                  color: '#f43f5e',
-                }}>
-                  ⚠️ Camera Error: {cameraError}. Please check permissions.
-                </div>
-              </div>
-            )}
+        {/* Camera error */}
+        {cameraError ? (
+          <Card className="mt-4 border-danger-line bg-danger-wash p-3.5">
+            <p className="flex items-center gap-2 text-small text-danger">
+              <AlertTriangle size={15} strokeWidth={1.5} />
+              Camera error: {cameraError}. Check permissions.
+            </p>
+          </Card>
+        ) : null}
 
-            {/* Mode Switcher - 4 Distinct Tabs */}
-            <div style={{
-              display: 'flex',
-              gap: '8px',
-              marginBottom: '12px',
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-              flexShrink: 0,
-            }}>
-              {/* Pomodoro Tab */}
-              <button
-                onClick={() => {
+        {/* ------------------------------------------------------ body ---- */}
+        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Main column */}
+          <div className="flex flex-col items-center lg:col-span-8">
+            {/* Mode switch */}
+            <motion.div {...chrome(-8)}>
+              <Tabs
+                items={[
+                  { value: 'pomodoro', label: 'Pomodoro' },
+                  { value: 'shortBreak', label: 'Short break' },
+                  { value: 'longBreak', label: 'Long break' },
+                  { value: 'flowmodoro', label: 'Flowmodoro' },
+                ]}
+                value={mode}
+                onChange={(next) => {
                   setIsRunning(false);
-                  setMode('pomodoro');
+                  setMode(next);
                 }}
-                style={{
-                  backgroundColor: mode === 'pomodoro'
-                    ? 'rgba(59, 130, 246, 0.2)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                  border: mode === 'pomodoro'
-                    ? '1px solid rgba(59, 130, 246, 0.4)'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: mode === 'pomodoro' ? '#3b82f6' : 'rgba(255, 255, 255, 0.7)',
-                  padding: '10px 20px',
-                  borderRadius: '50px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  backdropFilter: 'blur(10px)',
-                }}
-              >
-                Pomodoro
-              </button>
-              {/* Short Break Tab */}
-              <button
-                onClick={() => {
-                  setIsRunning(false);
-                  setMode('shortBreak');
-                }}
-                style={{
-                  backgroundColor: mode === 'shortBreak'
-                    ? 'rgba(16, 185, 129, 0.2)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                  border: mode === 'shortBreak'
-                    ? '1px solid rgba(16, 185, 129, 0.4)'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: mode === 'shortBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
-                  padding: '10px 20px',
-                  borderRadius: '50px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  backdropFilter: 'blur(10px)',
-                }}
-              >
-                Short Break
-              </button>
-              {/* Long Break Tab */}
-              <button
-                onClick={() => {
-                  setIsRunning(false);
-                  setMode('longBreak');
-                }}
-                style={{
-                  backgroundColor: mode === 'longBreak'
-                    ? 'rgba(16, 185, 129, 0.2)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                  border: mode === 'longBreak'
-                    ? '1px solid rgba(16, 185, 129, 0.4)'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: mode === 'longBreak' ? '#10b981' : 'rgba(255, 255, 255, 0.7)',
-                  padding: '10px 20px',
-                  borderRadius: '50px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  backdropFilter: 'blur(10px)',
-                }}
-              >
-                Long Break
-              </button>
-              {/* Flowmodoro Tab */}
-              <button
-                onClick={() => {
-                  setIsRunning(false);
-                  setMode('flowmodoro');
-                }}
-                style={{
-                  backgroundColor: mode === 'flowmodoro'
-                    ? 'rgba(34, 211, 238, 0.2)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                  border: mode === 'flowmodoro'
-                    ? '1px solid rgba(34, 211, 238, 0.4)'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: mode === 'flowmodoro' ? '#22d3ee' : 'rgba(255, 255, 255, 0.7)',
-                  padding: '10px 20px',
-                  borderRadius: '50px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  backdropFilter: 'blur(10px)',
-                }}
-              >
-                Flowmodoro
-              </button>
-            </div>
-          </div>
+              />
+            </motion.div>
 
-          {/* CENTER SECTION: Task, Timer, Controls */}
-          <div className="flex-1 flex flex-col justify-center items-center w-full gap-4 min-h-0">
-
-            {/* Focus Intent Input */}
-            <div style={{
-              marginBottom: '12px',
-              width: '100%',
-              flexShrink: 0,
-            }}>
+            {/* Task intent */}
+            <motion.div {...chrome(-4)} className="mt-6 w-full max-w-xl">
               {isRunning ? (
-                // Display mode - show as label
-                <div style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                  backdropFilter: 'blur(10px)',
-                  borderRadius: '16px',
-                  padding: '20px 24px',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                }}>
-                  <div style={{
-                    fontSize: '12px',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    marginBottom: '8px',
-                  }}>
-                    Current Task
-                  </div>
-                  <div style={{
-                    fontSize: '20px',
-                    fontWeight: '700',
-                    color: '#ffffff',
-                  }}>
+                <Card className="p-4">
+                  <p className="font-mono text-micro uppercase text-secondary">Current task</p>
+                  <p className="mt-1 truncate text-body font-medium text-primary">
                     {focusIntent || 'No task specified'}
-                  </div>
-                </div>
+                  </p>
+                </Card>
               ) : (
-                // Edit mode - show as input with topic autocomplete
-                <input
-                  type="text"
+                <Input
                   value={focusIntent}
                   onChange={(e) => setFocusIntent(e.target.value)}
                   placeholder="What is your main task?"
+                  aria-label="Focus task"
                   list="topic-suggestions"
-                  style={{
-                    width: '100%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '16px',
-                    padding: '20px 24px',
-                    fontSize: '18px',
-                    color: '#ffffff',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                  }}
+                  className="h-11"
                 />
               )}
-            </div>
+            </motion.div>
 
-            {/* Timer Display */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flex: 1,
-              minHeight: 0,
-              marginBottom: '12px',
-            }}>
-              {/* Circular Progress Ring */}
-              {mode !== 'flowmodoro' && (
-                <div style={{
-                  position: 'relative',
-                  width: '336px',
-                  height: '336px',
-                }}>
-                  <svg width="336" height="336" style={{ transform: 'rotate(-90deg)' }}>
-                    {/* Background circle */}
-                    <circle
-                      cx="168"
-                      cy="168"
-                      r={radius}
-                      fill="none"
-                      stroke="rgba(255, 255, 255, 0.1)"
-                      strokeWidth="8"
-                    />
-                    {/* Progress circle */}
-                    <circle
-                      cx="168"
-                      cy="168"
-                      r={radius}
-                      fill="none"
-                      stroke={modeColor.primary}
-                      strokeWidth="8"
-                      strokeDasharray={circumference}
-                      strokeDashoffset={strokeDashoffset}
-                      strokeLinecap="round"
-                      style={{ transition: 'stroke-dashoffset 0.3s ease' }}
-                    />
-                  </svg>
-                  {/* Timer text in center */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    textAlign: 'center',
-                  }}>
-                    <div style={{
-                      fontSize: '86px',
-                      fontWeight: '300',
-                      color: modeColor.primary,
-                      fontFeatureSettings: '"tnum"',
-                      letterSpacing: '-0.02em',
-                      lineHeight: '1',
-                      textShadow: `0 0 30px ${modeColor.shadow}`,
-                    }}>
-                      {getDisplayTime()}
+            {/* Centerpiece */}
+            <div className="mt-8 flex flex-col items-center">
+              {isCountdownMode ? (
+                <motion.div
+                  animate={reduce ? {} : { scale: isRunning ? 1.04 : 1 }}
+                  transition={smooth}
+                >
+                  <CountRing
+                    value={getRingFraction()}
+                    size={320}
+                    strokeWidth={8}
+                    tone={justCompleted ? 'success' : 'accent'}
+                    transition={{ duration: 1, ease: 'linear' }}
+                  >
+                    <div className="flex flex-col items-center">
+                      <Ticker value={getDisplayTime()} className="text-timer text-primary" />
+                      <p className="mt-2 font-mono text-micro uppercase text-secondary">
+                        {MODE_LABELS[mode]}
+                      </p>
                     </div>
-                    <div style={{
-                      fontSize: '14px',
-                      color: 'rgba(255, 255, 255, 0.5)',
-                      marginTop: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.1em',
-                    }}>
-                      {getModeLabel()}
-                    </div>
-                  </div>
+                  </CountRing>
+                </motion.div>
+              ) : (
+                <div className="flex flex-col items-center py-6">
+                  <Ticker value={getDisplayTime()} className="text-timer text-primary" />
+                  <p className="mt-2 font-mono text-micro uppercase text-secondary">
+                    {MODE_LABELS[mode]}
+                  </p>
                 </div>
               )}
 
-              {/* Flowmodoro Display (no progress ring) */}
-              {mode === 'flowmodoro' && (
-                <div style={{
-                  textAlign: 'center',
-                }}>
-                  <div style={{
-                    fontSize: '115px',
-                    fontWeight: '300',
-                    color: modeColor.primary,
-                    fontFeatureSettings: '"tnum"',
-                    letterSpacing: '-0.02em',
-                    lineHeight: '1',
-                    textShadow: `0 0 40px ${modeColor.shadow}`,
-                    marginBottom: '16px',
-                  }}>
-                    {getDisplayTime()}
-                  </div>
-                  <div style={{
-                    fontSize: '16px',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                  }}>
-                    {getModeLabel()}
-                  </div>
-                </div>
-              )}
+              {/* FOCUSING readout */}
+              <div className="mt-4 h-4" aria-live="polite">
+                <AnimatePresence>
+                  {isRunning ? (
+                    <motion.p
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1, transition: reduce ? reduced : { duration: 0.4 } }}
+                      exit={{ opacity: 0, transition: reduced }}
+                      className="font-mono text-micro uppercase tracking-[0.16em] text-accent"
+                    >
+                      Focusing
+                    </motion.p>
+                  ) : null}
+                </AnimatePresence>
+              </div>
 
               {/* Controls */}
-              <div style={{
-                display: 'flex',
-                marginTop: '20px',
-                gap: '16px',
-                alignItems: 'center',
-              }}>
-                {/* Main Action Button (Toggle Start/Pause) */}
-                <button
+              <div className="mt-4 flex items-center gap-3">
+                <Button
+                  size="lg"
+                  mono
                   onClick={handleStartPause}
-                  disabled={isSentryActive && !isUserPresent}
-                  style={{
-                    backgroundColor: (isSentryActive && !isUserPresent)
-                      ? 'rgba(255, 255, 255, 0.02)'
-                      : isRunning
-                        ? 'rgba(239, 68, 68, 0.1)'
-                        : 'rgba(59, 130, 246, 0.2)',
-                    backdropFilter: 'blur(10px)',
-                    border: isRunning
-                      ? '2px solid rgba(239, 68, 68, 0.5)'
-                      : '2px solid rgba(59, 130, 246, 0.5)',
-                    borderRadius: '50px',
-                    padding: '16px 32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    color: isRunning ? '#ef4444' : '#ffffff',
-                    fontSize: '16px',
-                    fontWeight: '700',
-                    cursor: (isSentryActive && !isUserPresent) ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.3s ease',
-                    opacity: (isSentryActive && !isUserPresent) ? 0.5 : 1,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!(isSentryActive && !isUserPresent)) {
-                      e.currentTarget.style.backgroundColor = isRunning
-                        ? 'rgba(239, 68, 68, 0.2)'
-                        : 'rgba(59, 130, 246, 0.3)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = (isSentryActive && !isUserPresent)
-                      ? 'rgba(255, 255, 255, 0.02)'
-                      : isRunning
-                        ? 'rgba(239, 68, 68, 0.1)'
-                        : 'rgba(59, 130, 246, 0.2)';
-                  }}
+                  disabled={sentryBlocked}
+                  variant={isRunning ? 'secondary' : 'primary'}
                 >
                   {isRunning ? (
                     <>
-                      <Pause size={20} />
-                      <span>Pause</span>
+                      <Pause size={15} strokeWidth={1.5} /> Pause
                     </>
                   ) : (
                     <>
-                      <Play size={20} />
-                      <span>{isCountdownMode && workerTimeLeft < workerDuration ? 'Resume' : 'Start'}</span>
+                      <Play size={15} strokeWidth={1.5} />
+                      {isCountdownMode && workerTimeLeft < workerDuration ? 'Resume' : 'Start'}
                     </>
                   )}
-                </button>
+                </Button>
 
-                {/* Reset Button (Only shows if timer is dirty) */}
-                {isCountdownMode && workerTimeLeft !== workerDuration && (
-                  <button
+                {isDirty ? (
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    aria-label="Reset timer"
                     onClick={handleReset}
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '50%',
-                      width: '56px',
-                      height: '56px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                    }}
-                    title="Reset Timer"
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
                   >
-                    <RotateCcw size={20} />
-                  </button>
-                )}
+                    <RotateCcw size={16} strokeWidth={1.5} />
+                  </Button>
+                ) : null}
 
-                {/* Finish & Rest Button (only for flowmodoro) */}
-                {mode === 'flowmodoro' && timeElapsed > 0 && (
-                  <button
-                    onClick={handleFinishWork}
-                    style={{
-                      background: 'linear-gradient(90deg, #22d3ee, #3b82f6)',
-                      border: 'none',
-                      borderRadius: '50px',
-                      padding: '16px 32px',
-                      color: '#ffffff',
-                      fontSize: '16px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      boxShadow: '0 4px 20px rgba(34, 211, 238, 0.3)',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.boxShadow = '0 6px 30px rgba(34, 211, 238, 0.5)';
-                      e.currentTarget.style.transform = 'scale(1.02)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.3)';
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
-                  >
-                    Finish & Rest
-                  </button>
-                )}
+                {mode === 'flowmodoro' && timeElapsed > 0 ? (
+                  <Button variant="secondary" size="lg" mono onClick={handleFinishWork}>
+                    Finish &amp; rest
+                  </Button>
+                ) : null}
               </div>
+
+              {(mode === 'shortBreak' || mode === 'longBreak') && !isRunning ? (
+                <p className="mt-5 text-small text-secondary">
+                  Take a well-deserved break. Rest your mind.
+                </p>
+              ) : null}
             </div>
 
-            {/* Mode Info (for breaks) */}
-            {(mode === 'shortBreak' || mode === 'longBreak') && (
-              <div style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '24px',
-                padding: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                textAlign: 'center',
-                marginBottom: '12px',
-                flexShrink: 0,
-              }}>
-                <div style={{
-                  fontSize: '14px',
-                  color: 'rgba(255, 255, 255, 0.7)',
-                }}>
-                  Take a well-deserved break. Rest your mind.
-                </div>
+            {/* Soundscapes */}
+            <motion.div {...chrome(8)} className="mt-10 w-full max-w-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-soft bg-subtle px-4 py-3">
+                <span className="font-mono text-micro uppercase text-secondary">Soundscapes</span>
+                <Tabs
+                  items={[
+                    { value: 'off', label: 'Off' },
+                    { value: 'rain', label: 'Rain' },
+                    { value: 'forest', label: 'Forest' },
+                    { value: 'whitenoise', label: 'White noise' },
+                  ]}
+                  value={activeSound || 'off'}
+                  onChange={handleSoundChange}
+                />
               </div>
-            )}
+            </motion.div>
+          </div>
 
-            {/* Ambient Soundscapes */}
-            {/* BOTTOM SECTION: Ambient Sounds Dock */}
-            <div className="w-full mt-auto">
-              <div style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '24px',
-                padding: '16px 24px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '16px',
-              }}>
-                <div style={{
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  color: 'rgba(255, 255, 255, 0.5)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  whiteSpace: 'nowrap',
-                }}>
-                  Soundscapes
+          {/* ------------------------------------------------ session log -- */}
+          <motion.aside
+            animate={{ opacity: isRunning ? 0.4 : 1 }}
+            transition={smooth}
+            className="lg:col-span-4"
+          >
+            {sessionHistory.length > 0 ? (
+              <Card className="flex max-h-[calc(100vh-160px)] flex-col overflow-hidden lg:sticky lg:top-6">
+                <div className="border-b border-soft px-4 py-3">
+                  <p className="font-mono text-micro uppercase text-secondary">Session log</p>
                 </div>
-                <div style={{
-                  display: 'flex',
-                  gap: '8px',
-                  alignItems: 'center',
-                  overflowX: 'auto',
-                  paddingBottom: '0px',
-                  scrollbarWidth: 'none', // Hide scrollbar for cleaner look
-                }}>
-                  {['rain', 'forest', 'whitenoise'].map((soundType) => (
-                    <button
-                      key={soundType}
-                      onClick={() => handleSoundToggle(soundType)}
-                      style={{
-                        backgroundColor: activeSound === soundType
-                          ? 'rgba(168, 85, 247, 0.2)'
-                          : 'rgba(255, 255, 255, 0.05)',
-                        border: activeSound === soundType
-                          ? '1px solid rgba(168, 85, 247, 0.4)'
-                          : '1px solid rgba(255, 255, 255, 0.1)',
-                        color: activeSound === soundType ? '#a855f7' : 'rgba(255, 255, 255, 0.7)',
-                        padding: '8px 16px',
-                        borderRadius: '20px',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {soundType === 'whitenoise' ? 'White Noise' : soundType.charAt(0).toUpperCase() + soundType.slice(1)}
-                    </button>
+                <div className="flex-1 overflow-y-auto p-2">
+                  {logGroups.map((group, gi) => (
+                    <div key={group.label} className={gi > 0 ? 'mt-3' : ''}>
+                      <p className="px-2 pb-1 pt-2 font-mono text-micro uppercase text-secondary">
+                        {group.label}
+                      </p>
+                      {group.sessions.map((session, si) => (
+                        <motion.div
+                          key={session.id}
+                          // Entrance for the newest entry only; the rest of a
+                          // 50-row list must never animate layout.
+                          initial={
+                            gi === 0 && si === 0 && !reduce ? { opacity: 0, y: -8 } : false
+                          }
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={snappy}
+                          className="flex items-center justify-between gap-3 rounded-input px-2 py-2
+                                     transition-colors duration-150 hover:bg-elevated"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-small font-medium text-primary">
+                              {session.task}
+                            </p>
+                            <p className="font-mono text-micro text-secondary">
+                              {timeLabel(session.timestamp)}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="font-mono text-small tabular-nums text-secondary">
+                              {Math.floor(session.duration / 60)}m
+                            </span>
+                            <Badge variant={session.mode === 'pomodoro' ? 'accent' : 'neutral'}>
+                              {session.mode === 'pomodoro' ? 'Pomo' : 'Flow'}
+                            </Badge>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
                   ))}
                 </div>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* RIGHT COLUMN: Session Log */}
-        <div className="flex flex-col w-full lg:w-1/3 flex-shrink-0 lg:h-[calc(100vh-64px)] lg:sticky lg:top-8">
-          {sessionHistory.length > 0 && (
-            <div style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.03)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '24px',
-              padding: '20px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              width: '100%',
-              height: '100%',
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-            }}>
-              <div style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: 'rgba(255, 255, 255, 0.7)',
-                marginBottom: '12px',
-                textAlign: 'center',
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-                position: 'sticky',
-                top: 0,
-                backgroundColor: 'rgba(15, 16, 18, 0.95)', // Match bg color for sticky header
-                zIndex: 10,
-                paddingBottom: '10px',
-              }}>
-                Session Log
-              </div>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}>
-                {sessionHistory.map((session, index) => {
-                  const durationMinutes = Math.floor(session.duration / 60);
-                  const modeLabel = session.mode === 'pomodoro' ? 'Pomodoro' : 'Flowmodoro';
-                  const modeColor = session.mode === 'pomodoro' ? '#3b82f6' : '#22d3ee';
-                  const timeStr = formatSessionTimestamp(session.timestamp);
-
-                  return (
-                    <div
-                      key={session.id}
-                      style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                        backdropFilter: 'blur(10px)',
-                        borderRadius: '16px',
-                        padding: '16px 20px',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        transition: 'all 0.2s ease',
-                        animation: index === 0 ? 'slideInDown 0.4s ease-out' : 'none',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                      }}
-                    >
-                      {/* Left: Task Name */}
-                      <div style={{ flex: 1 }}>
-                        <div style={{
-                          fontSize: '15px',
-                          fontWeight: '700',
-                          color: '#ffffff',
-                          marginBottom: '4px',
-                        }}>
-                          {session.task}
-                        </div>
-                        <div style={{
-                          fontSize: '12px',
-                          color: 'rgba(255, 255, 255, 0.5)',
-                        }}>
-                          {timeStr}
-                        </div>
-                      </div>
-                      {/* Right: Duration and Mode Badge */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                      }}>
-                        <div style={{
-                          fontSize: '15px',
-                          fontWeight: '600',
-                          color: 'rgba(255, 255, 255, 0.8)',
-                        }}>
-                          {durationMinutes}m
-                        </div>
-                        <div style={{
-                          backgroundColor: `${modeColor}20`,
-                          border: `1px solid ${modeColor}40`,
-                          borderRadius: '12px',
-                          padding: '4px 12px',
-                          fontSize: '11px',
-                          fontWeight: '600',
-                          color: modeColor,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                        }}>
-                          {modeLabel}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+              </Card>
+            ) : null}
+          </motion.aside>
         </div>
       </div>
-
-      {/* Settings Modal */}
-      {isSettingsOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsSettingsOpen(false);
-            }
-          }}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'rgba(10, 10, 12, 0.95)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '24px',
-              padding: '32px',
-              width: '90%',
-              maxWidth: '400px',
-              color: '#ffffff',
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '24px',
-            }}>
-              <h2 style={{
-                fontSize: '24px',
-                fontWeight: '700',
-                margin: 0,
-                background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}>
-                Timer Settings
-              </h2>
-              <button
-                onClick={() => setIsSettingsOpen(false)}
-                style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                }}
-              >
-                <svg
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    stroke: 'currentColor',
-                    fill: 'none',
-                    strokeWidth: '2',
-                  }}
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Settings Inputs */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <DurationInput
-                label="Pomodoro Duration (minutes)"
-                value={pomodoroDuration}
-                min={1}
-                max={120}
-                onCommit={setPomodoroDuration}
-              />
-              <DurationInput
-                label="Short Break Duration (minutes)"
-                value={shortBreakDuration}
-                min={1}
-                max={60}
-                onCommit={setShortBreakDuration}
-              />
-              <DurationInput
-                label="Long Break Duration (minutes)"
-                value={longBreakDuration}
-                min={1}
-                max={120}
-                onCommit={setLongBreakDuration}
-              />
-            </div>
-
-            {/* Save Button */}
-            <button
-              onClick={() => {
-                setIsSettingsOpen(false);
-                // Reset timer to reflect new durations if not running
-                if (!isRunning) {
-                  switch (mode) {
-                    case 'pomodoro':
-                      setTimeRemaining(pomodoroDuration * 60);
-                      break;
-                    case 'shortBreak':
-                      setTimeRemaining(shortBreakDuration * 60);
-                      break;
-                    case 'longBreak':
-                      setTimeRemaining(longBreakDuration * 60);
-                      break;
-                    default:
-                      break;
-                  }
-                }
-              }}
-              style={{
-                width: '100%',
-                marginTop: '24px',
-                padding: '14px 24px',
-                background: 'linear-gradient(90deg, #a855f7, #ec4899)',
-                border: 'none',
-                borderRadius: '12px',
-                color: '#ffffff',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: '0 4px 20px rgba(168, 85, 247, 0.3)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 6px 30px rgba(168, 85, 247, 0.5)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.3)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              Save Settings
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Topic autocomplete for the task input */}
       <datalist id="topic-suggestions">
@@ -2504,79 +1527,261 @@ const TimerMode = () => {
         ))}
       </datalist>
 
-      {/* Session -> Recall handoff: the loop's first stitch */}
-      {recallHandoff && (
-        <div style={{
-          position: 'fixed',
-          bottom: '24px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: 'rgba(17, 24, 39, 0.95)',
-          backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(139, 92, 246, 0.4)',
-          borderRadius: '16px',
-          padding: '20px 24px',
-          zIndex: 900,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '20px',
-          boxShadow: '0 8px 40px rgba(139, 92, 246, 0.25)',
-          maxWidth: 'calc(100vw - 32px)',
-          animation: 'slideInDown 0.4s ease-out',
-        }}>
-          <div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff', marginBottom: '2px' }}>
-              Session saved{recallHandoff.topicName !== 'Untitled Session' ? ` — ${recallHandoff.topicName}` : ''}
-            </div>
-            <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.6)' }}>
-              The best moment to test yourself is right now.
-            </div>
-          </div>
-          <button
-            onClick={() => navigate('/recall', {
-              state: {
-                topicId: recallHandoff.topicId,
-                topicName: recallHandoff.topicName,
-                from: 'focus-session',
-              },
-            })}
-            style={{
-              background: 'linear-gradient(90deg, #8b5cf6, #ec4899)',
-              color: '#ffffff',
-              border: 'none',
-              padding: '12px 20px',
-              borderRadius: '12px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Test what you just studied
-          </button>
-          <button
-            onClick={() => setRecallHandoff(null)}
-            aria-label="Dismiss"
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '8px',
-              width: '32px',
-              height: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: 'rgba(255, 255, 255, 0.7)',
-              flexShrink: 0,
-            }}
-          >
-            <svg style={{ width: '16px', height: '16px', stroke: 'currentColor', fill: 'none', strokeWidth: '2' }} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      {/* ------------------------------------------------- portals ------- */}
+      {/* Everything fixed-position portals to body: this page renders inside
+          PageTransition's transform context, where fixed pins to the page. */}
+
+      {/* Focus broken banner */}
+      {createPortal(
+        <AnimatePresence>
+          {showFocusBrokenAlert ? (
+            <motion.div
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: -12 }}
+              animate={{ opacity: 1, y: 0, transition: reduce ? reduced : snappy }}
+              exit={{ opacity: 0, transition: reduced }}
+              className="fixed inset-x-0 top-4 z-50 flex justify-center px-4"
+            >
+              <div className="flex items-center gap-3 rounded-card border border-danger-line bg-elevated px-4 py-3 shadow-modal">
+                <AlertTriangle size={17} strokeWidth={1.5} className="shrink-0 text-danger" />
+                <div>
+                  <p className="text-small font-medium text-primary">Focus broken</p>
+                  <p className="font-mono text-micro text-secondary">You left the app. Timer paused.</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Dismiss"
+                  onClick={() => setShowFocusBrokenAlert(false)}
+                >
+                  <X size={14} strokeWidth={1.5} />
+                </Button>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>,
+        document.body
       )}
+
+      {/* Sentry video feed */}
+      {isSentryActive
+        ? createPortal(
+            isVideoMinimized ? (
+              <button
+                type="button"
+                onClick={() => setIsVideoMinimized(false)}
+                className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-pill border
+                           border-soft bg-elevated px-3.5 py-2 shadow-modal transition-colors
+                           duration-150 hover:border-strong"
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 rounded-pill"
+                  style={{ backgroundColor: isUserPresent ? 'var(--success)' : 'var(--danger)' }}
+                />
+                <Video size={14} strokeWidth={1.5} className="text-secondary" />
+                <span className="font-mono text-micro uppercase text-primary">Sentry</span>
+              </button>
+            ) : (
+              <div className="fixed bottom-4 right-4 z-40 w-48 overflow-hidden rounded-card border border-soft bg-elevated shadow-modal">
+                <button
+                  type="button"
+                  onClick={() => setIsVideoMinimized(true)}
+                  aria-label="Minimize Sentry video"
+                  className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center
+                             rounded-input border border-soft bg-subtle text-secondary
+                             transition-colors duration-150 hover:text-primary"
+                >
+                  <Minus size={12} strokeWidth={1.5} />
+                </button>
+                <div className="relative w-full pt-[75%]">
+                  <Webcam
+                    ref={webcamRef}
+                    audio={false}
+                    width={640}
+                    height={480}
+                    videoConstraints={{ width: 640, height: 480, facingMode: 'user' }}
+                    onUserMediaError={(error) => {
+                      console.error('Camera error:', error);
+                      setCameraError(error.message || 'Failed to access camera');
+                    }}
+                    onUserMedia={() => setCameraError(null)}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                  <div className="absolute bottom-1.5 left-1.5 right-1.5 z-[2] rounded-input bg-base/80 px-2 py-1 text-center">
+                    <p className="font-mono text-micro text-primary">Faces: {faceCount}</p>
+                    <p
+                      className="font-mono text-[10px]"
+                      style={{
+                        color: isUserPresent
+                          ? 'var(--success)'
+                          : faceDetectorStatus.includes('Error')
+                            ? 'var(--danger)'
+                            : 'var(--warning)',
+                      }}
+                    >
+                      {isUserPresent ? 'Present' : faceDetectorStatus.includes('Error') ? 'Error' : 'Away'}
+                    </p>
+                  </div>
+                </div>
+                <p className="border-t border-soft px-3 py-2 text-center font-mono text-[10px] text-secondary">
+                  Running locally. No video leaves this device.
+                </p>
+              </div>
+            ),
+            document.body
+          )
+        : null}
+
+      {/* User missing overlay */}
+      {isSentryActive && !isUserPresent
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 px-6 text-center">
+              <p className="font-mono text-micro uppercase tracking-[0.16em] text-danger">
+                Sentry
+              </p>
+              <p className="mt-3 text-h1 text-danger">User missing — paused</p>
+              <p className="mt-2 max-w-[40ch] text-body text-secondary">
+                Return to your desk to resume the timer.
+              </p>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {/* Completion card: session stats + the recall handoff */}
+      {createPortal(
+        <AnimatePresence>
+          {recallHandoff ? (
+            <motion.div
+              initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0, transition: reduce ? reduced : smooth }}
+              exit={{ opacity: 0, transition: reduced }}
+              className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4"
+            >
+              <div className="w-full max-w-md rounded-modal border border-accent-line bg-elevated p-5 shadow-modal">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <motion.span
+                      initial={reduce ? false : { scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={snappy}
+                      className="text-warning"
+                    >
+                      <Flame size={18} strokeWidth={1.5} />
+                    </motion.span>
+                    <div>
+                      <p className="text-small font-medium text-primary">
+                        Session saved
+                        {recallHandoff.topicName !== 'Untitled Session'
+                          ? ` — ${recallHandoff.topicName}`
+                          : ''}
+                      </p>
+                      <p className="mt-0.5 font-mono text-micro text-secondary">
+                        {Math.max(1, Math.floor((recallHandoff.duration || 0) / 60))}m ·{' '}
+                        {MODE_LABELS[recallHandoff.mode] || recallHandoff.mode}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Dismiss"
+                    onClick={() => setRecallHandoff(null)}
+                  >
+                    <X size={14} strokeWidth={1.5} />
+                  </Button>
+                </div>
+                <p className="mt-3 text-small text-secondary">
+                  The best moment to test yourself is right now.
+                </p>
+                <div className="mt-4">
+                  <Button
+                    mono
+                    className="w-full"
+                    onClick={() =>
+                      navigate('/recall', {
+                        state: {
+                          topicId: recallHandoff.topicId,
+                          topicName: recallHandoff.topicName,
+                          from: 'focus-session',
+                        },
+                      })
+                    }
+                  >
+                    Test what you just studied
+                    <ArrowRight size={14} strokeWidth={1.5} />
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Settings modal */}
+      <Modal
+        open={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        title="Timer settings"
+        footer={
+          <Button
+            mono
+            onClick={() => {
+              setIsSettingsOpen(false);
+              // Reflect new durations immediately if not mid-session.
+              if (!isRunning) {
+                switch (mode) {
+                  case 'pomodoro':
+                    setTimeRemaining(pomodoroDuration * 60);
+                    break;
+                  case 'shortBreak':
+                    setTimeRemaining(shortBreakDuration * 60);
+                    break;
+                  case 'longBreak':
+                    setTimeRemaining(longBreakDuration * 60);
+                    break;
+                  default:
+                    break;
+                }
+              }
+            }}
+          >
+            Save settings
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <DurationInput
+            label="Pomodoro Duration (minutes)"
+            value={pomodoroDuration}
+            min={1}
+            max={120}
+            onCommit={commitDuration('timer_focusDuration', setPomodoroDuration)}
+          />
+          <DurationInput
+            label="Short Break Duration (minutes)"
+            value={shortBreakDuration}
+            min={1}
+            max={60}
+            onCommit={commitDuration('timer_shortBreakDuration', setShortBreakDuration)}
+          />
+          <DurationInput
+            label="Long Break Duration (minutes)"
+            value={longBreakDuration}
+            min={1}
+            max={120}
+            onCommit={commitDuration('timer_longBreakDuration', setLongBreakDuration)}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

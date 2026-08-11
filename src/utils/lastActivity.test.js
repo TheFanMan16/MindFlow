@@ -144,8 +144,12 @@ describe('TimerMode wiring', () => {
   });
 
   it('renders session timestamps with their date', () => {
-    expect(timerSource).toContain('formatSessionTimestamp(session.timestamp)');
-    expect(timerSource).not.toContain("date.toLocaleTimeString([], { hour: '2-digit'");
+    // The original bug: log entries showed a bare time, so "14:32" could be
+    // today or last Tuesday. The redesigned log carries the date as a day
+    // group header (dayLabel) with per-entry times (timeLabel) - the date
+    // must stay part of how every entry is presented.
+    expect(timerSource).toContain('dayLabel(session.timestamp)');
+    expect(timerSource).toContain('timeLabel(session.timestamp)');
   });
 });
 
