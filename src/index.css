@@ -11,6 +11,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CLS guard: metric-matched local fallbacks so text set in Arial while Geist
+   loads (font-display: swap) occupies the same space it will after the swap.
+   Overrides approximate Geist's vertical metrics against Arial's. */
+@font-face {
+  font-family: 'Geist Fallback';
+  src: local('Arial');
+  size-adjust: 104%;
+  ascent-override: 96%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Geist Mono Fallback';
+  src: local('Consolas'), local('Courier New');
+  size-adjust: 108%;
+  ascent-override: 96%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+
 @layer base {
   * {
     margin: 0;

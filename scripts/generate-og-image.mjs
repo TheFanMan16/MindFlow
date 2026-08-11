@@ -2,14 +2,15 @@
  * Generates public/og-image.png, the social preview card referenced by the
  * og:image and twitter:image tags in index.html.
  *
- * The output is committed, so this only needs to run when the branding or the
- * tagline changes. sharp is not a project dependency - install it just for the
- * run:
- *
+ * Committed output - rerun only when branding or the tagline changes:
  *   npm install --no-save sharp
  *   node scripts/generate-og-image.mjs
  *
- * Colours and the lightbulb mark are kept in sync with public/icon.svg by hand.
+ * Brand: the flat Linear-grade system - near-black ground, ONE indigo
+ * accent, no gradients, no glows. Values mirror src/styles/tokens.css by
+ * hand (this script runs outside the app, so it cannot read CSS vars).
+ * Segoe UI stands in for Geist; the rendered forms are close enough at
+ * card sizes.
  */
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -21,69 +22,51 @@ const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'og-im
 const WIDTH = 1200;
 const HEIGHT = 630;
 
-const INK = '#0f1012';
-const VIOLET = '#8b5cf6';
-const PINK = '#ec4899';
-const TEXT = '#f4f4f5';
-const MUTED = '#a1a1aa';
+const BASE = '#08090A';
+const SUBTLE = '#0E0F11';
+const BORDER = 'rgba(255,255,255,0.07)';
+const TEXT = '#EDEEF0';
+const SECONDARY = '#8A8F98';
+const ACCENT = '#6E79FF';
 
-// Segoe UI is the Windows system face; the fallbacks keep this renderable if
-// the image is ever regenerated elsewhere.
-const FONT = "'Segoe UI', Inter, Helvetica, Arial, sans-serif";
+const SANS = "'Segoe UI', Inter, Helvetica, Arial, sans-serif";
+const MONO = "'Cascadia Mono', Consolas, 'Courier New', monospace";
 
-/** One capability pill: a gradient dot and a label. */
-function pill(x, y, label) {
-  return `
-    <circle cx="${x + 7}" cy="${y - 7}" r="7" fill="url(#brand)"/>
-    <text x="${x + 28}" y="${y}" font-family="${FONT}" font-size="27" fill="${MUTED}">${label}</text>`;
-}
+/** One capability chip: flat bordered pill with a mono label. */
+const chip = (x, label, w) => `
+  <rect x="${x}" y="522" width="${w}" height="40" rx="6" fill="${SUBTLE}" stroke="${BORDER}"/>
+  <circle cx="${x + 22}" cy="542" r="3.5" fill="${ACCENT}"/>
+  <text x="${x + 36}" y="548" font-family="${MONO}" font-size="17" letter-spacing="1.5" fill="${SECONDARY}">${label}</text>`;
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
-  <defs>
-    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${VIOLET}"/>
-      <stop offset="100%" stop-color="${PINK}"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="${VIOLET}" stop-opacity="0.38"/>
-      <stop offset="40%" stop-color="${VIOLET}" stop-opacity="0.16"/>
-      <stop offset="70%" stop-color="${PINK}" stop-opacity="0.05"/>
-      <stop offset="100%" stop-color="${PINK}" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="${BASE}"/>
 
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="${INK}"/>
-  <!-- Soft brand glow. Centred past the right edge so its falloff runs off
-       canvas instead of showing a visible rim. -->
-  <circle cx="1120" cy="60" r="580" fill="url(#glow)"/>
-
-  <!-- Lightbulb mark, same geometry as public/icon.svg. The stroke is widened
-       from 26 to 40 because at this scale the two base lines vanish otherwise
-       and the mark reads as a balloon rather than a bulb. -->
-  <g transform="translate(88 56) scale(0.222)"
-     fill="none" stroke="url(#brand)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Flat lightbulb mark + wordmark. Same geometry as public/icon.svg. -->
+  <g transform="translate(90 84) scale(0.14)"
+     fill="none" stroke="${ACCENT}" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
     <path d="M256 96c-66 0-114 50-114 112 0 42 22 72 44 94 14 14 22 28 22 46v10h96v-10c0-18 8-32 22-46 22-22 44-52 44-94 0-62-48-112-114-112z"/>
     <path d="M218 402h76"/>
     <path d="M232 438h48"/>
   </g>
-
-  <text x="220" y="152" font-family="${FONT}" font-size="46" font-weight="600"
+  <text x="176" y="132" font-family="${SANS}" font-size="38" font-weight="600"
         fill="${TEXT}" letter-spacing="-0.5">MindFlow</text>
 
-  <text x="90" y="316" font-family="${FONT}" font-size="76" font-weight="700"
-        fill="${TEXT}" letter-spacing="-2">Study it once.</text>
-  <text x="90" y="404" font-family="${FONT}" font-size="76" font-weight="700"
-        fill="url(#brand)" letter-spacing="-2">Remember it on exam day.</text>
+  <text x="90" y="300" font-family="${SANS}" font-size="78" font-weight="700"
+        fill="${TEXT}" letter-spacing="-2.5">Study it once.</text>
+  <text x="90" y="392" font-family="${SANS}" font-size="78" font-weight="700"
+        fill="${SECONDARY}" letter-spacing="-2.5">Remember it on exam day.</text>
 
-  <text x="90" y="468" font-family="${FONT}" font-size="29" fill="${MUTED}">
-    Your whole study loop, so nothing you learn leaks away.
+  <!-- Accent underline: the one chromatic moment, flat, measured. -->
+  <rect x="92" y="420" width="180" height="4" rx="2" fill="${ACCENT}"/>
+
+  <text x="90" y="482" font-family="${SANS}" font-size="28" fill="${SECONDARY}">
+    Your whole study loop — focus, self-test, spaced review.
   </text>
 
-  ${pill(90, 552, 'Focus')}
-  ${pill(260, 552, 'Self-test')}
-  ${pill(470, 552, 'Spaced review')}
-
-  <rect x="0" y="${HEIGHT - 8}" width="${WIDTH}" height="8" fill="url(#brand)"/>
+  ${chip(90, 'FOCUS', 118)}
+  ${chip(224, 'RECALL', 128)}
+  ${chip(368, 'FEYNMAN', 148)}
+  ${chip(532, 'SPACED REVIEW', 214)}
 </svg>`;
 
 const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();

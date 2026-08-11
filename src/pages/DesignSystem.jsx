@@ -16,6 +16,9 @@ import {
   Skeleton,
   SkeletonText,
   toast,
+  Progress,
+  StepRail,
+  SaveButton,
 } from '../components/ui';
 import {
   PageTransition,
@@ -271,6 +274,19 @@ const DesignSystem = () => {
           />
         </Section>
 
+        <Section title="Flow primitives" note="step rail · progress · save morph">
+          <StepRailDemo />
+          <div className="mt-6 max-w-md">
+            <Progress value={ring} label="Demo progress" />
+            <p className="mt-2 font-mono text-micro text-secondary">
+              Progress — thin scaleX line (blurt timer drain, study position)
+            </p>
+          </div>
+          <div className="mt-6">
+            <SaveButtonDemo />
+          </div>
+        </Section>
+
         <Section title="Overlays">
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="secondary" onClick={() => setModalOpen(true)}>
@@ -378,6 +394,49 @@ const DesignSystem = () => {
           </p>
         </footer>
       </div>
+    </div>
+  );
+};
+
+/** StepRail with a live step switcher - the underline slides via layoutId. */
+const StepRailDemo = () => {
+  const [step, setStep] = useState('source');
+  const steps = [
+    { id: 'source', label: 'Source' },
+    { id: 'blurt', label: 'Blurt' },
+    { id: 'analysis', label: 'Analysis' },
+  ];
+  return (
+    <div>
+      <StepRail steps={steps} active={step} />
+      <div className="mt-4 flex gap-2">
+        {steps.map((s) => (
+          <Button key={s.id} variant="secondary" size="sm" mono onClick={() => setStep(s.id)}>
+            {s.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/** SaveButton walking its own lifecycle on click. */
+const SaveButtonDemo = () => {
+  const [state, setState] = useState('idle');
+  const run = () => {
+    if (state !== 'idle') return;
+    setState('saving');
+    setTimeout(() => {
+      setState('saved');
+      setTimeout(() => setState('idle'), 1400);
+    }, 1200);
+  };
+  return (
+    <div className="flex items-center gap-4">
+      <SaveButton state={state} onClick={run}>
+        Save settings
+      </SaveButton>
+      <span className="font-mono text-micro text-tertiary">label → spinner → check</span>
     </div>
   );
 };
