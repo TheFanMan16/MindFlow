@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Flame, AlertTriangle, ArrowRight } from 'lucide-react';
+import { motion, useReducedMotion } from '../motion';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { getLastActivityAt, formatTimeAgo } from '../utils/lastActivity';
@@ -15,58 +16,34 @@ import {
   toLocalDateKey,
 } from '../utils/studyLoop';
 import { maybeNotifyDueCards } from '../utils/notifications';
-import { Eyebrow, Rule, RevealHeadline, Panel, IconFrame, Numeral, MagneticButton } from './ui';
-import { IconFocus, IconRecall, IconFeynman, IconLeitner, IconTriage, IconLead } from './icons';
-import { stagger, rise } from '../design/motion';
+import {
+  Breadcrumb,
+  Card,
+  StatTile,
+  Badge,
+  Button,
+  Skeleton,
+  EmptyState,
+} from './ui';
+import { TextReveal, Stagger, AnimatedNumber, Magnetic } from '../motion';
+import { snappy } from '../motion/transitions';
 
 /**
- * Dashboard - "Sleek Dark Architectural" reference implementation.
+ * Dashboard - the money page, rebuilt entirely on the design system.
  *
- * What changed, and why, beyond swapping colours:
+ * Layout: 12-col grid, max-width 1200, 32px gutters. Hero reveals once per
+ * SESSION (not per visit - a headline that performs on every navigation stops
+ * being a moment). Stats tick up on first mount only. The Loop section is the
+ * one sanctioned use of in-view staggering, on the hardened Stagger that
+ * renders content even if the observer never fires.
  *
- * - The centred hero is gone. A 100px gradient-filled "MindFlow" wordmark over
- *   a centred tagline is the single most template-like element in the app, and it
- *   spent the most valuable screen real estate restating the product name to
- *   someone already signed in. The masthead is now asymmetric: the promise sits
- *   left on a 7/5 split, with live instrument readings right.
- * - Stats that were fetched and thrown away are now displayed. streakCount,
- *   totalFocusMinutes and cardsCreated were all queried on every mount and
- *   never rendered.
- * - Topic rows are a ruled table, not a wrap of pill cards. Comparing mastery
- *   across topics is the actual job; equal-width cards in a flex-wrap made
- *   that harder than a shared baseline does.
- * - The four mode cards are no longer four identical boxes with four different
- *   two-stop gradients. They share one surface treatment and are asymmetric by
- *   importance: the loop's entry point is wide, the rest are equal.
- * - Dead billing handlers (handleSubscribe, handleCancelSubscription,
- *   createPortalSession) and formatTime were removed - none were referenced by
- *   any JSX here, and billing lives in SettingsMode.
+ * Data layer unchanged from the previous build - every query, effect and
+ * handler carries over verbatim per the behavior contract.
  */
 
-/** Recall trend. Square caps and a flat baseline so it reads as a plotted
- *  instrument trace rather than a soft marketing sparkline. */
-const Sparkline = ({ values, tone = '#7B61FF', width = 88, height = 24 }) => {
-  if (!values || values.length < 2) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const points = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * (width - 2) + 1;
-      const y = height - 2 - ((v - min) / range) * (height - 4);
-      return `${x},${y}`;
-    })
-    .join(' ');
-  return (
-    <svg width={width} height={height} className="block shrink-0" aria-hidden="true">
-      <line x1="0" y1={height - 1} x2={width} y2={height - 1} stroke="#1C1F24" strokeWidth="1" />
-      <polyline points={points} fill="none" stroke={tone} strokeWidth="1.25" strokeLinecap="square" />
-    </svg>
-  );
-};
+const HERO_SEEN_KEY = 'mf_hero_revealed';
 
-/** Mastery as a segmented bar. Ten discrete cells rather than a smooth fill:
- *  discrete units read as measurement, and make small differences legible. */
+/** Mastery as ten discrete cells - measurement, not a smooth fill. */
 const MasteryMeter = ({ value, tone }) => {
   const filled = Math.round((value / 100) * 10);
   return (
@@ -75,20 +52,21 @@ const MasteryMeter = ({ value, tone }) => {
         <span
           key={i}
           className="h-3 w-[3px]"
-          style={{ backgroundColor: i < filled ? tone : '#1C1F24' }}
+          style={{ backgroundColor: i < filled ? tone : 'var(--border-soft)' }}
         />
       ))}
     </div>
   );
 };
 
-const masteryTone = (m) => (m >= 70 ? '#57D9A3' : m >= 40 ? '#E8B339' : '#FF5C46');
-const masteryToneName = (m) => (m >= 70 ? 'ok' : m >= 40 ? 'warn' : 'risk');
+const masteryTone = (m) =>
+  m >= 70 ? 'var(--success)' : m >= 40 ? 'var(--warning)' : 'var(--danger)';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile, refreshProfile } = useAuth();
+  const reduce = useReducedMotion();
 
   const [stats, setStats] = useState({
     totalStudyTime: 0,
@@ -105,6 +83,23 @@ const Dashboard = () => {
   const [topicMastery, setTopicMastery] = useState([]);
   const [loopStreak, setLoopStreak] = useState(0);
   const [weeklyMomentum, setWeeklyMomentum] = useState(0);
+
+  // The hero performs once per session. Read synchronously so the very first
+  // render already knows; write after the reveal has actually mounted.
+  const [heroSeen] = useState(() => {
+    try {
+      return sessionStorage.getItem(HERO_SEEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(HERO_SEEN_KEY, '1');
+    } catch {
+      /* private mode - the hero will just perform again */
+    }
+  }, []);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -270,24 +265,12 @@ const Dashboard = () => {
 
   const go = (view) => navigate(user ? `/${view}` : '/login');
 
-  /**
-   * The loop, in the order the product actually describes it: focus, self-test,
-   * explain, spaced review. The numbering is load-bearing for that reason - it
-   * marks a real sequence a user moves through, not decoration. An earlier pass
-   * numbered them by visual prominence, which made 01-04 a pattern rather than
-   * information; if the order stops being a sequence, the numbers should go.
-   *
-   * `span` gives step one double width: it is where the loop starts, so the
-   * grid opens on it instead of presenting four equal choices.
-   */
   const modes = [
     {
       id: 'focus',
       index: '01',
       title: 'Deep Work',
-      description:
-        'Pomodoro, Flowmodoro and Sentry Mode. Put the hours in before you test what stuck.',
-      Icon: IconFocus,
+      description: 'Pomodoro, Flowmodoro and Sentry Mode. Put the hours in before you test what stuck.',
       view: 'focus',
       span: true,
     },
@@ -296,7 +279,6 @@ const Dashboard = () => {
       index: '02',
       title: 'Active Recall',
       description: 'Blurt what you remember. The AI grades the gaps and turns every miss into a card.',
-      Icon: IconRecall,
       view: 'recall',
     },
     {
@@ -304,7 +286,6 @@ const Dashboard = () => {
       index: '03',
       title: 'Feynman',
       description: 'Teach it to learn it. Explain a concept to a curious AI.',
-      Icon: IconFeynman,
       view: 'feynman',
     },
     {
@@ -312,7 +293,6 @@ const Dashboard = () => {
       index: '04',
       title: 'Spaced Review',
       description: 'Leitner scheduling that resurfaces cards before you forget.',
-      Icon: IconLeitner,
       view: 'flashcards',
     },
   ];
@@ -325,371 +305,320 @@ const Dashboard = () => {
     weeklyMomentum === 0 &&
     stats.sessionsCompleted === 0;
 
-  const readout = [
-    { label: 'Focus', value: stats.totalFocusMinutes, unit: 'min' },
-    { label: 'Cards', value: stats.cardsCreated, unit: '' },
-    { label: 'Streak', value: loopStreak || stats.streakCount, unit: 'd' },
-    { label: 'Week', value: `${weeklyMomentum}/7`, unit: '' },
-  ];
+  const streakValue = loopStreak || stats.streakCount;
+
+  // Soonest upcoming exam across topics, for the warning badge.
+  const examDaysList = topicMastery
+    .map(({ topic }) => daysUntilExam(topic.exam_date))
+    .filter((d) => d !== null && d >= 0);
+  const soonestExam = examDaysList.length > 0 ? Math.min(...examDaysList) : null;
+
+  const heroTitle = 'Study it once.';
+  const heroSecond = 'Remember it on exam day.';
 
   return (
-    <div className="surface-architectural min-h-full w-full">
-      <div className="relative z-[1] mx-auto w-full max-w-[1240px] px-5 py-8 md:px-10 md:py-12">
-        {/* ---------------------------------------------------- masthead -- */}
-        <motion.div variants={stagger(0, 0.05)} initial="hidden" animate="visible">
-          <motion.div variants={rise} className="flex flex-wrap items-center justify-between gap-4">
-            <Eyebrow>MindFlow / Dashboard</Eyebrow>
-            <div className="flex items-center gap-5">
-              <span className="font-mono text-micro text-paper-faint">
-                {new Date().toLocaleDateString('en-GB', {
-                  weekday: 'short',
-                  day: '2-digit',
-                  month: 'short',
-                })}
+    <div className="min-h-full w-full bg-base">
+      <div className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-8 md:py-10">
+        {/* ---------------------------------------------------- header ---- */}
+        <Breadcrumb
+          trail={['MindFlow', 'Dashboard']}
+          right={
+            <>
+              <span className="font-mono text-micro text-secondary">
+                {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
               </span>
-              {user && (
-                <button
-                  type="button"
-                  onClick={() => navigate('/panic')}
-                  className="group inline-flex items-center gap-2 rounded-xs border border-[rgba(255,92,70,0.28)]
-                             px-3 py-2 font-mono text-label uppercase text-risk transition-colors
-                             duration-quick ease-mech hover:border-risk hover:bg-[rgba(255,92,70,0.07)]"
-                >
-                  <IconTriage size={14} />
+              {user ? (
+                <Button variant="danger" size="sm" mono onClick={() => navigate('/panic')}>
+                  <AlertTriangle size={13} strokeWidth={1.5} />
                   Exam soon
-                </button>
-              )}
+                </Button>
+              ) : null}
+            </>
+          }
+        />
+
+        {/* ------------------------------------------------------ hero ---- */}
+        <div className="mt-10 grid grid-cols-1 gap-8 md:mt-14 md:grid-cols-12">
+          <div className="md:col-span-8">
+            {heroSeen ? (
+              <>
+                <h1 className="text-display text-primary">{heroTitle}</h1>
+                <p className="text-display text-secondary">{heroSecond}</p>
+              </>
+            ) : (
+              <>
+                <TextReveal text={heroTitle} as="h1" className="text-display text-primary" />
+                <TextReveal text={heroSecond} as="p" delay={0.18} className="text-display text-secondary" />
+              </>
+            )}
+
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Magnetic>
+                <Button mono size="lg" onClick={() => go(dueCards.length > 0 ? 'flashcards' : 'recall')}>
+                  Start today&rsquo;s loop
+                  <ArrowRight size={14} strokeWidth={1.5} />
+                </Button>
+              </Magnetic>
+              <Button variant="secondary" mono size="lg" onClick={() => go('focus')}>
+                Focus session
+              </Button>
             </div>
-          </motion.div>
-
-          <motion.div variants={rise} className="mt-5">
-            <Rule />
-          </motion.div>
-
-          {/* Asymmetric 7/5 split. The old hero was centred, which gave the
-              page no reading edge and made every block feel like a poster. */}
-          <div className="mt-10 grid grid-cols-1 gap-10 md:mt-14 md:grid-cols-12 md:gap-8">
-            <div className="md:col-span-7">
-              <RevealHeadline
-                text="Study it once."
-                as="h1"
-                className="text-display-lg font-display text-paper"
-              />
-              {/* Second line recedes to carry the two-part promise, but only to
-                  muted (8.5:1). The first pass used ghost at 2:1, which read as
-                  a deliberate design move on screen and was simply illegible. */}
-              <RevealHeadline
-                text="Remember it on exam day."
-                as="p"
-                className="text-display-lg font-display text-paper-muted"
-              />
-
-              <motion.p
-                variants={rise}
-                className="mt-6 max-w-[46ch] text-[15px] leading-relaxed text-paper-muted"
-              >
-                MindFlow runs your whole study loop — focus, self-test and spaced review — so
-                nothing you learn leaks away.
-              </motion.p>
-
-              <motion.div variants={rise} className="mt-8 flex flex-wrap items-center gap-3">
-                <MagneticButton onClick={() => go(dueCards.length > 0 ? 'flashcards' : 'recall')}>
-                  {dueCards.length > 0 ? 'Start review' : 'Start the loop'}
-                  <IconLead size={15} />
-                </MagneticButton>
-                <MagneticButton variant="quiet" onClick={() => go('focus')}>
-                  Focus session
-                </MagneticButton>
-              </motion.div>
-            </div>
-
-            {/* Instrument readout. This data was already being fetched on every
-                mount and never rendered - showing it is why the dashboard now
-                tells you something on arrival. */}
-            <motion.div variants={rise} className="md:col-span-5">
-              <div className="border-t border-line">
-                {readout.map((r) => (
-                  <div
-                    key={r.label}
-                    className="flex items-baseline justify-between border-b border-line py-3.5"
-                  >
-                    <span className="font-mono text-label uppercase text-paper-faint">{r.label}</span>
-                    <Numeral
-                      value={r.value}
-                      unit={r.unit}
-                      tone={r.label === 'Streak' && (loopStreak || stats.streakCount) > 0 ? 'signal' : 'paper'}
-                      className="text-[22px] font-medium"
-                    />
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 font-mono text-[11px] leading-relaxed text-paper-ghost">
-                {dueCards.length > 0
-                  ? `${dueCards.length} card${dueCards.length === 1 ? '' : 's'} scheduled for today`
-                  : 'Nothing scheduled — the queue is clear'}
-              </p>
-            </motion.div>
           </div>
-        </motion.div>
+        </div>
 
-        {/* -------------------------------------------------- first run --- */}
-        {isFirstRun && (
-          <motion.div
-            variants={rise}
-            initial="hidden"
-            animate="visible"
-            className="mt-14 border border-signal-line bg-signal-wash p-7 md:p-9"
-          >
-            <Eyebrow tone="signal">Start here</Eyebrow>
-            <h2 className="mt-4 text-display-md font-display text-paper">
-              Feel the loop in 60 seconds
-            </h2>
-            <p className="mt-3 max-w-[56ch] text-[15px] leading-relaxed text-paper-muted">
+        {/* ------------------------------------------------ stats rail ---- */}
+        <div className="mt-12">
+          {loading && user ? (
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-[104px] rounded-card" />
+              ))}
+            </div>
+          ) : (
+            <Stagger className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <Stagger.Item>
+                <StatTile label="Focus minutes" value={stats.totalFocusMinutes} unit="min" countUp />
+              </Stagger.Item>
+              <Stagger.Item>
+                <StatTile label="Cards due" value={dueCards.length} countUp />
+              </Stagger.Item>
+              <Stagger.Item>
+                <div className="rounded-card border border-soft bg-subtle p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-micro uppercase text-secondary">Streak</span>
+                    {streakValue > 0 ? (
+                      // One springy pop on mount - the overshoot IS the pop.
+                      <motion.span
+                        initial={reduce ? false : { scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={snappy}
+                        className="text-warning"
+                      >
+                        <Flame size={15} strokeWidth={1.5} />
+                      </motion.span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-1.5">
+                    <AnimatedNumber value={streakValue} countUp className="text-h1 text-primary" />
+                    <span className="font-mono text-small text-secondary">d</span>
+                  </div>
+                </div>
+              </Stagger.Item>
+              <Stagger.Item>
+                <StatTile
+                  label="This week"
+                  value={weeklyMomentum}
+                  countUp
+                  format={(n) => `${Math.round(n)}/7`}
+                />
+              </Stagger.Item>
+            </Stagger>
+          )}
+        </div>
+
+        {/* ------------------------------------------------- first run ---- */}
+        {isFirstRun ? (
+          <Card className="mt-12 border-accent-line bg-accent-wash p-7 md:p-9">
+            <p className="font-mono text-micro uppercase text-accent">Start here</p>
+            <h2 className="mt-3 text-h1 text-primary">Feel the loop in 60 seconds</h2>
+            <p className="mt-3 max-w-[56ch] text-body text-secondary">
               Paste any notes, blurt what you remember, and watch the AI find your gaps and turn
               them into flashcards that resurface right before you would forget them.
             </p>
-            {/* Numbered steps as a ruled sequence - the old version was three
-                centred spans separated by mid-dots, which read as decoration
-                rather than as an ordered process. */}
-            <ol className="mt-7 grid grid-cols-1 gap-px bg-line sm:grid-cols-3">
+            <ol className="mt-6 grid grid-cols-1 gap-px overflow-hidden rounded-input border border-soft bg-elevated sm:grid-cols-3">
               {['Paste your notes', 'Test yourself', 'Misses become cards'].map((step, i) => (
-                <li key={step} className="bg-ink-900 p-4">
-                  <span className="font-mono text-label text-signal">{`0${i + 1}`}</span>
-                  <p className="mt-2 text-sm text-paper">{step}</p>
+                <li key={step} className="bg-subtle p-4">
+                  <span className="font-mono text-micro text-accent">{`0${i + 1}`}</span>
+                  <p className="mt-1.5 text-small text-primary">{step}</p>
                 </li>
               ))}
             </ol>
-            <div className="mt-7">
-              <MagneticButton onClick={() => navigate('/recall')}>
+            <div className="mt-6">
+              <Button mono onClick={() => navigate('/recall')}>
                 Paste your notes
-                <IconLead size={15} />
-              </MagneticButton>
+                <ArrowRight size={14} strokeWidth={1.5} />
+              </Button>
             </div>
-          </motion.div>
-        )}
+          </Card>
+        ) : null}
 
-        {/* ------------------------------------------------ today's plan --
-            Content sections animate on mount, not on intersection. A scroll
-            observer that fails to fire leaves initial="hidden" in place -
-            opacity 0 forever - so gating real content on one means a silent
-            bug blanks the page. Observers drive decoration only (Rule). */}
-        {user && (dueCards.length > 0 || topicMastery.length > 0) && (
-          <motion.section
-            variants={stagger(0, 0.04)}
-            initial="hidden"
-            animate="visible"
-            className="mt-16"
-          >
-            <motion.div variants={rise} className="flex flex-wrap items-end justify-between gap-5">
-              <div>
-                <Eyebrow>Today&rsquo;s plan</Eyebrow>
-                <h2 className="mt-3 text-display-md font-display text-paper">
+        {/* ----------------------------------------------- today's plan --- */}
+        {user && loading ? (
+          <Skeleton className="mt-12 h-[168px] rounded-card" />
+        ) : user && (dueCards.length > 0 || topicMastery.length > 0) ? (
+          <Card className="mt-12 p-6 md:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-6">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="font-mono text-micro uppercase text-secondary">Today&rsquo;s plan</p>
+                  {soonestExam !== null ? (
+                    // One pulse on mount - scale 1 -> 1.04 -> 1, never looping.
+                    <motion.span
+                      initial={false}
+                      animate={reduce ? {} : { scale: [1, 1.04, 1] }}
+                      transition={{ duration: 0.6, times: [0, 0.5, 1], ease: 'easeInOut' }}
+                      className="inline-flex"
+                    >
+                      <Badge variant="warning">
+                        {soonestExam === 0 ? 'Exam today' : `Exam in ${soonestExam}d`}
+                      </Badge>
+                    </motion.span>
+                  ) : null}
+                </div>
+                <h2 className="mt-2 text-h1 text-primary">
                   {dueCards.length > 0 ? (
                     <>
-                      <Numeral value={dueCards.length} className="text-display-md" />{' '}
-                      card{dueCards.length === 1 ? '' : 's'} due
+                      <AnimatedNumber value={dueCards.length} countUp className="text-h1" /> card
+                      {dueCards.length === 1 ? '' : 's'} due
                     </>
                   ) : (
                     'All caught up'
                   )}
                 </h2>
               </div>
-              <MagneticButton
-                variant="quiet"
+              <Button
+                mono
                 onClick={() => navigate(dueCards.length > 0 ? '/flashcards' : '/focus')}
               >
                 {dueCards.length > 0 ? "Start today's loop" : 'Start focusing'}
-                <IconLead size={15} />
-              </MagneticButton>
-            </motion.div>
+                <ArrowRight size={14} strokeWidth={1.5} />
+              </Button>
+            </div>
 
-            <motion.div variants={rise} className="mt-6">
-              <Rule />
-            </motion.div>
-
-            {/* Topic rows as a ruled table. Shared baselines make mastery
-                comparable at a glance; the previous pill cards did not align. */}
-            {topicMastery.length > 0 && (
-              <div className="mt-2">
-                <div className="hidden grid-cols-12 gap-4 border-b border-line py-2.5 md:grid">
-                  {['Topic', 'Mastery', 'Trend', 'Exam'].map((h, i) => (
-                    <span
-                      key={h}
-                      className={`font-mono text-label uppercase text-paper-ghost ${
-                        ['col-span-5', 'col-span-3', 'col-span-2', 'col-span-2'][i]
-                      }`}
-                    >
-                      {h}
-                    </span>
-                  ))}
-                </div>
-
-                {topicMastery.slice(0, 6).map(({ topic, mastery, recallTrend }) => {
+            {topicMastery.length > 0 ? (
+              <div className="mt-6 border-t border-soft">
+                {topicMastery.slice(0, 6).map(({ topic, mastery }) => {
                   const examDays = daysUntilExam(topic.exam_date);
                   const tone = masteryTone(mastery);
                   return (
-                    <motion.div
-                      variants={rise}
+                    <div
                       key={topic.id}
-                      className="grid grid-cols-2 items-center gap-4 border-b border-line py-4
-                                 transition-colors duration-quick ease-mech hover:bg-ink-850 md:grid-cols-12"
+                      className="grid grid-cols-2 items-center gap-4 border-b border-soft py-3.5
+                                 transition-colors duration-150 hover:bg-elevated md:grid-cols-12"
                     >
-                      <div className="col-span-2 min-w-0 md:col-span-5">
-                        <div className="truncate text-[15px] font-medium text-paper">{topic.name}</div>
-                        {examDays !== null && examDays >= 0 && (
-                          <div className="mt-1 font-mono text-[11px] text-paper-faint">
+                      <div className="col-span-2 min-w-0 md:col-span-6">
+                        <p className="truncate text-body font-medium text-primary">{topic.name}</p>
+                        {examDays !== null && examDays >= 0 ? (
+                          <p className="mt-0.5 font-mono text-micro text-secondary">
                             {examDays === 0 ? 'Exam today' : `T-minus ${examDays}d`}
-                            <span className="mx-1.5 text-paper-ghost">/</span>
-                            <span style={{ color: mastery >= 60 ? '#57D9A3' : '#FF5C46' }}>
+                            <span className="mx-1.5">/</span>
+                            <span style={{ color: mastery >= 60 ? 'var(--success)' : 'var(--danger)' }}>
                               {mastery >= 60 ? 'on track' : 'behind'}
                             </span>
-                          </div>
-                        )}
+                          </p>
+                        ) : null}
                       </div>
-
                       <div className="col-span-1 flex items-center gap-3 md:col-span-3">
                         <MasteryMeter value={mastery} tone={tone} />
-                        <Numeral
-                          value={mastery}
-                          unit="%"
-                          tone={masteryToneName(mastery)}
-                          className="text-[13px]"
-                        />
+                        <span className="font-mono text-small tabular-nums" style={{ color: tone }}>
+                          {mastery}%
+                        </span>
                       </div>
-
-                      <div className="col-span-1 md:col-span-2">
-                        <Sparkline values={recallTrend} tone={tone} />
-                      </div>
-
-                      <div className="col-span-2 md:col-span-2">
+                      <div className="col-span-1 md:col-span-3">
                         <input
                           type="date"
                           value={topic.exam_date || ''}
                           onChange={(e) => handleSetExamDate(topic.id, e.target.value)}
                           aria-label={`Exam date for ${topic.name}`}
                           title="Set exam date"
-                          className="w-full cursor-pointer rounded-xs border border-transparent bg-transparent
-                                     px-1.5 py-1 font-mono text-[11px] text-paper-faint transition-colors
-                                     duration-quick ease-mech hover:border-line-strong hover:text-paper
-                                     [color-scheme:dark]"
+                          className="w-full cursor-pointer rounded-input border border-transparent bg-transparent
+                                     px-1.5 py-1 font-mono text-micro text-secondary transition-colors
+                                     duration-150 hover:border-strong hover:text-primary [color-scheme:dark]"
                         />
                       </div>
-                    </motion.div>
+                    </div>
                   );
                 })}
               </div>
-            )}
-          </motion.section>
-        )}
+            ) : null}
+          </Card>
+        ) : user && !loading && dueCards.length === 0 && !isFirstRun ? (
+          <EmptyState
+            className="mt-12"
+            title="Nothing due today"
+            description="Every card is scheduled ahead of your forgetting curve."
+            action={
+              <Button variant="secondary" size="sm" mono onClick={() => navigate('/focus')}>
+                Start a focus session
+              </Button>
+            }
+          />
+        ) : null}
 
-        {/* ------------------------------------------------------ modes --- */}
-        <motion.section
-          variants={stagger(0.12, 0.05)}
-          initial="hidden"
-          animate="visible"
-          className="mt-16 md:mt-20"
-        >
-          <motion.div variants={rise}>
-            <Eyebrow>The loop</Eyebrow>
-          </motion.div>
-
-          {/* Asymmetric by importance rather than a uniform 4-up grid. */}
-          <div className="mt-6 grid grid-cols-1 gap-px bg-line sm:grid-cols-2 lg:grid-cols-3">
+        {/* ---------------------------------------------------- the loop -- */}
+        {/* The sanctioned in-view reveal: Stagger's hardened inView mode
+            falls back to visible after 1.2s even if the observer never fires. */}
+        <section className="mt-16">
+          <p className="font-mono text-micro uppercase text-secondary">The loop</p>
+          <Stagger inView className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-12">
             {modes.map((mode) => {
               const last = formatTimeAgo(getLastActivityAt(mode.id));
               return (
-                <motion.div
+                <Stagger.Item
                   key={mode.id}
-                  variants={rise}
-                  className={mode.span ? 'lg:col-span-3' : ''}
+                  className={mode.span ? 'md:col-span-12' : 'md:col-span-6 lg:col-span-4'}
                 >
-                  <Panel
+                  <Card
                     interactive
-                    tilt={!mode.span}
                     onClick={() => go(mode.view)}
-                    className={`group flex h-full flex-col p-7 md:p-8 ${
-                      mode.span ? 'lg:flex-row lg:items-center lg:justify-between lg:gap-10' : ''
-                    }`}
+                    className="group relative flex h-full flex-col overflow-hidden p-6 md:p-7"
                   >
-                    <div className={mode.span ? 'lg:max-w-[52%]' : ''}>
-                      <div className="flex items-center justify-between gap-4">
-                        <IconFrame>
-                          <mode.Icon size={22} />
-                        </IconFrame>
-                        <span className="font-mono text-label text-paper-ghost">{mode.index}</span>
-                      </div>
-
-                      <h3 className="mt-6 text-display-sm font-display text-paper">{mode.title}</h3>
-                      <p className="mt-2.5 max-w-[42ch] text-sm leading-relaxed text-paper-muted">
-                        {mode.description}
-                      </p>
-                    </div>
-
-                    {/* Step one is double width, which left a dead zone in the
-                        middle. A large ghosted step number fills it with the
-                        one thing that belongs there - where you are in the
-                        loop - rather than with padding. */}
-                    {mode.span && (
-                      <span
-                        aria-hidden="true"
-                        className="pointer-events-none hidden select-none font-mono text-[7rem] font-bold
-                                   leading-none text-line-strong transition-colors duration-base
-                                   ease-mech group-hover:text-signal-dim lg:block"
-                      >
-                        {mode.index}
-                      </span>
-                    )}
-
-                    <div
-                      className={`mt-7 flex items-center justify-between gap-6 ${
-                        mode.span ? 'lg:mt-0 lg:shrink-0' : ''
-                      }`}
+                    {/* Oversized ghost numeral: tertiary at 20% - decorative
+                        by definition, which is what tertiary is for. Shifts
+                        4px right on hover. */}
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute -top-4 right-4 select-none font-mono
+                                 text-[96px] font-bold leading-none text-tertiary opacity-20
+                                 transition-transform duration-150 ease-mech group-hover:translate-x-1"
                     >
-                      <span className="font-mono text-[11px] text-paper-ghost">
-                        {last ? `Last ${last}` : 'Not started'}
+                      {mode.index}
+                    </span>
+
+                    <h3 className="relative z-10 text-h2 text-primary">{mode.title}</h3>
+                    <p className="relative z-10 mt-2 max-w-[48ch] flex-1 text-small leading-relaxed text-secondary">
+                      {mode.description}
+                    </p>
+
+                    <div className="relative z-10 mt-6 flex items-center justify-between gap-4">
+                      <span className="font-mono text-micro text-secondary">
+                        {last ? `Last session ${last}` : 'Not started'}
                       </span>
-                      {/* The arrow is the affordance; the whole panel is the
-                          hit target, so this is a cue rather than a button. */}
                       <span
-                        className="inline-flex items-center gap-2 font-mono text-label uppercase
-                                   text-paper-faint transition-all duration-quick ease-mech
-                                   group-hover:gap-3 group-hover:text-signal"
+                        className="inline-flex items-center gap-1.5 font-mono text-micro uppercase
+                                   text-secondary transition-all duration-150 ease-mech
+                                   group-hover:gap-2.5 group-hover:text-accent"
                       >
                         {user ? 'Open' : 'Sign in'}
-                        <IconLead size={15} />
+                        <ArrowRight size={13} strokeWidth={1.5} />
                       </span>
                     </div>
-                  </Panel>
-                </motion.div>
+                  </Card>
+                </Stagger.Item>
               );
             })}
-          </div>
-        </motion.section>
+          </Stagger>
+        </section>
 
-        {/* ----------------------------------------------------- footer --- */}
-        <footer className="mt-20 border-t border-line pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <span className="font-mono text-[11px] text-paper-ghost">
-              © {new Date().getFullYear()} MindFlow
-            </span>
-            <nav className="flex flex-wrap gap-6">
-              {[
-                ['About', '/about'],
-                ['Privacy', '/privacy'],
-                ['Terms', '/terms'],
-                ['Contact', 'mailto:hannajohn37@gmail.com'],
-              ].map(([label, href]) => (
-                <a
-                  key={label}
-                  href={href}
-                  className="font-mono text-[11px] uppercase tracking-[0.14em] text-paper-faint
-                             transition-colors duration-quick ease-mech hover:text-paper"
-                >
-                  {label}
-                </a>
-              ))}
-            </nav>
-          </div>
+        {/* ------------------------------------------------------ footer -- */}
+        <footer className="mt-16 flex flex-wrap items-center justify-between gap-4 border-t border-soft pt-5">
+          <span className="font-mono text-micro text-tertiary">© {new Date().getFullYear()} MindFlow</span>
+          <nav className="flex flex-wrap gap-5">
+            {[
+              ['About', '/about'],
+              ['Privacy', '/privacy'],
+              ['Terms', '/terms'],
+              ['Contact', 'mailto:hannajohn37@gmail.com'],
+            ].map(([label, href]) => (
+              <a
+                key={label}
+                href={href}
+                className="font-mono text-micro uppercase text-secondary transition-colors duration-150 hover:text-primary"
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
         </footer>
       </div>
     </div>

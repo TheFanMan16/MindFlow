@@ -35,12 +35,19 @@ vi.mock('../lib/supabaseClient', () => {
   return { supabase: { from: () => q } };
 });
 
+// Stable identities matter: Dashboard keys effects on `user`, and a mock
+// that mints a new object per render re-runs the fetch effect on every
+// render - loading flips true/false forever and data sections detach
+// between findBy* resolving and the assertion running. The real context
+// provides a stable user; the mock must too.
+const AUTH = vi.hoisted(() => ({
+  user: { id: 'user-1', email: 'a@b.c' },
+  profile: { is_pro: false },
+  refreshProfile: () => {},
+}));
+
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({
-    user: { id: 'user-1', email: 'a@b.c' },
-    profile: { is_pro: false },
-    refreshProfile: vi.fn(),
-  }),
+  useAuth: () => AUTH,
 }));
 
 vi.mock('../utils/studyLoop', () => ({
@@ -83,7 +90,7 @@ describe('Dashboard (architectural redesign)', () => {
 
   it('mounts and renders the masthead headline', async () => {
     renderDashboard();
-    // RevealHeadline splits into words but exposes the full string as the
+    // TextReveal splits into words but exposes the full string as the
     // accessible name, which is the behaviour that matters for screen readers.
     expect(await screen.findByRole('heading', { name: 'Study it once.' })).toBeInTheDocument();
   });
@@ -95,18 +102,18 @@ describe('Dashboard (architectural redesign)', () => {
     }
   });
 
-  it('surfaces the stats it fetches instead of discarding them', async () => {
+  it('renders the stats rail: focus minutes, streak and week momentum', async () => {
     renderDashboard();
-    // total_focus_minutes and the flashcard count were previously queried on
-    // every mount and never rendered. This is the regression guard.
-    expect(await screen.findByText('240')).toBeInTheDocument();
-    expect(await screen.findByText('12')).toBeInTheDocument();
+    // Numbers count up on a spring from 0, so allow time to settle.
+    expect(await screen.findByText('240', {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(await screen.findByText('4', {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(await screen.findByText('3/7', {}, { timeout: 4000 })).toBeInTheDocument();
   });
 
   it('renders due-card count and topic rows', async () => {
     renderDashboard();
     expect(await screen.findByText('Organic Chemistry')).toBeInTheDocument();
-    expect(await screen.findByText('72')).toBeInTheDocument();
+    expect(await screen.findByText('72%')).toBeInTheDocument();
   });
 
   it('exposes the exam-date control with an accessible name per topic', async () => {
