@@ -68,6 +68,13 @@
   --r-lg: 14px;   /* outer cards, floating panels */
   --r-full: 999px; /* status pills ONLY */
 
+  /* Activity-grid ramp - sequential, one hue, light to dark. Empty is a
+     solid dark step, then accent at .30/.58/.85 (mindflow-design skill). */
+  --grid-empty: #161A1E;
+  --grid-l1: rgba(233, 169, 77, 0.30);
+  --grid-l2: rgba(233, 169, 77, 0.58);
+  --grid-l3: rgba(233, 169, 77, 0.85);
+
   /* --------------------------------------------------------- motion --- */
   --dur-micro: 120ms;
   --dur-base: 180ms;

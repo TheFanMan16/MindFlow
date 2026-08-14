@@ -63,9 +63,11 @@ const MainLayout = ({ children }) => {
     <ProfileProvider>
       <div className="flex h-screen w-screen bg-canvas text-primary overflow-hidden">
         <Sidebar />
-        {/* pb-24 clears the mobile bottom tab bar; the bar hides at sm, where
-            the side rail takes over, so the clearance hides with it */}
-        <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-4 pb-24 sm:pb-4 md:p-6 relative">
+        {/* No wrapper padding: the page shell (topbar + content gutters) is
+            owned by each route per the mindflow-design skill, so the shell
+            chrome sits flush. pb-24 clears the mobile bottom tab bar; the bar
+            hides at sm, where the side rail takes over. */}
+        <main className="flex-1 h-full overflow-y-auto overflow-x-hidden pb-24 sm:pb-0 relative">
           {/* Inner boundary so a route chunk loads without unmounting the
               sidebar - React resolves to the nearest Suspense ancestor. */}
           <Suspense fallback={<RouteFallback />}>{children}</Suspense>

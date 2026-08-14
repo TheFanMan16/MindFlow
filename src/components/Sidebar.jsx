@@ -87,17 +87,17 @@ const Sidebar = () => {
   return (
     <>
       {/* ------------------------------------------------ side rail ------ */}
-      <aside className="hidden h-full w-[220px] shrink-0 flex-col border-r border-line bg-surface sm:flex">
+      <aside className="hidden h-full w-[184px] shrink-0 flex-col border-r border-line bg-surface sm:flex">
         {/* Brand */}
         <button
           type="button"
           onClick={() => navigate('/dashboard')}
-          className="flex h-14 items-center gap-2.5 border-b border-line px-[22px]
+          className="flex h-11 items-center gap-2 border-b border-faint px-4
                      transition-colors duration-micro hover:bg-hover active:bg-active"
           aria-label="MindFlow home"
         >
-          <Lightbulb size={20} strokeWidth={1.5} className="shrink-0 text-accent" />
-          <span className="text-body-sm font-semibold text-primary">MindFlow</span>
+          <Lightbulb size={18} strokeWidth={1.5} className="shrink-0 text-accent" />
+          <span className="font-mono uppercase text-label-mono text-primary">MindFlow</span>
         </button>
 
         {/* Nav */}
@@ -113,7 +113,7 @@ const Sidebar = () => {
                 disabled={item.disabled}
                 aria-label={item.label}
                 aria-current={active ? 'page' : undefined}
-                className="relative flex h-9 items-center gap-3 rounded-sm px-2.5
+                className="relative flex h-[34px] items-center gap-2.5 rounded-sm px-2
                            after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-['']
                            transition-colors duration-micro
                            hover:bg-hover active:bg-active disabled:pointer-events-none"

@@ -15,6 +15,9 @@ export const AnimatedNumber = ({
   value,
   format = (n) => Math.round(n).toLocaleString('en-US'),
   countUp = false,
+  /* Proportional figures on display-size values (tabular at that size reads
+     loose and gappy); keep tabular where digits align in columns. */
+  tabular = true,
   className = '',
 }) => {
   const reduce = useReducedMotion();
@@ -26,11 +29,13 @@ export const AnimatedNumber = ({
     mv.set(value);
   }, [value, mv]);
 
+  const numClass = `${tabular ? 'tabular-nums ' : ''}${className}`;
+
   if (reduce) {
-    return <span className={`tabular-nums ${className}`}>{format(value)}</span>;
+    return <span className={numClass}>{format(value)}</span>;
   }
 
-  return <motion.span className={`tabular-nums ${className}`}>{text}</motion.span>;
+  return <motion.span className={numClass}>{text}</motion.span>;
 };
 
 export default AnimatedNumber;

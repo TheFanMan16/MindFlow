@@ -78,7 +78,7 @@ describe('Button', () => {
   it('every size resolves to a 40px hit target', () => {
     // md and lg are natively tall enough.
     const { unmount } = render(<Button size="md">M</Button>);
-    expect(screen.getByRole('button', { name: 'M' }).classList.contains('h-10')).toBe(true);
+    expect(screen.getByRole('button', { name: 'M' }).classList.contains('h-11')).toBe(true);
     unmount();
     // sm stays 32px visually and extends the hit area with a pseudo-element,
     // not extra height.
@@ -394,10 +394,10 @@ describe('EmptyState', () => {
 
 describe('data display', () => {
   it('StatTile renders label, mono value and delta', () => {
-    render(<StatTile label="Focus minutes" value={240} unit="min" delta={12} />);
+    render(<StatTile label="Focus minutes" value={240} unit="min" delta="+12% vs last month" deltaTone="up" />);
     expect(screen.getByText('Focus minutes')).toBeInTheDocument();
     expect(screen.getByText('240')).toBeInTheDocument();
-    expect(screen.getByText('+12%')).toBeInTheDocument();
+    expect(screen.getByText('+12% vs last month')).toBeInTheDocument();
   });
 
   it('ProgressRing exposes its value to assistive tech', () => {

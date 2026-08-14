@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Flame, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -14,10 +14,9 @@ import {
   toLocalDateKey,
 } from '../utils/studyLoop';
 import { maybeNotifyDueCards } from '../utils/notifications';
-import { Card, Button, Skeleton, EmptyState, Staleness, stalenessRowClass } from './ui';
+import { Card, Button, Skeleton, EmptyState, Staleness, StatTile, stalenessRowClass } from './ui';
 import { stalenessTier, formatRelative } from '../utils/staleness';
-import { motion, AnimatedNumber, Magnetic, useReducedMotion } from '../motion';
-import { snappy } from '../motion/transitions';
+import { AnimatedNumber, Magnetic } from '../motion';
 
 /**
  * Dashboard - four zones, top to bottom, hierarchy by density not color:
@@ -69,13 +68,10 @@ const MasteryMeter = ({ value, tone }) => {
 const masteryTone = (m) =>
   m >= 70 ? 'var(--positive)' : m >= 40 ? 'var(--text-secondary)' : 'var(--negative)';
 
-/** Activity cell fill: 4 steps from inset toward the accent. */
-const levelFill = (level) =>
-  level === 0
-    ? 'var(--bg-inset)'
-    : `color-mix(in srgb, var(--accent) ${[0, 25, 45, 70, 100][level]}%, var(--bg-inset))`;
+/** Activity ramp: solid dark empty, then accent at .30/.58/.85 (tokens). */
+const levelFill = (level) => (level === 0 ? 'var(--grid-empty)' : `var(--grid-l${level})`);
 
-const minutesToLevel = (m) => (m <= 0 ? 0 : m <= 10 ? 1 : m <= 25 ? 2 : m <= 45 ? 3 : 4);
+const minutesToLevel = (m) => (m <= 0 ? 0 : m <= 15 ? 1 : m <= 40 ? 2 : 3);
 
 /**
  * Exam countdown in the staleness scale's units - 'today', 'tomorrow',
@@ -94,7 +90,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile, refreshProfile } = useAuth();
-  const reduce = useReducedMotion();
 
   // Six independent data sources, each resolving or failing ON ITS OWN
   // (Promise.allSettled semantics): one failed query must never blank data
@@ -405,6 +400,50 @@ const Dashboard = () => {
     return labels;
   }, []);
 
+  // ------------------------------------------------- tile inputs -------
+  // All four tiles derive from persisted rows already fetched - no tile
+  // shows a number without a real source.
+  const weeklyMinutes = useMemo(() => {
+    const sums = Array(GRID_WEEKS).fill(0);
+    gridCells.forEach((cell, i) => {
+      if (!cell.future) sums[Math.floor(i / 7)] += cell.minutes;
+    });
+    return sums;
+  }, [gridCells]);
+
+  // Trailing 4 weeks vs the 4 before - a real month-on-month movement.
+  const focusDelta = useMemo(() => {
+    const last4 = weeklyMinutes.slice(-4).reduce((a, b) => a + b, 0);
+    const prev4 = weeklyMinutes.slice(-8, -4).reduce((a, b) => a + b, 0);
+    if (prev4 === 0) return null; // no base period - show minutes, not a fake %
+    return Math.round(((last4 - prev4) / prev4) * 100);
+  }, [weeklyMinutes]);
+
+  const longestStreak = useMemo(() => {
+    const days = [...new Set(activeDays)].sort();
+    let best = 0;
+    let run = 0;
+    let prev = null;
+    for (const key of days) {
+      const t = new Date(`${key}T12:00:00`).getTime();
+      run = prev !== null && t - prev === DAY_MS ? run + 1 : 1;
+      best = Math.max(best, run);
+      prev = t;
+    }
+    return best;
+  }, [activeDays]);
+
+  const lastWeekDays = useMemo(() => {
+    const set = new Set(activeDays);
+    let n = 0;
+    for (let d = 7; d < 14; d++) {
+      if (set.has(toLocalDateKey(new Date(Date.now() - d * DAY_MS)))) n += 1;
+    }
+    return n;
+  }, [activeDays]);
+
+  const dueDecks = useMemo(() => decks.filter((d) => d.due > 0).length, [decks]);
+
   const sortedDecks = useMemo(
     () =>
       [...decks].sort((a, b) => {
@@ -421,32 +460,33 @@ const Dashboard = () => {
   // ------------------------------------------------------------ render --
   return (
     <div className="min-h-full w-full bg-canvas">
-      {/* Bar - chrome, not content. */}
-      <div className="mx-auto flex h-12 w-full max-w-[712px] items-center justify-between border-b border-faint px-5 md:px-8">
-        <div className="flex items-center gap-4">
-          <span className="text-label-sm text-tertiary">
-            {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
-          </span>
-        </div>
+      {/* Topbar - breadcrumb left, context right. Chrome, not content. */}
+      <div className="flex h-11 w-full items-center justify-between border-b border-faint px-10">
+        <span className="font-mono uppercase text-label-mono text-tertiary">
+          MindFlow / <span className="text-secondary">Dashboard</span>
+        </span>
+        <span className="font-mono uppercase text-label-mono text-tertiary">
+          {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
+        </span>
       </div>
 
-      {/* ~712px column: the page's content is a single narrow stack, and a
-          wide column just manufactures emptiness around it. */}
-      <div className="mx-auto w-full max-w-[712px] px-5 pb-24 md:px-8">
+      {/* The page shell: content left-aligned to the shell, max-width 1136,
+          34px above and 64px below (mindflow-design skill - every route). */}
+      <div className="w-full max-w-[1136px] px-10 pb-16 pt-[34px]">
         <>
             {/* Each zone gates on ITS OWN sources: a static skeleton at the
                 real zone's dimensions until they all settle (so a zone paints
                 exactly once - no partial sums mid-read), zone-scoped error
                 copy if one of them failed, real content otherwise. A failed
                 deck query can no longer blank a queue that loaded fine. */}
-            {/* ---------------------------------- ZONE A: state of things ----- */}
-            <section className="mt-8">
+            {/* ---------------------------------- ZONE A: the hero ------------ */}
+            <section>
               {user && !zoneAReady ? (
-                /* Zone A card: p-8 (64) + metric line (48) + mt-2 body-sm (28)
-                    + mt-6 button h-10 (64) = 204px. */
+                /* Hero card: p-8 (64) + eyebrow (14) + mt-3 display (64) +
+                    mt-2 body-sm (28) + mt-6 button h-11 (68) = 238px. */
                 <div aria-busy="true">
                   <span className="sr-only">Loading your dashboard</span>
-                  <Skeleton className="h-[204px] rounded-lg" />
+                  <Skeleton className="h-[238px] rounded-lg" />
                 </div>
               ) : user && zoneAError ? (
                 /* Only the queue's own sources failed - the zones below still
@@ -477,7 +517,7 @@ const Dashboard = () => {
                 </Card>
               ) : state === 'new' ? (
                 <Card className="p-8">
-                  <p className="text-label-sm text-secondary">Start here</p>
+                  <p className="font-mono uppercase text-label-mono text-secondary">Start here</p>
                   <p className="mt-3 max-w-[56ch] text-body text-secondary">
                     Paste any notes, blurt what you remember, and the AI turns what you missed into
                     flashcards scheduled to resurface before you would forget them.
@@ -503,13 +543,13 @@ const Dashboard = () => {
                 /* The number the button acts on carries the size; the gap is
                    a quiet 12px line above it. Amber lives on the button and
                    the count only - never as a panel wash. */
-                <Card className="p-8">
-                  <p className="text-label-sm text-secondary">
+                <Card className="p-8 pt-7">
+                  <p className="font-mono uppercase text-label-mono text-secondary">
                     Last studied {lastSessionLabel} ago
                   </p>
-                  <h1 className="mt-3 text-metric text-primary">
+                  <h1 className="mt-3 text-display text-primary">
                     <span className="text-accent">
-                      <AnimatedNumber value={dueCount} className="text-metric" />
+                      <AnimatedNumber value={dueCount} tabular={false} className="text-display" />
                     </span>{' '}
                     card{dueCount === 1 ? '' : 's'} to review
                   </h1>
@@ -550,9 +590,9 @@ const Dashboard = () => {
                 <Card className="p-8">
                   {dueCount > 0 ? (
                     <>
-                      <h1 className="text-metric text-primary">
+                      <h1 className="text-display text-primary">
                         <span className="text-accent">
-                          <AnimatedNumber value={dueCount} className="text-metric" />
+                          <AnimatedNumber value={dueCount} tabular={false} className="text-display" />
                         </span>{' '}
                         card{dueCount === 1 ? '' : 's'} due
                       </h1>
@@ -590,81 +630,123 @@ const Dashboard = () => {
               )}
             </section>
 
-            {/* -------------------------------- ZONE B: continuity strip ------ */}
+            {/* ------------------------------------------- stat tiles --------- */}
+            {user ? (
+              <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {!zoneBReady || src.due.status === 'loading' ? (
+                  [0, 1, 2, 3].map((i) => <StatTile key={i} loading label="" />)
+                ) : (
+                  <>
+                    <StatTile
+                      label="Focus minutes"
+                      value={zoneBError ? null : src.profile.totalFocusMinutes}
+                      unit="min"
+                      emptyHint="not loaded"
+                      delta={
+                        focusDelta === null
+                          ? `${weeklyMinutes.slice(-4).reduce((a, b) => a + b, 0)} min in 4 weeks`
+                          : `${focusDelta >= 0 ? '+' : ''}${focusDelta}% vs last month`
+                      }
+                      deltaTone={focusDelta === null ? undefined : focusDelta >= 0 ? 'up' : 'down'}
+                      sparkline={weeklyMinutes}
+                    />
+                    <StatTile
+                      label="Cards due"
+                      value={src.due.status === 'ok' ? dueCount : null}
+                      emptyHint="not loaded"
+                      delta={`across ${dueDecks} deck${dueDecks === 1 ? '' : 's'}`}
+                    />
+                    <StatTile
+                      label="Streak"
+                      value={zoneBError ? null : loopStreak}
+                      unit="days"
+                      emptyHint="not loaded"
+                      delta={`longest ${longestStreak} day${longestStreak === 1 ? '' : 's'}`}
+                    />
+                    <StatTile
+                      label="This week"
+                      value={zoneBError ? null : weeklyMomentum}
+                      unit="of 7 days"
+                      emptyHint="not loaded"
+                      delta={`last week ${lastWeekDays} of 7`}
+                    />
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {/* ---------------------------------- ZONE B: activity ------------ */}
             {user && !zoneBReady ? (
-              /* Zone B strip: month labels (12+4) + 7 rows x 11px cells +
-                  6 x 3px gaps (95) + py-3 (24) + borders (2) = 137px. */
-              <section className="mt-6" aria-busy="true">
-                <Skeleton className="h-[137px] rounded-md" />
+              <section className="mt-10" aria-busy="true">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="mt-4 h-[113px] w-[165px] rounded-sm" />
               </section>
             ) : user && zoneBError ? (
-              <section className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-md border border-line bg-surface px-4 py-3 shadow-edge">
-                <span className="text-body-sm text-secondary">
+              <section className="mt-10">
+                <h2 className="font-mono uppercase text-label-mono text-tertiary">Activity</h2>
+                <p className="mt-3 text-body-sm text-secondary">
                   Your activity and focus stats didn&apos;t load.
-                </span>
+                </p>
                 {retryHost === 'B' ? (
-                  <Button variant="ghost" size="sm" onClick={retryFetch}>
-                    Retry
-                  </Button>
+                  <div className="mt-3">
+                    <Button variant="secondary" size="sm" onClick={retryFetch}>
+                      Retry
+                    </Button>
+                  </div>
                 ) : null}
               </section>
             ) : user ? (
-              <section className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-md border border-line bg-surface px-4 py-3 shadow-edge">
-                <div className="shrink-0">
-                  <div
-                    className="mb-1 grid grid-flow-col auto-cols-[11px] gap-[3px] text-label-xs text-tertiary"
-                    aria-hidden="true"
-                  >
-                    {weekLabels.map((label, i) => (
-                      <span key={i} className="overflow-visible whitespace-nowrap">
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                  <div
-                    className="grid grid-flow-col grid-rows-7 gap-[3px]"
-                    role="img"
-                    aria-label={`Study activity, last ${GRID_WEEKS} weeks: active ${activeDays.length} day${
-                      activeDays.length === 1 ? '' : 's'
-                    }`}
-                  >
-                    {gridCells.map((cell) => (
-                      <span
-                        key={cell.key}
-                        title={cell.future ? undefined : `${cell.key}: ${cell.minutes} min`}
-                        className="h-[11px] w-[11px] rounded-[2px]"
-                        style={{
-                          backgroundColor: cell.future ? 'transparent' : levelFill(cell.level),
-                        }}
-                      />
-                    ))}
-                  </div>
+              <section className="mt-10">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-mono uppercase text-label-mono text-tertiary">Activity</h2>
+                  <span className="text-label-sm text-tertiary">last 12 weeks</span>
                 </div>
-                <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-1">
-                  <span className="flex items-center gap-1.5 text-label-sm text-secondary">
-                    {loopStreak > 0 ? (
-                      <motion.span
-                        initial={reduce ? false : { scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={snappy}
-                        className="inline-flex"
-                      >
-                        <Flame size={12} strokeWidth={1.5} />
-                      </motion.span>
-                    ) : null}
-                    {/* One text child, so the flex gap cannot open a stray
-                        space between the number and "-day". */}
-                    <span>
-                      <span className="tabular-nums text-primary">{loopStreak}</span>-day streak
+                <div className="mt-4 flex flex-wrap items-start gap-8">
+                  <div className="shrink-0">
+                    <div
+                      className="mb-1.5 grid grid-flow-col auto-cols-[11px] gap-[3px] font-mono text-[10px] uppercase leading-3 tracking-[0.06em] text-tertiary"
+                      aria-hidden="true"
+                    >
+                      {weekLabels.map((label, i) => (
+                        <span key={i} className="overflow-visible whitespace-nowrap">
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                    <div
+                      className="grid grid-flow-col grid-rows-7 gap-[3px]"
+                      role="img"
+                      aria-label={`Study activity, last ${GRID_WEEKS} weeks: active ${activeDays.length} day${
+                        activeDays.length === 1 ? '' : 's'
+                      }`}
+                    >
+                      {gridCells.map((cell) => (
+                        <span
+                          key={cell.key}
+                          title={cell.future ? undefined : `${cell.key}: ${cell.minutes} min`}
+                          className="h-[11px] w-[11px] rounded-[2px]"
+                          style={{
+                            backgroundColor: cell.future ? 'transparent' : levelFill(cell.level),
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-4">
+                    <span className="text-body-sm text-secondary">
+                      <span className="font-semibold tabular-nums text-primary">{loopStreak}</span>-day streak
                     </span>
-                  </span>
-                  <span className="text-label-sm text-secondary">
-                    <span className="tabular-nums text-primary">{weeklyMomentum}/7</span> days this week
-                  </span>
-                  <span className="text-label-sm text-secondary">
-                    <span className="tabular-nums text-primary">{src.profile.totalFocusMinutes}</span> focus
-                    minutes total
-                  </span>
+                    <span className="text-body-sm text-secondary">
+                      <span className="font-semibold tabular-nums text-primary">{weeklyMomentum}/7</span> days
+                      this week
+                    </span>
+                    <span className="text-body-sm text-secondary">
+                      <span className="font-semibold tabular-nums text-primary">
+                        {src.profile.totalFocusMinutes}
+                      </span>{' '}
+                      focus minutes total
+                    </span>
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -674,23 +756,23 @@ const Dashboard = () => {
               /* Zone C: title-sm heading (24) then 56px rows mirroring the
                   real columns: name / due / staleness / progress. */
               <section className="mt-10" aria-busy="true">
-                <Skeleton className="h-6 w-12" />
+                <Skeleton className="h-4 w-14" />
                 <div className="mt-3">
                   {[0, 1, 2].map((i) => (
-                    <div key={i} className="flex h-14 items-center gap-4 border-b border-faint px-2">
+                    <div key={i} className="flex h-[62px] items-center gap-4 border-b border-faint px-3">
                       <div className="flex-1">
                         <Skeleton className="h-4 w-2/5" />
                       </div>
-                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="hidden h-[3px] w-24 sm:block" />
+                      <Skeleton className="h-4 w-14" />
                       <Skeleton className="hidden h-3 w-24 sm:block" />
-                      <Skeleton className="hidden h-0.5 w-24 sm:block" />
                     </div>
                   ))}
                 </div>
               </section>
             ) : user && zoneCError ? (
               <section className="mt-10">
-                <h2 className="text-title-sm text-primary">Decks</h2>
+                <h2 className="font-mono uppercase text-label-mono text-tertiary">Decks</h2>
                 <p className="mt-3 text-body-sm text-secondary">Your decks didn&apos;t load.</p>
                 {retryHost === 'C' ? (
                   <div className="mt-3">
@@ -702,8 +784,11 @@ const Dashboard = () => {
               </section>
             ) : user && (sortedDecks.length > 0 || hasAnyData) ? (
               <section className="mt-10">
-                <h2 className="text-title-sm text-primary">Decks</h2>
-                <div className="mt-3">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-mono uppercase text-label-mono text-tertiary">Decks</h2>
+                  <span className="text-label-sm text-tertiary">most overdue first</span>
+                </div>
+                <div className="mt-3 border-t border-faint">
                   {sortedDecks.length === 0 ? (
                     <EmptyState
                       title="No decks yet"
@@ -717,7 +802,6 @@ const Dashboard = () => {
                   ) : (
                     sortedDecks.map((deck) => {
                       const masteredPct = deck.total > 0 ? (deck.matured / deck.total) * 100 : 0;
-                      const inProgressPct = deck.total > 0 ? (deck.in_progress / deck.total) * 100 : 0;
                       // Real study recency (MAX(last_reviewed) via the view);
                       // NULL means never studied and renders as exactly that.
                       const tier = stalenessTier(deck.last_reviewed);
@@ -733,32 +817,26 @@ const Dashboard = () => {
                               navigate('/flashcards');
                             }
                           }}
-                          className={`group flex h-14 cursor-pointer items-center gap-4 border-b border-faint px-2
+                          className={`group flex h-[62px] cursor-pointer items-center gap-4 rounded-sm border-b border-faint px-3
                                      transition-colors duration-micro hover:bg-hover active:bg-active
                                      ${stalenessRowClass(tier)}`}
                         >
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-title-sm text-primary">{deck.title || 'Untitled Deck'}</p>
                           </div>
-                          {/* 2px bar: inset track, accent = mastered (box 3+),
-                              tertiary = in-progress. Only rendered once the
-                              deck has actually been studied - a 0% bar reads
-                              as a stray horizontal rule, not as data. */}
-                          {deck.last_reviewed ? (
+                          {/* 3px meter: the unfilled track is a lighter step
+                              of the same ramp (accent-wash), so state reads
+                              across the whole bar. No meter at zero - an
+                              empty track reads as a stray rule - and none for
+                              never-studied decks. */}
+                          {deck.last_reviewed && deck.matured > 0 ? (
                             <div
                               className="hidden w-24 shrink-0 sm:block"
                               role="img"
                               aria-label={`${deck.matured} of ${deck.total} cards mastered`}
                             >
-                              <div className="flex h-0.5 w-full overflow-hidden bg-inset">
-                                <span className="h-full bg-accent" style={{ width: `${masteredPct}%` }} />
-                                <span
-                                  className="h-full"
-                                  style={{
-                                    width: `${inProgressPct}%`,
-                                    backgroundColor: 'var(--text-tertiary)',
-                                  }}
-                                />
+                              <div className="h-[3px] w-full overflow-hidden rounded-[2px] bg-accent-wash">
+                                <div className="h-full bg-accent" style={{ width: `${masteredPct}%` }} />
                               </div>
                             </div>
                           ) : null}
@@ -814,8 +892,8 @@ const Dashboard = () => {
                 </div>
               </section>
             ) : user && zoneDError ? (
-              <section className="mt-14">
-                <h2 className="text-body-sm text-tertiary">Topics and exam dates</h2>
+              <section className="mt-10">
+                <h2 className="font-mono uppercase text-label-mono text-tertiary">Topics and exam dates</h2>
                 <p className="mt-2 text-body-sm text-tertiary">Topics didn&apos;t load.</p>
                 {retryHost === 'D' ? (
                   <div className="mt-2">
@@ -826,8 +904,8 @@ const Dashboard = () => {
                 ) : null}
               </section>
             ) : user && topicMastery.length > 0 ? (
-              <section className="mt-14">
-                <h2 className="text-body-sm text-tertiary">Topics and exam dates</h2>
+              <section className="mt-10">
+                <h2 className="font-mono uppercase text-label-mono text-tertiary">Topics and exam dates</h2>
                 <div className="mt-2">
                   {topicMastery.slice(0, 6).map(({ topic, mastery }) => {
                     const examDays = daysUntilExam(topic.exam_date);

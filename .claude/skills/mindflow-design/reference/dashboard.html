@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MindFlow — reference dashboard</title>
+<style>
+  /* ================= tokens — literal, never substitute ================= */
+  :root {
+    --bg-canvas:#0A0C0E;  --bg-inset:#07080A;   --bg-surface:#111417;
+    --bg-raised:#171B1F;  --bg-hover:#1C2126;   --bg-active:#232A30;
+    --line-faint:#191D21; --line:#262C32;       --line-strong:#363E45;
+    --text-primary:#E8EBED;   --text-secondary:#98A1A9;
+    --text-tertiary:#7A828A;  --text-disabled:#454C53;
+    --accent:#E9A94D; --accent-hover:#F4B85F; --accent-press:#D6963C;
+    --accent-ink:#16110A;
+    --accent-wash:rgba(233,169,77,.10); --accent-line:rgba(233,169,77,.28);
+    --positive:#6E9E78; --negative:#C9635E; --negative-wash:rgba(201,99,94,.10);
+    --edge:inset 0 1px 0 rgba(255,255,255,.045);
+    --r-sm:6px; --r-md:10px; --r-lg:14px; --r-full:999px;
+    --grid-empty:#161A1E;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    background:var(--bg-canvas); color:var(--text-primary);
+    font:400 15px/24px 'Geist', 'Geist Fallback', system-ui, sans-serif;
+    display:flex;
+  }
+  /* ============================ type roles ============================== */
+  .label-mono {
+    font:500 11px/14px 'Geist Mono', ui-monospace, monospace;
+    letter-spacing:.09em; text-transform:uppercase;
+  }
+  .body-sm  { font-size:13px; line-height:20px; }
+  .title-sm { font-size:17px; line-height:24px; letter-spacing:-.013em; font-weight:550; }
+  .title    { font-size:22px; line-height:28px; letter-spacing:-.022em; font-weight:600; }
+  .display-sm { font-size:32px; line-height:32px; letter-spacing:-.028em; font-weight:600; }
+  .display    { font-size:48px; line-height:52px; letter-spacing:-.030em; font-weight:600; }
+  .tnum { font-variant-numeric: tabular-nums slashed-zero; }
+
+  /* ============================ page shell ============================== */
+  aside {
+    width:184px; flex-shrink:0; height:100vh; position:sticky; top:0;
+    background:var(--bg-surface); border-right:1px solid var(--line);
+    display:flex; flex-direction:column;
+  }
+  .brand {
+    height:44px; display:flex; align-items:center; gap:8px; padding:0 16px;
+    border-bottom:1px solid var(--line-faint); color:var(--text-primary);
+  }
+  .brand svg { color:var(--accent); }
+  nav.rail { padding:8px; display:flex; flex-direction:column; gap:2px; }
+  .nav-item {
+    display:flex; align-items:center; gap:10px; height:34px; padding:0 8px;
+    border-radius:var(--r-sm); color:var(--text-secondary); font-size:13px;
+    text-decoration:none;
+  }
+  .nav-item:hover { background:var(--bg-hover); }
+  .nav-item.active {
+    background:var(--bg-raised); border:1px solid var(--line);
+    color:var(--text-primary); font-weight:500;
+  }
+  .nav-item.active svg { color:var(--accent); }
+  .nav-item svg { flex-shrink:0; }
+  .rail-foot { margin-top:auto; border-top:1px solid var(--line-faint); padding:8px; }
+  .user {
+    display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:var(--r-sm);
+    color:var(--text-secondary); font-size:12px;
+  }
+  .user .avatar {
+    width:24px; height:24px; border-radius:var(--r-full); flex-shrink:0;
+    background:var(--accent-wash); color:var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:600;
+  }
+
+  main { flex:1; min-width:0; }
+  .topbar {
+    height:44px; display:flex; align-items:center; justify-content:space-between;
+    padding:0 40px; border-bottom:1px solid var(--line-faint);
+  }
+  .topbar .crumb { color:var(--text-tertiary); }
+  .topbar .crumb b { color:var(--text-secondary); font-weight:500; }
+  .topbar .context { color:var(--text-tertiary); }
+  .content { max-width:1136px; padding:34px 40px 64px; }
+
+  /* ============================== hero ================================= */
+  .hero {
+    background:var(--bg-surface); border:1px solid var(--line);
+    border-radius:var(--r-lg); box-shadow:var(--edge); padding:28px 32px 32px;
+  }
+  .hero .eyebrow { color:var(--text-secondary); }
+  .hero h1 { margin-top:12px; }
+  .hero h1 .n { color:var(--accent); }
+  .hero p { margin-top:8px; color:var(--text-secondary); }
+  .btn {
+    margin-top:24px; height:44px; padding:0 20px; border:0; cursor:pointer;
+    border-radius:var(--r-sm); background:var(--accent); color:var(--accent-ink);
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn:hover { background:var(--accent-hover); }
+  .btn:active { background:var(--accent-press); }
+
+  /* ============================ stat tiles ============================= */
+  .tiles { margin-top:20px; display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .tile {
+    background:var(--bg-surface); border:1px solid var(--line);
+    border-radius:var(--r-md); box-shadow:var(--edge); padding:16px;
+  }
+  .tile .lbl { color:var(--text-tertiary); }
+  .tile .val { margin-top:10px; display:flex; align-items:baseline; gap:6px; }
+  .tile .unit { color:var(--text-tertiary); }
+  .tile .meta { margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .tile .delta { font-size:12px; line-height:16px; color:var(--text-tertiary); }
+  .tile .delta.up { color:var(--positive); }
+  .tile .delta.down { color:var(--negative); }
+  .spark { display:block; }
+  .spark .base { stroke:var(--text-disabled); }
+  .spark .now  { stroke:var(--accent); }
+
+  /* ============================= sections ============================== */
+  section { margin-top:40px; }
+  .sec-head {
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:16px;
+  }
+  .sec-head .h { color:var(--text-tertiary); }
+  .sec-head .aside-note { color:var(--text-tertiary); font-size:12px; }
+
+  /* =========================== activity grid =========================== */
+  .months {
+    display:grid; grid-auto-flow:column; grid-auto-columns:11px; gap:3px;
+    margin-bottom:6px; color:var(--text-tertiary);
+    font:500 10px/12px 'Geist Mono', ui-monospace, monospace; letter-spacing:.06em;
+  }
+  .months span { overflow:visible; white-space:nowrap; text-transform:uppercase; }
+  .grid {
+    display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,11px);
+    grid-auto-columns:11px; gap:3px;
+  }
+  .grid i { width:11px; height:11px; border-radius:2px; background:var(--grid-empty); }
+  .grid i.l1 { background:rgba(233,169,77,.30); }
+  .grid i.l2 { background:rgba(233,169,77,.58); }
+  .grid i.l3 { background:rgba(233,169,77,.85); }
+  .grid-row { display:flex; align-items:flex-start; gap:32px; }
+  .grid-side { display:flex; flex-direction:column; gap:8px; padding-top:18px; }
+  .grid-side .line { color:var(--text-secondary); font-size:13px; line-height:20px; }
+  .grid-side .line b { color:var(--text-primary); font-weight:600; }
+
+  /* ============================= deck list ============================= */
+  .rows { border-top:1px solid var(--line-faint); }
+  .row {
+    height:62px; display:flex; align-items:center; gap:16px;
+    border-bottom:1px solid var(--line-faint); border-radius:var(--r-sm);
+    padding:0 12px; cursor:pointer;
+  }
+  .row:hover { background:var(--bg-hover); }
+  .row .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .right { display:flex; align-items:center; gap:16px; flex-shrink:0; }
+  .meter { width:96px; height:3px; border-radius:2px; background:var(--accent-wash); overflow:hidden; display:flex; }
+  .meter b { height:100%; background:var(--accent); }
+  .row .due { color:var(--accent); font-size:13px; }
+  .row .due.zero { color:var(--text-tertiary); }
+  .row .when { width:96px; text-align:right; font-size:13px; }
+  /* The dot carries the signal from 7 days up, so escalation never rides on
+     color alone. */
+  .when.stale { color:var(--accent); }
+  .when.stale::before { content:''; display:inline-block; width:4px; height:4px; border-radius:999px; background:var(--accent); margin-right:6px; vertical-align:2px; }
+  .when.dot { color:var(--text-secondary); }
+  .when.dot::before { content:''; display:inline-block; width:4px; height:4px; border-radius:999px; background:var(--accent); margin-right:6px; vertical-align:2px; }
+  .when.never { color:var(--text-tertiary); }
+  .row.washed { background:var(--accent-wash); }
+
+  /* ============================== topics =============================== */
+  .topic-row {
+    display:flex; align-items:center; gap:16px; padding:12px;
+    border-bottom:1px solid var(--line-faint);
+  }
+  .topic-row .t { flex:1; min-width:0; }
+  .topic-row .t .nm { color:var(--text-secondary); font-size:13px; }
+  .topic-row .t .ex { margin-top:2px; color:var(--text-tertiary); font-size:12px; }
+  .topic-row .t .ex .bad { color:var(--negative); }
+  .mastery { display:flex; align-items:center; gap:10px; }
+  .cells { display:flex; gap:3px; }
+  .cells i { width:3px; height:12px; background:var(--line); }
+  .cells i.on { background:var(--text-secondary); }
+  .mastery .pct { color:var(--text-tertiary); font-size:12px; }
+  .datebox {
+    width:132px; height:30px; border:1px solid var(--line); border-radius:var(--r-sm);
+    display:flex; align-items:center; justify-content:space-between; padding:0 8px;
+    color:var(--text-tertiary); font-size:12px;
+  }
+  .quiet-links { margin-top:32px; display:flex; gap:24px; }
+  .quiet-links a { color:var(--text-tertiary); font-size:13px; text-decoration:none; }
+  .quiet-links a:hover { color:var(--text-secondary); }
+</style>
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.5 1 2.5h6c0-1 .4-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>
+      <span class="label-mono">MindFlow</span>
+    </div>
+    <nav class="rail">
+      <a class="nav-item active" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>Focus</a>
+      <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>Recall</a>
+      <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg>Feynman</a>
+      <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m12 3 9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg>Cards</a>
+    </nav>
+    <div class="rail-foot">
+      <div class="user"><span class="avatar">D</span><span>demo@mindflow.app</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <span class="crumb label-mono">MindFlow / <b>Dashboard</b></span>
+      <span class="context label-mono">Fri 14 Aug</span>
+    </div>
+
+    <div class="content">
+      <!-- hero: the one display figure per view -->
+      <div class="hero">
+        <div class="eyebrow label-mono">Last studied 2 months ago</div>
+        <h1 class="display"><span class="n">23</span> cards to review</h1>
+        <p class="body-sm">After this long the intervals are stale — this pass rebuilds them from what you actually recall.</p>
+        <button class="btn label-mono">Start with 10 cards
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+        </button>
+      </div>
+
+      <!-- stat tiles -->
+      <div class="tiles">
+        <div class="tile">
+          <div class="lbl label-mono">Focus minutes</div>
+          <div class="val"><span class="display-sm">743</span><span class="unit label-mono">min</span></div>
+          <div class="meta">
+            <span class="delta">0 min in 4 weeks</span>
+            <svg class="spark" width="72" height="20" viewBox="0 0 72 20" fill="none" stroke-width="1.5">
+              <polyline class="base" points="0,4 6.5,2 13,6 19.5,1 26,8 32.5,5 39,12 45.5,19 52,19 58.5,19 65,19 71,19"/>
+              <polyline class="now" points="65,19 71,19"/>
+            </svg>
+          </div>
+        </div>
+        <div class="tile">
+          <div class="lbl label-mono">Cards due</div>
+          <div class="val"><span class="display-sm">23</span></div>
+          <div class="meta">
+            <span class="delta">across 2 decks</span>
+          </div>
+        </div>
+        <div class="tile">
+          <div class="lbl label-mono">Streak</div>
+          <div class="val"><span class="display-sm">0</span><span class="unit label-mono">days</span></div>
+          <div class="meta"><span class="delta">longest 3 days</span></div>
+        </div>
+        <div class="tile">
+          <div class="lbl label-mono">This week</div>
+          <div class="val"><span class="display-sm">0</span><span class="unit label-mono">of 7 days</span></div>
+          <div class="meta"><span class="delta">last week 0 of 7</span></div>
+        </div>
+      </div>
+
+      <!-- activity -->
+      <section>
+        <div class="sec-head">
+          <span class="h label-mono">Activity</span>
+          <span class="aside-note">last 12 weeks</span>
+        </div>
+        <div class="grid-row">
+          <div>
+            <div class="months">
+              <span></span><span></span><span>Jun</span><span></span><span></span><span></span><span>Jul</span><span></span><span></span><span></span><span></span><span>Aug</span>
+            </div>
+            <div class="grid">
+              <!-- 12 columns x 7 rows; activity ~9-11 weeks ago -->
+              <i></i><i></i><i class="l1"></i><i></i><i class="l2"></i><i></i><i></i>
+              <i class="l1"></i><i></i><i class="l3"></i><i class="l1"></i><i></i><i></i><i class="l2"></i>
+              <i></i><i class="l2"></i><i class="l1"></i><i></i><i></i><i class="l1"></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </div>
+          <div class="grid-side">
+            <span class="line"><b class="tnum">0</b>-day streak</span>
+            <span class="line"><b class="tnum">0/7</b> days this week</span>
+            <span class="line"><b class="tnum">743</b> focus minutes total</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- decks -->
+      <section>
+        <div class="sec-head">
+          <span class="h label-mono">Decks</span>
+          <span class="aside-note">most overdue first</span>
+        </div>
+        <div class="rows">
+          <div class="row">
+            <span class="name title-sm">Biochemistry — metabolism</span>
+            <span class="right">
+              <span class="meter"><b style="width:29%"></b></span>
+              <span class="due tnum">13 due</span>
+              <span class="when stale">2 months</span>
+            </span>
+          </div>
+          <div class="row">
+            <span class="name title-sm">Pharmacology</span>
+            <span class="right">
+              <span class="meter"><b style="width:14%"></b></span>
+              <span class="due tnum">10 due</span>
+              <span class="when stale">2 months</span>
+            </span>
+          </div>
+          <div class="row">
+            <span class="name title-sm">Anatomy basics</span>
+            <span class="right">
+              <span class="due zero tnum">0 due</span>
+              <span class="when never">never studied</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- topics -->
+      <section>
+        <div class="sec-head">
+          <span class="h label-mono">Topics and exam dates</span>
+        </div>
+        <div>
+          <div class="topic-row">
+            <div class="t">
+              <div class="nm">Organic chemistry</div>
+              <div class="ex">Exam 2026-09-07 · in 3 weeks · <span class="bad">behind</span></div>
+            </div>
+            <div class="mastery">
+              <span class="cells"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></span>
+              <span class="pct tnum">52%</span>
+            </div>
+            <span class="datebox tnum">09/07/2026 <span>▦</span></span>
+          </div>
+          <div class="topic-row">
+            <div class="t">
+              <div class="nm">Pharmacokinetics</div>
+            </div>
+            <div class="mastery">
+              <span class="cells"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+              <span class="pct tnum">49%</span>
+            </div>
+            <span class="datebox">mm/dd/yyyy <span>▦</span></span>
+          </div>
+        </div>
+        <div class="quiet-links">
+          <a href="#">Manage decks</a><a href="#">Session history</a><a href="#">Settings</a>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

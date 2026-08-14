@@ -92,16 +92,22 @@ export default {
       },
 
       fontSize: {
+        /* The house label: uppercase Geist Mono - pair with `font-mono
+           uppercase` at call sites. Eyebrows, stat labels, section headers,
+           button text, metadata. Never body copy or headings. */
+        'label-mono': ['11px', { lineHeight: '14px', letterSpacing: '0.09em', fontWeight: '500' }],
         'label-xs': ['11px', { lineHeight: '14px', letterSpacing: '0.010em', fontWeight: '500' }],
         'label-sm': ['12px', { lineHeight: '16px', letterSpacing: '0.005em', fontWeight: '500' }],
         'body-sm': ['13px', { lineHeight: '20px', letterSpacing: '0', fontWeight: '400' }],
         body: ['15px', { lineHeight: '24px', letterSpacing: '0', fontWeight: '400' }],
-        'title-sm': ['17px', { lineHeight: '24px', letterSpacing: '-0.011em', fontWeight: '550' }],
-        title: ['21px', { lineHeight: '28px', letterSpacing: '-0.017em', fontWeight: '560' }],
-        'display-sm': ['28px', { lineHeight: '32px', letterSpacing: '-0.022em', fontWeight: '600' }],
-        display: ['38px', { lineHeight: '40px', letterSpacing: '-0.028em', fontWeight: '600' }],
-        /* MAXIMUM ONE PER SCREEN */
-        metric: ['52px', { lineHeight: '48px', letterSpacing: '-0.035em', fontWeight: '600' }],
+        'title-sm': ['17px', { lineHeight: '24px', letterSpacing: '-0.013em', fontWeight: '550' }],
+        title: ['22px', { lineHeight: '28px', letterSpacing: '-0.022em', fontWeight: '600' }],
+        /* Stat-tile values - proportional figures at this size. */
+        'display-sm': ['32px', { lineHeight: '32px', letterSpacing: '-0.028em', fontWeight: '600' }],
+        /* The hero figure - ONE per view. */
+        display: ['48px', { lineHeight: '52px', letterSpacing: '-0.030em', fontWeight: '600' }],
+        /* legacy alias - swept with call sites; new code uses `display` */
+        metric: ['48px', { lineHeight: '52px', letterSpacing: '-0.030em', fontWeight: '600' }],
       },
 
       borderRadius: {

@@ -162,8 +162,13 @@ describe('Dashboard (zone architecture)', () => {
     expect(
       await screen.findByRole('img', { name: /Study activity, last 12 weeks/ })
     ).toBeInTheDocument();
-    expect(await screen.findByText('240')).toBeInTheDocument();
+    // 240 appears twice by design: the Focus minutes tile and the satellite
+    // line beside the grid both read from the same settled profile source.
+    expect((await screen.findAllByText('240')).length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText('3/7')).toBeInTheDocument();
+    // The stat-tile row is present with all four real-data tiles.
+    expect(screen.getByText('Focus minutes')).toBeInTheDocument();
+    expect(screen.getByText('This week')).toBeInTheDocument();
   });
 
   it('Zone C: deck rows read study recency (last_reviewed) on the staleness scale', async () => {
@@ -186,29 +191,27 @@ describe('Dashboard (zone architecture)', () => {
     expect(screen.getByText('never studied')).toBeInTheDocument();
   });
 
-  it('Zone C: progress bar splits mastered (accent) from in-progress (tertiary)', async () => {
+  it('Zone C: meter fills the mastered share over an accent-wash track', async () => {
     renderDashboard();
     const bar = await screen.findByRole('img', { name: '1 of 2 cards mastered' });
     const accent = bar.querySelector('.bg-accent');
     expect(accent).not.toBeNull();
     expect(accent.style.width).toBe('50%'); // 1 of 2 mastered
-    expect(accent.nextElementSibling.style.width).toBe('50%'); // 1 of 2 in progress
+    expect(bar.querySelector('.bg-accent-wash')).not.toBeNull(); // ramp track, not neutral
   });
 
-  it('Zone C: unseen cards stay off the bar - the bare track is the untouched remainder', async () => {
-    // 2 cards: 1 mastered, 1 never reviewed - the view counts in_progress 0.
+  it('Zone C: no meter at zero - an empty track reads as a stray rule', async () => {
+    // Studied deck with nothing mastered yet: the meter is absent entirely.
     db.tables.deck_overview.data[0] = {
       ...db.tables.deck_overview.data[0],
       total: 2,
-      matured: 1,
-      in_progress: 0,
+      matured: 0,
+      in_progress: 1,
       due: 1,
     };
     renderDashboard();
-    const bar = await screen.findByRole('img', { name: '1 of 2 cards mastered' });
-    const accent = bar.querySelector('.bg-accent');
-    expect(accent.style.width).toBe('50%');
-    expect(accent.nextElementSibling.style.width).toBe('0%');
+    await screen.findByRole('button', { name: /Biochemistry/ });
+    expect(screen.queryByRole('img', { name: /of 2 cards mastered/ })).toBeNull();
   });
 
   it('Zone C: deck rows are keyboard-reachable in visual order after the Zone A CTA', async () => {

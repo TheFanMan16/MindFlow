@@ -37,7 +37,7 @@ const VARIANTS = {
   primary:
     'bg-accent text-on-accent border border-transparent hover:bg-accent-hover active:bg-accent-press',
   secondary:
-    'bg-transparent text-primary border border-line hover:border-strong hover:bg-hover active:bg-active',
+    'bg-raised text-primary border border-line hover:border-strong hover:bg-hover active:bg-active',
   ghost:
     'bg-transparent text-secondary border border-transparent hover:text-primary hover:bg-hover active:bg-active',
   danger:
@@ -47,7 +47,7 @@ const VARIANTS = {
 const SIZES = {
   /* sm: 32px visual, 40px effective via the pseudo hit extender. */
   sm: "h-8 px-3 after:absolute after:-inset-1 after:content-['']",
-  md: 'h-10 px-4',
+  md: 'h-11 px-5',
   lg: 'h-11 px-5',
 };
 
@@ -69,16 +69,20 @@ export const Button = ({
   const btn = (
     <motion.button
       type={type}
-      whileTap={reduce || loading ? undefined : { scale: 0.98 }}
+      whileTap={reduce || loading ? undefined : { scale: 0.97 }}
       transition={snappy}
       aria-busy={loading || undefined}
       onClick={loading ? undefined : onClick}
       className={[
         'relative inline-flex select-none items-center justify-center gap-2 rounded-sm',
         'transition-colors duration-micro',
-        'disabled:pointer-events-none disabled:opacity-50',
+        /* Disabled is a state of its own - never a faded accent (a
+           below-full-opacity accent fill reads as muddy brown). */
+        'disabled:pointer-events-none disabled:border-transparent disabled:bg-raised disabled:text-disabled',
         loading ? 'pointer-events-none' : '',
-        mono ? 'text-label-sm' : 'text-body-sm font-medium',
+        /* The house label: uppercase Geist Mono on every button (the legacy
+           `mono` prop is a no-op now that this IS the label treatment). */
+        'font-mono uppercase text-label-mono',
         VARIANTS[variant] || VARIANTS.primary,
         SIZES[size] || SIZES.md,
         className,
