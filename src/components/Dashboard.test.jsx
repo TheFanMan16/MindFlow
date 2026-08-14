@@ -72,6 +72,10 @@ vi.mock('../utils/studyLoop', () => ({
     },
   ]),
   getLoopActiveDays: vi.fn().mockResolvedValue([]),
+  // Inline the date math: vi.mock factories are hoisted above `iso`.
+  getRecentFocusSessions: vi
+    .fn()
+    .mockResolvedValue([{ started_at: new Date(Date.now() - 65 * 24 * 60 * 60 * 1000).toISOString() }]),
   computeStreakFromDates: () => 4,
   countActiveDaysThisWeek: () => 3,
   setTopicExamDate: vi.fn().mockResolvedValue(true),
@@ -162,13 +166,16 @@ describe('Dashboard (zone architecture)', () => {
     expect(
       await screen.findByRole('img', { name: /Study activity, last 12 weeks/ })
     ).toBeInTheDocument();
-    // 240 appears twice by design: the Focus minutes tile and the satellite
-    // line beside the grid both read from the same settled profile source.
     expect((await screen.findAllByText('240')).length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText('3/7')).toBeInTheDocument();
-    // The stat-tile row is present with all four real-data tiles.
-    expect(screen.getByText('Focus minutes')).toBeInTheDocument();
-    expect(screen.getByText('This week')).toBeInTheDocument();
+    // The Loop replaces the tile row: a real tabs pattern with all four
+    // stages, and the data-derived current stage marked as such.
+    expect(screen.getByRole('tablist', { name: 'Study loop stages' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tab')).toHaveLength(4);
+    // Mocked latest focus session is 65 days old -> Deep Work is the
+    // earliest stage with outstanding work.
+    expect(screen.getByRole('tab', { name: /Deep Work/ })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByText(/You are here — Deep Work/)).toBeInTheDocument();
   });
 
   it('Zone C: deck rows read study recency (last_reviewed) on the staleness scale', async () => {

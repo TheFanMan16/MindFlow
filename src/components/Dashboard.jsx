@@ -7,14 +7,16 @@ import {
   getDueCount,
   getTopicMastery,
   getLoopActiveDays,
+  getRecentFocusSessions,
   computeStreakFromDates,
   countActiveDaysThisWeek,
   setTopicExamDate,
   daysUntilExam,
   toLocalDateKey,
 } from '../utils/studyLoop';
+import { TheLoop } from './TheLoop';
 import { maybeNotifyDueCards } from '../utils/notifications';
-import { Card, Button, Skeleton, EmptyState, Staleness, StatTile, stalenessRowClass } from './ui';
+import { Card, Button, Skeleton, EmptyState, Staleness, stalenessRowClass } from './ui';
 import { stalenessTier, formatRelative } from '../utils/staleness';
 import {
   motion,
@@ -132,6 +134,7 @@ const Dashboard = () => {
     profile: { status: 'loading', totalFocusMinutes: 0 },
     decks: { status: 'loading', rows: [] }, // deck_overview aggregates
     topics: { status: 'loading', mastery: [] },
+    lastFocus: { status: 'loading', lastAt: null }, // latest focus session
   };
   const [src, setSrc] = useState(SOURCES_LOADING);
   const [sessionsCompleted, setSessionsCompleted] = useState(0); // localStorage
@@ -251,6 +254,12 @@ const Dashboard = () => {
     settle('topics', async () => ({
       mastery: await getTopicMastery(userId, { throwOnError: true }),
     }));
+
+    // The Loop's Deep Work stage: the single most recent focus session.
+    settle('lastFocus', async () => {
+      const rows = await getRecentFocusSessions(userId, 1, { throwOnError: true });
+      return { lastAt: rows[0]?.started_at ?? null };
+    });
 
     return () => {
       cancelled = true;
@@ -453,48 +462,8 @@ const Dashboard = () => {
     return labels;
   }, []);
 
-  // ------------------------------------------------- tile inputs -------
-  // All four tiles derive from persisted rows already fetched - no tile
-  // shows a number without a real source.
-  const weeklyMinutes = useMemo(() => {
-    const sums = Array(GRID_WEEKS).fill(0);
-    gridCells.forEach((cell, i) => {
-      if (!cell.future) sums[Math.floor(i / 7)] += cell.minutes;
-    });
-    return sums;
-  }, [gridCells]);
-
-  // Trailing 4 weeks vs the 4 before - a real month-on-month movement.
-  const focusDelta = useMemo(() => {
-    const last4 = weeklyMinutes.slice(-4).reduce((a, b) => a + b, 0);
-    const prev4 = weeklyMinutes.slice(-8, -4).reduce((a, b) => a + b, 0);
-    if (prev4 === 0) return null; // no base period - show minutes, not a fake %
-    return Math.round(((last4 - prev4) / prev4) * 100);
-  }, [weeklyMinutes]);
-
-  const longestStreak = useMemo(() => {
-    const days = [...new Set(activeDays)].sort();
-    let best = 0;
-    let run = 0;
-    let prev = null;
-    for (const key of days) {
-      const t = new Date(`${key}T12:00:00`).getTime();
-      run = prev !== null && t - prev === DAY_MS ? run + 1 : 1;
-      best = Math.max(best, run);
-      prev = t;
-    }
-    return best;
-  }, [activeDays]);
-
-  const lastWeekDays = useMemo(() => {
-    const set = new Set(activeDays);
-    let n = 0;
-    for (let d = 7; d < 14; d++) {
-      if (set.has(toLocalDateKey(new Date(Date.now() - d * DAY_MS)))) n += 1;
-    }
-    return n;
-  }, [activeDays]);
-
+  // Spaced Review's lapsed-deck count - same deck_overview source Zone C
+  // renders from (one source per stage).
   const dueDecks = useMemo(() => decks.filter((d) => d.due > 0).length, [decks]);
 
   const sortedDecks = useMemo(
@@ -720,61 +689,20 @@ const Dashboard = () => {
               )}
             </section>
 
-            {/* ------------------------------------------- stat tiles --------- */}
+            {/* -------------------------------------------- The Loop ---------- */}
+            {/* The four methods as a cycle - current stage derived from each
+                stage's own data source (allSettled per stage). Replaces the
+                stat-tile grid: the loop IS the method row. */}
             {user ? (
-              <motion.div
-                {...sceneProps(0.2)}
-                className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4"
-              >
-                {!zoneBReady || src.due.status === 'loading' ? (
-                  [0, 1, 2, 3].map((i) => <StatTile key={i} loading label="" />)
-                ) : (
-                  <>
-                    <motion.div variants={scenes ? riseIn : undefined}>
-                      <StatTile
-                        label="Focus minutes"
-                        value={zoneBError ? null : src.profile.totalFocusMinutes}
-                        unit="min"
-                        emptyHint="not loaded"
-                        delta={
-                          focusDelta === null
-                            ? `${weeklyMinutes.slice(-4).reduce((a, b) => a + b, 0)} min in 4 weeks`
-                            : `${focusDelta >= 0 ? '+' : ''}${focusDelta}% vs last month`
-                        }
-                        deltaTone={focusDelta === null ? undefined : focusDelta >= 0 ? 'up' : 'down'}
-                        sparkline={weeklyMinutes}
-                        drawDelay={scenes ? 0.45 : null}
-                      />
-                    </motion.div>
-                    <motion.div variants={scenes ? riseIn : undefined}>
-                      <StatTile
-                        label="Cards due"
-                        value={src.due.status === 'ok' ? dueCount : null}
-                        emptyHint="not loaded"
-                        delta={`across ${dueDecks} deck${dueDecks === 1 ? '' : 's'}`}
-                      />
-                    </motion.div>
-                    <motion.div variants={scenes ? riseIn : undefined}>
-                      <StatTile
-                        label="Streak"
-                        value={zoneBError ? null : loopStreak}
-                        unit="days"
-                        emptyHint="not loaded"
-                        delta={`longest ${longestStreak} day${longestStreak === 1 ? '' : 's'}`}
-                      />
-                    </motion.div>
-                    <motion.div variants={scenes ? riseIn : undefined}>
-                      <StatTile
-                        label="This week"
-                        value={zoneBError ? null : weeklyMomentum}
-                        unit="of 7 days"
-                        emptyHint="not loaded"
-                        delta={`last week ${lastWeekDays} of 7`}
-                      />
-                    </motion.div>
-                  </>
-                )}
-              </motion.div>
+              <TheLoop
+                stages={{
+                  deep: { status: src.lastFocus.status, lastAt: src.lastFocus.lastAt },
+                  recall: { status: src.due.status, count: dueCount },
+                  feynman: { status: 'ok' },
+                  review: { status: src.decks.status, lapsed: dueDecks },
+                }}
+                onRetry={retryFetch}
+              />
             ) : null}
 
             {/* ---------------------------------- ZONE B: activity ------------ */}

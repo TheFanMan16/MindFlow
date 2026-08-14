@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MindFlow — The Loop (reference)</title>
+<style>
+  :root {
+    --bg-canvas:#0A0C0E; --bg-inset:#07080A; --bg-surface:#111417;
+    --bg-raised:#171B1F; --bg-hover:#1C2126; --bg-active:#232A30;
+    --line-faint:#191D21; --line:#262C32; --line-strong:#363E45;
+    --text-primary:#E8EBED; --text-secondary:#98A1A9;
+    --text-tertiary:#7A828A; --text-disabled:#454C53;
+    --accent:#E9A94D; --accent-hover:#F4B85F; --accent-press:#D6963C;
+    --accent-ink:#16110A;
+    --accent-wash:rgba(233,169,77,.10); --accent-line:rgba(233,169,77,.28);
+    --edge:inset 0 1px 0 rgba(255,255,255,.045);
+    --r-sm:6px; --r-md:10px; --r-lg:14px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:var(--bg-canvas); color:var(--text-primary);
+    font:400 15px/24px 'Geist', system-ui, sans-serif;
+    padding:48px 40px; max-width:1136px;
+  }
+  .label-mono { font:500 11px/14px 'Geist Mono', ui-monospace, monospace; letter-spacing:.09em; text-transform:uppercase; }
+  .body-sm { font-size:13px; line-height:20px; }
+  .title-sm { font-size:17px; line-height:24px; letter-spacing:-.013em; font-weight:550; }
+
+  /* ---- header: 24px under it ---- */
+  .loop-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:24px; }
+  .loop-head .h { color:var(--text-tertiary); }
+  .loop-head .here { color:var(--accent); font-size:13px; }
+
+  /* ---- rail: 32px tall zone, 20px under it ---- */
+  .rail { position:relative; height:32px; margin:0 0 20px; }
+  .rail .track, .rail .fill {
+    position:absolute; top:50%; height:2px; transform:translateY(-50%);
+    left:12.5%; right:12.5%;
+  }
+  .rail .track { background:var(--line); }
+  .rail .fill { background:var(--accent); transform-origin:left center; transform:translateY(-50%) scaleX(.333); }
+  .rail .node {
+    position:absolute; top:50%; width:12px; height:12px; border-radius:999px;
+    transform:translate(-50%,-50%);
+    background:var(--bg-surface); border:2px solid var(--line);
+  }
+  .rail .node.done { background:var(--accent); border-color:var(--accent); }
+  .rail .node.current {
+    background:var(--accent); border-color:var(--accent);
+    transform:translate(-50%,-50%) scale(1.25);
+    box-shadow:0 0 0 6px var(--accent-wash);
+  }
+  .n1{left:12.5%} .n2{left:37.5%} .n3{left:62.5%} .n4{left:87.5%}
+
+  /* ---- stage cards: 4 cols, 12px gap; card p-16, r-md ---- */
+  .stages { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .stage {
+    text-align:left; background:var(--bg-surface); border:1px solid var(--line);
+    border-radius:var(--r-md); box-shadow:var(--edge); padding:16px;
+    cursor:pointer; color:inherit; font:inherit;
+    transition:background .16s, border-color .16s, transform .16s;
+  }
+  .stage:hover { background:var(--bg-hover); transform:translateY(-2px); }
+  .stage:active { transform:scale(.98); }
+  .stage[aria-selected="true"] { border-color:var(--line-strong); background:var(--bg-raised); }
+  .stage:focus-visible { outline:2px solid rgba(233,169,77,.45); outline-offset:2px; }
+  .stage .step { color:var(--text-disabled); }
+  .stage[aria-current="step"] .step { color:var(--accent); }
+  .stage .name { margin-top:8px; }
+  .stage .metric { margin-top:6px; color:var(--text-secondary); }
+  .stage .metric b { color:var(--text-primary); font-weight:600; }
+
+  /* ---- detail panel: 12px above, r-md, p-20 ---- */
+  .panel-wrap { overflow:hidden; height:0; transition:height .38s cubic-bezier(.19,1,.22,1); }
+  .panel {
+    margin-top:12px; background:var(--bg-raised); border:1px solid var(--line);
+    border-radius:var(--r-md); box-shadow:var(--edge); padding:20px;
+  }
+  .panel .desc { color:var(--text-secondary); max-width:64ch; }
+  .panel .act {
+    margin-top:16px; display:inline-flex; align-items:center; gap:8px;
+    height:44px; padding:0 20px; border-radius:var(--r-sm);
+    background:var(--bg-raised); border:1px solid var(--line); color:var(--text-primary);
+    cursor:pointer;
+  }
+  .panel .act:hover { border-color:var(--line-strong); background:var(--bg-hover); }
+
+  /* ---- vertical form below 900px ---- */
+  @media (max-width:899px) {
+    .rail { display:none; }
+    .stages { grid-template-columns:1fr; }
+    .vrow { display:grid; grid-template-columns:32px 1fr; gap:0 12px; }
+    .vrail { position:relative; }
+    .vrail .vtrack { position:absolute; left:50%; top:0; bottom:-12px; width:2px; transform:translateX(-50%); background:var(--line); }
+    .vrow:last-of-type .vtrack { bottom:auto; height:50%; }
+    .vrail .node { position:absolute; left:50%; top:22px; width:12px; height:12px; border-radius:999px; transform:translate(-50%,-50%); background:var(--bg-surface); border:2px solid var(--line); }
+    .vrail .node.done { background:var(--accent); border-color:var(--accent); }
+    .vrail .node.current { background:var(--accent); border-color:var(--accent); transform:translate(-50%,-50%) scale(1.25); box-shadow:0 0 0 6px var(--accent-wash); }
+  }
+  @media (min-width:900px) { .vrail { display:none; } .vrow { display:contents; } }
+</style>
+</head>
+<body>
+  <div class="loop-head">
+    <span class="h label-mono">The loop</span>
+    <span class="here">You are here — Active Recall</span>
+  </div>
+
+  <div class="rail" aria-hidden="true">
+    <div class="track"></div>
+    <div class="fill"></div>
+    <span class="node done n1"></span>
+    <span class="node current n2"></span>
+    <span class="node n3"></span>
+    <span class="node n4"></span>
+  </div>
+
+  <div class="stages" role="tablist" aria-label="Study loop stages">
+    <div class="vrow">
+      <span class="vrail"><span class="vtrack"></span><span class="node done"></span></span>
+      <button class="stage" role="tab" id="tab-deep" aria-selected="false" aria-controls="loop-panel" tabindex="-1">
+        <div class="step label-mono">01</div>
+        <div class="name title-sm">Deep Work</div>
+        <div class="metric body-sm">last session <b>2 months</b> ago</div>
+      </button>
+    </div>
+    <div class="vrow">
+      <span class="vrail"><span class="vtrack"></span><span class="node current"></span></span>
+      <button class="stage" role="tab" id="tab-recall" aria-selected="false" aria-controls="loop-panel" aria-current="step" tabindex="0">
+        <div class="step label-mono">02</div>
+        <div class="name title-sm">Active Recall</div>
+        <div class="metric body-sm"><b>23</b> cards waiting</div>
+      </button>
+    </div>
+    <div class="vrow">
+      <span class="vrail"><span class="vtrack"></span><span class="node"></span></span>
+      <button class="stage" role="tab" id="tab-feynman" aria-selected="false" aria-controls="loop-panel" tabindex="-1">
+        <div class="step label-mono">03</div>
+        <div class="name title-sm">Feynman</div>
+        <div class="metric body-sm">not tracked yet</div>
+      </button>
+    </div>
+    <div class="vrow">
+      <span class="vrail"><span class="vtrack"></span><span class="node"></span></span>
+      <button class="stage" role="tab" id="tab-review" aria-selected="false" aria-controls="loop-panel" tabindex="-1">
+        <div class="step label-mono">04</div>
+        <div class="name title-sm">Spaced Review</div>
+        <div class="metric body-sm"><b>2</b> decks lapsed</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel-wrap" id="panel-wrap">
+    <div class="panel" id="loop-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-recall">
+      <p class="desc body-sm" id="panel-desc"></p>
+      <button class="act label-mono" id="panel-act"></button>
+    </div>
+  </div>
+
+<script>
+  // Reference interaction: select toggles the panel; same-stage click
+  // collapses. Roving tabindex + arrow keys. Current stage (aria-current)
+  // never changes here - it is data-derived in the real component.
+  const DETAILS = {
+    'tab-deep':    { desc: 'A timed, distraction-free session on one topic. Your last session was 2 months ago.', act: 'Start a focus session' },
+    'tab-recall':  { desc: 'Blurt everything you remember, then let the grader mark the gaps. 23 cards are waiting from your last Deep Work.', act: 'Review 23 cards' },
+    'tab-feynman': { desc: 'Explain the topic in plain words until the jargon disappears. Sessions are not tracked yet.', act: 'Open Feynman' },
+    'tab-review':  { desc: 'Spaced repetition resurfaces cards right before you would forget them. 2 decks have lapsed intervals.', act: 'Rebuild 2 decks' },
+  };
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  const wrap = document.getElementById('panel-wrap');
+  const panel = document.getElementById('loop-panel');
+  let selected = null;
+  function render() {
+    tabs.forEach((t) => {
+      const on = t.id === selected;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on || (!selected && t.id === 'tab-recall') ? 0 : -1;
+    });
+    if (selected) {
+      const d = DETAILS[selected];
+      document.getElementById('panel-desc').textContent = d.desc;
+      document.getElementById('panel-act').textContent = d.act;
+      panel.setAttribute('aria-labelledby', selected);
+      wrap.style.height = 'auto';
+      const h = wrap.scrollHeight;
+      wrap.style.height = '0';
+      requestAnimationFrame(() => { wrap.style.height = h + 'px'; });
+    } else {
+      wrap.style.height = '0';
+    }
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => { selected = selected === t.id ? null : t.id; render(); });
+    t.addEventListener('keydown', (e) => {
+      let n = null;
+      if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
+      if (e.key === 'ArrowLeft') n = (i + 3) % tabs.length;
+      if (e.key === 'Home') n = 0;
+      if (e.key === 'End') n = tabs.length - 1;
+      if (n !== null) { e.preventDefault(); tabs[n].focus(); selected = tabs[n].id; render(); }
+    });
+  });
+  render();
+</script>
+</body>
+</html>
