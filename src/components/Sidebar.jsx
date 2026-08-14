@@ -1,16 +1,22 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Lightbulb, LayoutGrid, Timer, Zap, BookOpen, Layers, Settings, LogOut, User, LogIn, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { motion } from '../motion';
-import { pop } from '../motion/transitions';
+import { motion, useReducedMotion } from '../motion';
+import { pop, smooth, reduced } from '../motion/transitions';
 import { Popover, PopoverItem, PopoverSeparator, Button } from './ui';
 
 /**
  * App navigation, two responsive forms driven by CSS alone (no JS media
  * queries, no remounts):
- *   > 640px   full rail - icon + 13px label rows (labels always present:
- *             five bare glyphs are ambiguous, so there is no icon-only form)
+ *   > 640px   minimalist rail - 68px of icons at rest, springs out to 184px
+ *             on pointer hover OR keyboard focus-within. The expansion is an
+ *             OVERLAY (the rail's flow placeholder stays 68px), so content
+ *             never reflows under it. Labels are ALWAYS in the DOM - the
+ *             panel's overflow clips them at rest and they slide in on
+ *             expansion; every control also carries an aria-label, so the
+ *             rail reads identically to assistive tech in both states.
+ *             Collapse waits 150ms so skimming the edge does not flap it.
  *   <= 640    bottom tab bar (labels under the icons)
  *
  * The active indicator is a layoutId pill that physically slides between
@@ -25,8 +31,13 @@ import { Popover, PopoverItem, PopoverSeparator, Button } from './ui';
  * and drop out of the pointer and tab order in text-disabled.
  *
  * Flat by law: bg-surface surface, hairline right border, 18px/1.5 Lucide
- * icons, accent for the active item. No glows, no per-mode colors.
+ * icons, accent for the active item. The expanded overlay carries
+ * shadow-raised - it genuinely floats above content. No glows, no per-mode
+ * colors.
  */
+
+const RAIL_REST = 68;
+const RAIL_OPEN = 184;
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutGrid, match: ['/dashboard', '/'] },
@@ -43,6 +54,33 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, user, signOut } = useAuth();
+  const reduce = useReducedMotion();
+
+  // Expansion state: pointer in OR focus within. Collapse is debounced
+  // 150ms (hover intent); expand is immediate.
+  const [expanded, setExpanded] = useState(false);
+  const collapseTimer = useRef(null);
+  const openRail = () => {
+    clearTimeout(collapseTimer.current);
+    setExpanded(true);
+  };
+  const closeRail = () => {
+    clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setExpanded(false), 150);
+  };
+  useEffect(() => () => clearTimeout(collapseTimer.current), []);
+
+  /** Label that slides in as the rail opens; clipped by the rail at rest. */
+  const RailLabel = ({ children, className = '' }) => (
+    <motion.span
+      initial={false}
+      animate={{ opacity: expanded ? 1 : 0, x: expanded ? 0 : -6 }}
+      transition={reduce ? reduced : pop}
+      className={`whitespace-nowrap ${className}`}
+    >
+      {children}
+    </motion.span>
+  );
 
   const email = profile?.email || user?.email || '';
   const initial = (profile?.full_name || email || 'U').charAt(0).toUpperCase();
@@ -87,21 +125,40 @@ const Sidebar = () => {
   return (
     <>
       {/* ------------------------------------------------ side rail ------ */}
-      <aside className="hidden h-full w-[184px] shrink-0 flex-col border-r border-line bg-surface sm:flex">
-        {/* Brand */}
+      {/* Flow placeholder: layout is built against the 68px rest width; the
+          animated rail overlays content when it expands, so nothing reflows. */}
+      <div className="relative hidden h-full w-[68px] shrink-0 sm:block">
+        <motion.aside
+          onPointerEnter={openRail}
+          onPointerLeave={closeRail}
+          onFocusCapture={openRail}
+          onBlurCapture={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget)) closeRail();
+          }}
+          initial={false}
+          animate={{ width: expanded ? RAIL_OPEN : RAIL_REST }}
+          transition={reduce ? reduced : smooth}
+          className={`absolute inset-y-0 left-0 z-40 flex flex-col overflow-hidden border-r border-line bg-surface ${
+            expanded ? 'shadow-raised' : 'shadow-edge'
+          }`}
+        >
+        {/* Brand - icon column is fixed at x=22 in both states, so nothing
+            jumps while the rail breathes. */}
         <button
           type="button"
           onClick={() => navigate('/dashboard')}
-          className="flex h-11 items-center gap-2 border-b border-faint px-4
+          className="flex h-11 shrink-0 items-center gap-3 border-b border-faint px-[22px]
                      transition-colors duration-micro hover:bg-hover active:bg-active"
           aria-label="MindFlow home"
         >
           <Lightbulb size={18} strokeWidth={1.5} className="shrink-0 text-accent" />
-          <span className="font-mono uppercase text-label-mono text-primary">MindFlow</span>
+          <RailLabel className="font-mono uppercase text-label-mono text-primary">
+            MindFlow
+          </RailLabel>
         </button>
 
         {/* Nav */}
-        <nav className="flex flex-1 flex-col gap-0.5 p-2.5" aria-label="Primary">
+        <nav className="flex flex-1 flex-col gap-0.5 px-2.5 py-2.5" aria-label="Primary">
           {NAV_ITEMS.map((item) => {
             const active = isActivePath(location.pathname || '/', item);
             const Icon = item.icon;
@@ -113,7 +170,7 @@ const Sidebar = () => {
                 disabled={item.disabled}
                 aria-label={item.label}
                 aria-current={active ? 'page' : undefined}
-                className="relative flex h-[34px] items-center gap-2.5 rounded-sm px-2
+                className="relative flex h-[34px] items-center gap-3 rounded-sm px-3
                            after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-['']
                            transition-colors duration-micro
                            hover:bg-hover active:bg-active disabled:pointer-events-none"
@@ -133,7 +190,7 @@ const Sidebar = () => {
                     item.disabled ? 'text-disabled' : active ? 'text-accent' : 'text-secondary'
                   }`}
                 />
-                <span
+                <RailLabel
                   className={`relative z-10 text-body-sm ${
                     item.disabled
                       ? 'text-disabled'
@@ -143,35 +200,52 @@ const Sidebar = () => {
                   }`}
                 >
                   {item.label}
-                </span>
+                </RailLabel>
               </button>
             );
           })}
         </nav>
 
         {/* User block */}
-        <div className="border-t border-line p-2.5">
+        <div className="shrink-0 border-t border-line p-2.5">
           {user ? (
             userMenu(
               <button
                 type="button"
+                aria-label="Account menu"
                 className="flex w-full items-center gap-2.5 rounded-sm px-2 py-2 transition-colors
                            duration-micro hover:bg-hover active:bg-active"
               >
                 <Avatar />
-                <span className="min-w-0 flex-1 truncate text-left text-label-sm text-secondary">
+                <RailLabel className="min-w-0 flex-1 truncate text-left text-label-sm text-secondary">
                   {email}
-                </span>
-                <ChevronUp size={14} strokeWidth={1.5} className="shrink-0 text-tertiary" />
+                </RailLabel>
+                <RailLabel>
+                  <ChevronUp size={14} strokeWidth={1.5} className="shrink-0 text-tertiary" />
+                </RailLabel>
               </button>
             )
-          ) : (
+          ) : expanded ? (
             <Button size="sm" className="w-full" onClick={() => navigate('/login')}>
               Sign in
             </Button>
+          ) : (
+            /* Collapsed rest state: the same action as an icon; the label
+               arrives with the expansion. */
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              aria-label="Sign in"
+              className="flex h-11 w-full items-center justify-center rounded-sm text-secondary
+                         transition-colors duration-micro hover:bg-hover hover:text-primary
+                         active:bg-active"
+            >
+              <LogIn size={18} strokeWidth={1.5} />
+            </button>
           )}
         </div>
-      </aside>
+        </motion.aside>
+      </div>
 
       {/* -------------------------------------------- bottom tab bar ----- */}
       <nav

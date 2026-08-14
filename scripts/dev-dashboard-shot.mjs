@@ -175,6 +175,11 @@ await new Promise((r) => setTimeout(r, 1200));
 
 console.log('TEXT:', (await page.evaluate(() => document.body.innerText)).replace(/\n+/g, ' | ').slice(0, 700));
 await page.screenshot({ path: out });
+// Rail expansion state: hover the rail, let the spring settle, capture.
+await page.mouse.move(34, 400);
+await new Promise((r) => setTimeout(r, 600));
+await page.screenshot({ path: out.replace(/\.png$/, '-rail.png') });
+await page.mouse.move(700, 400);
 console.log('saved:', out, 'plus scene burst frames -b0..b13');
 if (errors.length) console.log('--- errors:\n' + errors.slice(0, 10).join('\n'));
 await browser.close();

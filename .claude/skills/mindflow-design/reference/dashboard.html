@@ -41,7 +41,7 @@
 
   /* ============================ page shell ============================== */
   aside {
-    width:184px; flex-shrink:0; height:100vh; position:sticky; top:0;
+    width:68px; flex-shrink:0; height:100vh; position:sticky; top:0;
     background:var(--bg-surface); border-right:1px solid var(--line);
     display:flex; flex-direction:column;
   }
@@ -50,12 +50,14 @@
     border-bottom:1px solid var(--line-faint); color:var(--text-primary);
   }
   .brand svg { color:var(--accent); }
+  .brand .label-mono { display:none; }
   nav.rail { padding:8px; display:flex; flex-direction:column; gap:2px; }
   .nav-item {
     display:flex; align-items:center; gap:10px; height:34px; padding:0 8px;
     border-radius:var(--r-sm); color:var(--text-secondary); font-size:13px;
     text-decoration:none;
   }
+  .nav-item { font-size:0; }
   .nav-item:hover { background:var(--bg-hover); }
   .nav-item.active {
     background:var(--bg-raised); border:1px solid var(--line);
@@ -68,6 +70,7 @@
     display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:var(--r-sm);
     color:var(--text-secondary); font-size:12px;
   }
+  .user > span:last-child { display:none; }
   .user .avatar {
     width:24px; height:24px; border-radius:var(--r-full); flex-shrink:0;
     background:var(--accent-wash); color:var(--accent);

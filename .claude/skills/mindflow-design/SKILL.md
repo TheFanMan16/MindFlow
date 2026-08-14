@@ -71,11 +71,18 @@ headers, status lines, button text, and metadata. Never for body copy or heading
 ## The page shell — every route, no exceptions
 
 ```
-sidebar 184px  |  topbar 44px   (breadcrumb left · context right)
-               |  content, max-width 1136px, padding 34px 0 64px
+rail 68px (expands to 184 as an overlay)  |  topbar 44px  (breadcrumb left · context right)
+                                          |  content, max-width 1136px, padding 34px 0 64px
 ```
 
-- Sidebar nav items always show their text label. Icon-only is not a variant.
+- The sidebar is a minimalist rail: 68px of icons at rest, springing to
+  184px on pointer hover OR keyboard focus-within. The expansion OVERLAYS
+  content (layout is built against 68px; nothing reflows) and carries
+  shadow-raised — it genuinely floats. Collapse is debounced ~150ms.
+- Labels are always in the DOM — clipped at rest, sliding in on expansion —
+  and every rail control carries an aria-label, so the rail reads the same
+  to assistive tech in both states. The icon column stays at a fixed x so
+  nothing jumps while the rail breathes.
 - The breadcrumb is either on every route or none. Currently it is inconsistent.
 - Content is left-aligned to the shell. No route centers its own narrow column.
 - One page-title pattern app-wide. Pick it once.
