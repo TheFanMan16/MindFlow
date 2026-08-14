@@ -137,14 +137,16 @@ describe('Dashboard (zone architecture)', () => {
     expect(await screen.findByRole('button', { name: /Review 2 cards/ })).toBeInTheDocument();
   });
 
-  it('Zone A dormant: the gap reads on the staleness scale, never a raw day count', async () => {
-    // 180 days of silence: the headline must climb to months, not print "180".
+  it('Zone A dormant: quiet last-studied line, the metric is the count the button acts on', async () => {
+    // 180 days of silence: the gap is a 12px secondary line on the staleness
+    // scale ("2 months", never "180 days"); the large number is the due count.
     localStorage.setItem('timerSessionHistory', JSON.stringify([{ timestamp: iso(180) }]));
     renderDashboard();
+    expect(await screen.findByText('Last studied 6 months ago')).toBeInTheDocument();
     expect(
-      await screen.findByRole('heading', { name: /6 months since your last session/ })
+      await screen.findByRole('heading', { name: /cards to review/ })
     ).toBeInTheDocument();
-    expect(screen.queryByText(/\d{2,} days since your last session/)).toBeNull();
+    expect(screen.queryByText(/\d{2,} days/)).toBeNull();
   });
 
   it('Zone A slipping: a 7-29 day gap reads in weeks on the same scale', async () => {

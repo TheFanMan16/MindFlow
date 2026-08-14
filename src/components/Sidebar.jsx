@@ -7,11 +7,11 @@ import { snappy } from '../motion/transitions';
 import { Popover, PopoverItem, PopoverSeparator, Button } from './ui';
 
 /**
- * App navigation, three responsive forms driven by CSS alone (no JS media
+ * App navigation, two responsive forms driven by CSS alone (no JS media
  * queries, no remounts):
- *   > 1100px  full rail - icon + 13px label rows
- *   641-1100  icon rail - same rows, labels hidden
- *   <= 640    bottom tab bar
+ *   > 640px   full rail - icon + 13px label rows (labels always present:
+ *             five bare glyphs are ambiguous, so there is no icon-only form)
+ *   <= 640    bottom tab bar (labels under the icons)
  *
  * The active indicator is a layoutId pill that physically slides between
  * items on navigation - the shell's signature micro-interaction. Rail and
@@ -87,7 +87,7 @@ const Sidebar = () => {
   return (
     <>
       {/* ------------------------------------------------ side rail ------ */}
-      <aside className="hidden h-full w-[68px] shrink-0 flex-col border-r border-line bg-surface sm:flex nav:w-[220px]">
+      <aside className="hidden h-full w-[220px] shrink-0 flex-col border-r border-line bg-surface sm:flex">
         {/* Brand */}
         <button
           type="button"
@@ -97,7 +97,7 @@ const Sidebar = () => {
           aria-label="MindFlow home"
         >
           <Lightbulb size={20} strokeWidth={1.5} className="shrink-0 text-accent" />
-          <span className="hidden text-body-sm font-semibold text-primary nav:block">MindFlow</span>
+          <span className="text-body-sm font-semibold text-primary">MindFlow</span>
         </button>
 
         {/* Nav */}
@@ -134,7 +134,7 @@ const Sidebar = () => {
                   }`}
                 />
                 <span
-                  className={`relative z-10 hidden text-body-sm nav:block ${
+                  className={`relative z-10 text-body-sm ${
                     item.disabled
                       ? 'text-disabled'
                       : active
@@ -159,30 +159,16 @@ const Sidebar = () => {
                            duration-micro hover:bg-hover active:bg-active"
               >
                 <Avatar />
-                <span className="hidden min-w-0 flex-1 truncate text-left text-label-sm text-secondary nav:block">
+                <span className="min-w-0 flex-1 truncate text-left text-label-sm text-secondary">
                   {email}
                 </span>
-                <ChevronUp size={14} strokeWidth={1.5} className="hidden shrink-0 text-tertiary nav:block" />
+                <ChevronUp size={14} strokeWidth={1.5} className="shrink-0 text-tertiary" />
               </button>
             )
           ) : (
-            <>
-              <div className="hidden nav:block">
-                <Button size="sm" className="w-full" onClick={() => navigate('/login')}>
-                  Sign in
-                </Button>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/login')}
-                aria-label="Sign in"
-                className="flex h-9 w-full items-center justify-center rounded-sm text-secondary
-                           transition-colors duration-micro hover:bg-hover hover:text-primary
-                           active:bg-active nav:hidden"
-              >
-                <LogIn size={18} strokeWidth={1.5} />
-              </button>
-            </>
+            <Button size="sm" className="w-full" onClick={() => navigate('/login')}>
+              Sign in
+            </Button>
           )}
         </div>
       </aside>

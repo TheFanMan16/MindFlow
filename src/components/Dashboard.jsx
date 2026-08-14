@@ -373,6 +373,38 @@ const Dashboard = () => {
     return cells;
   }, [activeDays, dailyMinutes]);
 
+  // Month labels above the grid - one label where a week column starts a new
+  // month. Derived from the same offset math as the cells so the two can
+  // never drift out of alignment. Without labels a heatmap reads as noise
+  // rather than as time.
+  const weekLabels = useMemo(() => {
+    const today = new Date();
+    const dow = (today.getDay() + 6) % 7; // Mon=0
+    const labels = [];
+    let prevMonth = null;
+    for (let w = 0; w < GRID_WEEKS; w++) {
+      const offset = (GRID_WEEKS - 1 - w) * 7 + dow; // this column's Monday
+      const date = new Date(today.getTime() - offset * DAY_MS);
+      const month = date.getMonth();
+      labels.push(
+        month === prevMonth ? '' : date.toLocaleDateString('en-GB', { month: 'short' })
+      );
+      prevMonth = month;
+    }
+    // A label needs ~3 columns of room before the next one; when a partial
+    // month opens the grid, drop its label rather than overlap the next.
+    for (let w = 0; w < GRID_WEEKS; w++) {
+      if (!labels[w]) continue;
+      for (let n = w + 1; n <= w + 2 && n < GRID_WEEKS; n++) {
+        if (labels[n]) {
+          labels[w] = '';
+          break;
+        }
+      }
+    }
+    return labels;
+  }, []);
+
   const sortedDecks = useMemo(
     () =>
       [...decks].sort((a, b) => {
@@ -390,7 +422,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-full w-full bg-canvas">
       {/* Bar - chrome, not content. */}
-      <div className="mx-auto flex h-12 w-full max-w-[1080px] items-center justify-between border-b border-faint px-5 md:px-8">
+      <div className="mx-auto flex h-12 w-full max-w-[712px] items-center justify-between border-b border-faint px-5 md:px-8">
         <div className="flex items-center gap-4">
           <span className="text-label-sm text-tertiary">
             {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
@@ -398,7 +430,9 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-[1080px] px-5 pb-24 md:px-8">
+      {/* ~712px column: the page's content is a single narrow stack, and a
+          wide column just manufactures emptiness around it. */}
+      <div className="mx-auto w-full max-w-[712px] px-5 pb-24 md:px-8">
         <>
             {/* Each zone gates on ITS OWN sources: a static skeleton at the
                 real zone's dimensions until they all settle (so a zone paints
@@ -466,31 +500,32 @@ const Dashboard = () => {
                   </div>
                 </Card>
               ) : state === 'dormant' ? (
-                /* A long absence is the most important fact on the page. */
-                <div
-                  className="rounded-lg border p-8 shadow-edge"
-                  style={{ backgroundColor: 'var(--accent-wash)', borderColor: 'var(--accent-line)' }}
-                >
-                  <h1 className="text-display text-primary">
-                    {lastSessionLabel} since your last session
-                  </h1>
-                  <p className="mt-3 max-w-[60ch] text-body text-secondary">
-                    Your queue lists {dueCount} card{dueCount === 1 ? '' : 's'} due, but after this long
-                    the schedule is stale — the intervals no longer reflect what you remember, so that
-                    number is an artifact, not a plan.
+                /* The number the button acts on carries the size; the gap is
+                   a quiet 12px line above it. Amber lives on the button and
+                   the count only - never as a panel wash. */
+                <Card className="p-8">
+                  <p className="text-label-sm text-secondary">
+                    Last studied {lastSessionLabel} ago
                   </p>
-                  <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <h1 className="mt-3 text-metric text-primary">
+                    <span className="text-accent">
+                      <AnimatedNumber value={dueCount} className="text-metric" />
+                    </span>{' '}
+                    card{dueCount === 1 ? '' : 's'} to review
+                  </h1>
+                  <p className="mt-2 text-body-sm text-secondary">
+                    After this long the intervals are stale — this pass rebuilds them from what you
+                    actually recall.
+                  </p>
+                  <div className="mt-6">
                     <Magnetic>
                       <Button onClick={() => navigate('/flashcards')}>
                         Start with 10 cards
                         <ArrowRight size={14} strokeWidth={1.5} />
                       </Button>
                     </Magnetic>
-                    <span className="text-body-sm text-secondary">
-                      Grades on this pass rebuild the schedule from what you actually recall.
-                    </span>
                   </div>
-                </div>
+                </Card>
               ) : state === 'slipping' ? (
                 <Card className="p-8">
                   <h1 className="text-display-sm text-primary">
@@ -557,10 +592,10 @@ const Dashboard = () => {
 
             {/* -------------------------------- ZONE B: continuity strip ------ */}
             {user && !zoneBReady ? (
-              /* Zone B strip: 7 rows x 9px cells + 6 x 2px gaps (75) + py-3
-                  (24) + borders (2) = 101px. */
+              /* Zone B strip: month labels (12+4) + 7 rows x 11px cells +
+                  6 x 3px gaps (95) + py-3 (24) + borders (2) = 137px. */
               <section className="mt-6" aria-busy="true">
-                <Skeleton className="h-[101px] rounded-md" />
+                <Skeleton className="h-[137px] rounded-md" />
               </section>
             ) : user && zoneBError ? (
               <section className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-md border border-line bg-surface px-4 py-3 shadow-edge">
@@ -575,23 +610,35 @@ const Dashboard = () => {
               </section>
             ) : user ? (
               <section className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-md border border-line bg-surface px-4 py-3 shadow-edge">
-                <div
-                  className="grid shrink-0 grid-flow-col grid-rows-7 gap-[2px]"
-                  role="img"
-                  aria-label={`Study activity, last ${GRID_WEEKS} weeks: active ${activeDays.length} day${
-                    activeDays.length === 1 ? '' : 's'
-                  }`}
-                >
-                  {gridCells.map((cell) => (
-                    <span
-                      key={cell.key}
-                      title={cell.future ? undefined : `${cell.key}: ${cell.minutes} min`}
-                      className="h-[9px] w-[9px] rounded-[2px]"
-                      style={{
-                        backgroundColor: cell.future ? 'transparent' : levelFill(cell.level),
-                      }}
-                    />
-                  ))}
+                <div className="shrink-0">
+                  <div
+                    className="mb-1 grid grid-flow-col auto-cols-[11px] gap-[3px] text-label-xs text-tertiary"
+                    aria-hidden="true"
+                  >
+                    {weekLabels.map((label, i) => (
+                      <span key={i} className="overflow-visible whitespace-nowrap">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                  <div
+                    className="grid grid-flow-col grid-rows-7 gap-[3px]"
+                    role="img"
+                    aria-label={`Study activity, last ${GRID_WEEKS} weeks: active ${activeDays.length} day${
+                      activeDays.length === 1 ? '' : 's'
+                    }`}
+                  >
+                    {gridCells.map((cell) => (
+                      <span
+                        key={cell.key}
+                        title={cell.future ? undefined : `${cell.key}: ${cell.minutes} min`}
+                        className="h-[11px] w-[11px] rounded-[2px]"
+                        style={{
+                          backgroundColor: cell.future ? 'transparent' : levelFill(cell.level),
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-1">
                   <span className="flex items-center gap-1.5 text-label-sm text-secondary">
@@ -605,7 +652,11 @@ const Dashboard = () => {
                         <Flame size={12} strokeWidth={1.5} />
                       </motion.span>
                     ) : null}
-                    <span className="tabular-nums text-primary">{loopStreak}</span>-day streak
+                    {/* One text child, so the flex gap cannot open a stray
+                        space between the number and "-day". */}
+                    <span>
+                      <span className="tabular-nums text-primary">{loopStreak}</span>-day streak
+                    </span>
                   </span>
                   <span className="text-label-sm text-secondary">
                     <span className="tabular-nums text-primary">{weeklyMomentum}/7</span> days this week
@@ -689,46 +740,52 @@ const Dashboard = () => {
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-title-sm text-primary">{deck.title || 'Untitled Deck'}</p>
                           </div>
-                          {/* Tertiary fails 4.5:1 on bg-hover/bg-active, so the
-                              row's `group` promotes tertiary-base labels to
-                              secondary while hovered; accent tiers keep their
-                              escalation color. */}
-                          <span
-                            className={`w-16 shrink-0 text-right text-body-sm tabular-nums ${
-                              deck.due > 0
-                                ? 'text-accent'
-                                : 'text-tertiary group-hover:text-secondary group-active:text-secondary'
-                            }`}
-                          >
-                            {deck.due} due
-                          </span>
-                          <Staleness
-                            at={deck.last_reviewed}
-                            never="never studied"
-                            className={`hidden w-24 shrink-0 justify-end sm:inline-flex ${
-                              tier === 'fresh' || tier === null
-                                ? 'group-hover:text-secondary group-active:text-secondary'
-                                : ''
-                            }`}
-                          />
                           {/* 2px bar: inset track, accent = mastered (box 3+),
-                              tertiary = in-progress (seen, boxes 1-2); the
-                              bare track is the unseen remainder. */}
-                          <div
-                            className="hidden w-24 shrink-0 sm:block"
-                            role="img"
-                            aria-label={`${deck.matured} of ${deck.total} cards mastered`}
-                          >
-                            <div className="flex h-0.5 w-full overflow-hidden bg-inset">
-                              <span className="h-full bg-accent" style={{ width: `${masteredPct}%` }} />
-                              <span
-                                className="h-full"
-                                style={{
-                                  width: `${inProgressPct}%`,
-                                  backgroundColor: 'var(--text-tertiary)',
-                                }}
-                              />
+                              tertiary = in-progress. Only rendered once the
+                              deck has actually been studied - a 0% bar reads
+                              as a stray horizontal rule, not as data. */}
+                          {deck.last_reviewed ? (
+                            <div
+                              className="hidden w-24 shrink-0 sm:block"
+                              role="img"
+                              aria-label={`${deck.matured} of ${deck.total} cards mastered`}
+                            >
+                              <div className="flex h-0.5 w-full overflow-hidden bg-inset">
+                                <span className="h-full bg-accent" style={{ width: `${masteredPct}%` }} />
+                                <span
+                                  className="h-full"
+                                  style={{
+                                    width: `${inProgressPct}%`,
+                                    backgroundColor: 'var(--text-tertiary)',
+                                  }}
+                                />
+                              </div>
                             </div>
+                          ) : null}
+                          {/* Due count + last-studied, grouped tight on the
+                              right. Tertiary fails 4.5:1 on bg-hover/bg-active,
+                              so the row's `group` promotes tertiary-base labels
+                              to secondary while hovered; accent tiers keep
+                              their escalation color. */}
+                          <div className="flex shrink-0 items-center gap-3">
+                            <span
+                              className={`shrink-0 text-right text-body-sm tabular-nums ${
+                                deck.due > 0
+                                  ? 'text-accent'
+                                  : 'text-tertiary group-hover:text-secondary group-active:text-secondary'
+                              }`}
+                            >
+                              {deck.due} due
+                            </span>
+                            <Staleness
+                              at={deck.last_reviewed}
+                              never="never studied"
+                              className={`hidden w-24 shrink-0 justify-end sm:inline-flex ${
+                                tier === 'fresh' || tier === null
+                                  ? 'group-hover:text-secondary group-active:text-secondary'
+                                  : ''
+                              }`}
+                            />
                           </div>
                         </div>
                       );
