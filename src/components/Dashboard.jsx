@@ -16,7 +16,19 @@ import {
 import { maybeNotifyDueCards } from '../utils/notifications';
 import { Card, Button, Skeleton, EmptyState, Staleness, StatTile, stalenessRowClass } from './ui';
 import { stalenessTier, formatRelative } from '../utils/staleness';
-import { AnimatedNumber, Magnetic } from '../motion';
+import {
+  motion,
+  useReducedMotion,
+  AnimatedNumber,
+  Magnetic,
+  TextReveal,
+  heroSettle,
+  smooth,
+  riseIn,
+  sceneContainer,
+  sweepCell,
+  listItem,
+} from '../motion';
 
 /**
  * Dashboard - four zones, top to bottom, hierarchy by density not color:
@@ -71,6 +83,23 @@ const masteryTone = (m) =>
 /** Activity ramp: solid dark empty, then accent at .30/.58/.85 (tokens). */
 const levelFill = (level) => (level === 0 ? 'var(--grid-empty)' : `var(--grid-l${level})`);
 
+/**
+ * The one ambient element on this view: a barely-there accent wash drifting
+ * behind the hero over ~22s. Passes the screenshot test - invisible in a
+ * still, felt in the room. Mounted only when motion is welcome.
+ */
+const HeroAmbient = () => (
+  <motion.div
+    aria-hidden="true"
+    className="pointer-events-none absolute inset-0 opacity-50"
+    style={{
+      background: 'radial-gradient(560px 280px at 28% 20%, var(--accent-wash), transparent 70%)',
+    }}
+    animate={{ x: [-24, 24, -24], y: [-10, 14, -10] }}
+    transition={{ duration: 22, ease: 'easeInOut', repeat: Infinity }}
+  />
+);
+
 const minutesToLevel = (m) => (m <= 0 ? 0 : m <= 15 ? 1 : m <= 40 ? 2 : 3);
 
 /**
@@ -110,6 +139,30 @@ const Dashboard = () => {
   const [examSaving, setExamSaving] = useState(null); // topic id mid-save
   const [examError, setExamError] = useState(null); // topic id whose save failed
   const notifiedRef = useRef(null); // one due-cards notification per load
+
+  // The entrance scene plays once per browser session; revisits render
+  // settled instantly so navigation stays snappy. The flag is read before
+  // first paint and stamped after mount (not in the initializer - React
+  // StrictMode double-invokes initializers in dev).
+  const reduce = useReducedMotion();
+  const [playScene] = useState(() => {
+    try {
+      return !sessionStorage.getItem('mf-scene:dashboard');
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('mf-scene:dashboard', '1');
+    } catch {
+      /* storage unavailable - the scene simply replays */
+    }
+  }, []);
+  const scenes = playScene && !reduce;
+  /** Zone-level scene wiring: stagger children from `delay`, or inert. */
+  const sceneProps = (delay) =>
+    scenes ? { variants: sceneContainer(delay), initial: 'hidden', animate: 'visible' } : {};
 
   // ------------------------------------------------------------ data ----
   useEffect(() => {
@@ -543,29 +596,54 @@ const Dashboard = () => {
                 /* The number the button acts on carries the size; the gap is
                    a quiet 12px line above it. Amber lives on the button and
                    the count only - never as a panel wash. */
-                <Card className="p-8 pt-7">
-                  <p className="font-mono uppercase text-label-mono text-secondary">
-                    Last studied {lastSessionLabel} ago
-                  </p>
-                  <h1 className="mt-3 text-display text-primary">
-                    <span className="text-accent">
-                      <AnimatedNumber value={dueCount} tabular={false} className="text-display" />
-                    </span>{' '}
-                    card{dueCount === 1 ? '' : 's'} to review
-                  </h1>
-                  <p className="mt-2 text-body-sm text-secondary">
-                    After this long the intervals are stale — this pass rebuilds them from what you
-                    actually recall.
-                  </p>
-                  <div className="mt-6">
-                    <Magnetic>
-                      <Button onClick={() => navigate('/flashcards')}>
-                        Start with 10 cards
-                        <ArrowRight size={14} strokeWidth={1.5} />
-                      </Button>
-                    </Magnetic>
-                  </div>
-                </Card>
+                <motion.div {...sceneProps(0.05)}>
+                  <motion.div variants={scenes ? riseIn : undefined}>
+                    <Card className="relative overflow-hidden p-8 pt-7">
+                      {!reduce ? <HeroAmbient /> : null}
+                      <div className="relative">
+                        <TextReveal
+                          as="p"
+                          play={scenes}
+                          delay={0.15}
+                          text={`Last studied ${lastSessionLabel} ago`}
+                          className="font-mono uppercase text-label-mono text-secondary"
+                        />
+                        <h1 className="mt-3 text-display text-primary">
+                          <span className="text-accent">
+                            <AnimatedNumber
+                              value={dueCount}
+                              tabular={false}
+                              countUp={scenes}
+                              springConfig={scenes ? heroSettle : undefined}
+                              className="text-display"
+                            />
+                          </span>{' '}
+                          <TextReveal
+                            as="span"
+                            play={scenes}
+                            delay={0.25}
+                            text={`card${dueCount === 1 ? '' : 's'} to review`}
+                          />
+                        </h1>
+                        <motion.p
+                          variants={scenes ? riseIn : undefined}
+                          className="mt-2 text-body-sm text-secondary"
+                        >
+                          After this long the intervals are stale — this pass rebuilds them from what
+                          you actually recall.
+                        </motion.p>
+                        <motion.div variants={scenes ? riseIn : undefined} className="mt-6">
+                          <Magnetic>
+                            <Button onClick={() => navigate('/flashcards')}>
+                              Start with 10 cards
+                              <ArrowRight size={14} strokeWidth={1.5} />
+                            </Button>
+                          </Magnetic>
+                        </motion.div>
+                      </div>
+                    </Card>
+                  </motion.div>
+                </motion.div>
               ) : state === 'slipping' ? (
                 <Card className="p-8">
                   <h1 className="text-display-sm text-primary">
@@ -587,14 +665,26 @@ const Dashboard = () => {
                 </Card>
               ) : (
                 /* current */
-                <Card className="p-8">
+                <Card className="relative overflow-hidden p-8">
+                  {!reduce ? <HeroAmbient /> : null}
                   {dueCount > 0 ? (
-                    <>
+                    <div className="relative">
                       <h1 className="text-display text-primary">
                         <span className="text-accent">
-                          <AnimatedNumber value={dueCount} tabular={false} className="text-display" />
+                          <AnimatedNumber
+                            value={dueCount}
+                            tabular={false}
+                            countUp={scenes}
+                            springConfig={scenes ? heroSettle : undefined}
+                            className="text-display"
+                          />
                         </span>{' '}
-                        card{dueCount === 1 ? '' : 's'} due
+                        <TextReveal
+                          as="span"
+                          play={scenes}
+                          delay={0.2}
+                          text={`card${dueCount === 1 ? '' : 's'} due`}
+                        />
                       </h1>
                       <p className="mt-2 text-body-sm text-secondary">
                         about {reviewMinutes} minute{reviewMinutes === 1 ? '' : 's'}
@@ -607,9 +697,9 @@ const Dashboard = () => {
                           </Button>
                         </Magnetic>
                       </div>
-                    </>
+                    </div>
                   ) : (
-                    <>
+                    <div className="relative">
                       <h1 className="text-display-sm text-primary">Nothing due right now</h1>
                       <p className="mt-2 text-body-sm text-secondary">
                         {`Next reviews land as cards hit their intervals${
@@ -624,7 +714,7 @@ const Dashboard = () => {
                           </Button>
                         </Magnetic>
                       </div>
-                    </>
+                    </div>
                   )}
                 </Card>
               )}
@@ -632,47 +722,59 @@ const Dashboard = () => {
 
             {/* ------------------------------------------- stat tiles --------- */}
             {user ? (
-              <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <motion.div
+                {...sceneProps(0.2)}
+                className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4"
+              >
                 {!zoneBReady || src.due.status === 'loading' ? (
                   [0, 1, 2, 3].map((i) => <StatTile key={i} loading label="" />)
                 ) : (
                   <>
-                    <StatTile
-                      label="Focus minutes"
-                      value={zoneBError ? null : src.profile.totalFocusMinutes}
-                      unit="min"
-                      emptyHint="not loaded"
-                      delta={
-                        focusDelta === null
-                          ? `${weeklyMinutes.slice(-4).reduce((a, b) => a + b, 0)} min in 4 weeks`
-                          : `${focusDelta >= 0 ? '+' : ''}${focusDelta}% vs last month`
-                      }
-                      deltaTone={focusDelta === null ? undefined : focusDelta >= 0 ? 'up' : 'down'}
-                      sparkline={weeklyMinutes}
-                    />
-                    <StatTile
-                      label="Cards due"
-                      value={src.due.status === 'ok' ? dueCount : null}
-                      emptyHint="not loaded"
-                      delta={`across ${dueDecks} deck${dueDecks === 1 ? '' : 's'}`}
-                    />
-                    <StatTile
-                      label="Streak"
-                      value={zoneBError ? null : loopStreak}
-                      unit="days"
-                      emptyHint="not loaded"
-                      delta={`longest ${longestStreak} day${longestStreak === 1 ? '' : 's'}`}
-                    />
-                    <StatTile
-                      label="This week"
-                      value={zoneBError ? null : weeklyMomentum}
-                      unit="of 7 days"
-                      emptyHint="not loaded"
-                      delta={`last week ${lastWeekDays} of 7`}
-                    />
+                    <motion.div variants={scenes ? riseIn : undefined}>
+                      <StatTile
+                        label="Focus minutes"
+                        value={zoneBError ? null : src.profile.totalFocusMinutes}
+                        unit="min"
+                        emptyHint="not loaded"
+                        delta={
+                          focusDelta === null
+                            ? `${weeklyMinutes.slice(-4).reduce((a, b) => a + b, 0)} min in 4 weeks`
+                            : `${focusDelta >= 0 ? '+' : ''}${focusDelta}% vs last month`
+                        }
+                        deltaTone={focusDelta === null ? undefined : focusDelta >= 0 ? 'up' : 'down'}
+                        sparkline={weeklyMinutes}
+                        drawDelay={scenes ? 0.45 : null}
+                      />
+                    </motion.div>
+                    <motion.div variants={scenes ? riseIn : undefined}>
+                      <StatTile
+                        label="Cards due"
+                        value={src.due.status === 'ok' ? dueCount : null}
+                        emptyHint="not loaded"
+                        delta={`across ${dueDecks} deck${dueDecks === 1 ? '' : 's'}`}
+                      />
+                    </motion.div>
+                    <motion.div variants={scenes ? riseIn : undefined}>
+                      <StatTile
+                        label="Streak"
+                        value={zoneBError ? null : loopStreak}
+                        unit="days"
+                        emptyHint="not loaded"
+                        delta={`longest ${longestStreak} day${longestStreak === 1 ? '' : 's'}`}
+                      />
+                    </motion.div>
+                    <motion.div variants={scenes ? riseIn : undefined}>
+                      <StatTile
+                        label="This week"
+                        value={zoneBError ? null : weeklyMomentum}
+                        unit="of 7 days"
+                        emptyHint="not loaded"
+                        delta={`last week ${lastWeekDays} of 7`}
+                      />
+                    </motion.div>
                   </>
                 )}
-              </div>
+              </motion.div>
             ) : null}
 
             {/* ---------------------------------- ZONE B: activity ------------ */}
@@ -696,14 +798,18 @@ const Dashboard = () => {
                 ) : null}
               </section>
             ) : user ? (
-              <section className="mt-10">
-                <div className="flex items-baseline justify-between">
+              <motion.section {...sceneProps(0.35)} className="mt-10">
+                <motion.div
+                  variants={scenes ? riseIn : undefined}
+                  className="flex items-baseline justify-between"
+                >
                   <h2 className="font-mono uppercase text-label-mono text-tertiary">Activity</h2>
                   <span className="text-label-sm text-tertiary">last 12 weeks</span>
-                </div>
+                </motion.div>
                 <div className="mt-4 flex flex-wrap items-start gap-8">
                   <div className="shrink-0">
-                    <div
+                    <motion.div
+                      variants={scenes ? riseIn : undefined}
                       className="mb-1.5 grid grid-flow-col auto-cols-[11px] gap-[3px] font-mono text-[10px] uppercase leading-3 tracking-[0.06em] text-tertiary"
                       aria-hidden="true"
                     >
@@ -712,7 +818,7 @@ const Dashboard = () => {
                           {label}
                         </span>
                       ))}
-                    </div>
+                    </motion.div>
                     <div
                       className="grid grid-flow-col grid-rows-7 gap-[3px]"
                       role="img"
@@ -720,9 +826,13 @@ const Dashboard = () => {
                         activeDays.length === 1 ? '' : 's'
                       }`}
                     >
-                      {gridCells.map((cell) => (
-                        <span
+                      {/* Column sweep: each cell arms with its column's delay,
+                          so the grid draws itself left to right - time made
+                          visible. Inert on revisits and reduced motion. */}
+                      {gridCells.map((cell, i) => (
+                        <motion.span
                           key={cell.key}
+                          variants={scenes ? sweepCell(Math.floor(i / 7) * 0.018) : undefined}
                           title={cell.future ? undefined : `${cell.key}: ${cell.minutes} min`}
                           className="h-[11px] w-[11px] rounded-[2px]"
                           style={{
@@ -733,22 +843,31 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 pt-4">
-                    <span className="text-body-sm text-secondary">
+                    <motion.span
+                      variants={scenes ? listItem : undefined}
+                      className="text-body-sm text-secondary"
+                    >
                       <span className="font-semibold tabular-nums text-primary">{loopStreak}</span>-day streak
-                    </span>
-                    <span className="text-body-sm text-secondary">
+                    </motion.span>
+                    <motion.span
+                      variants={scenes ? listItem : undefined}
+                      className="text-body-sm text-secondary"
+                    >
                       <span className="font-semibold tabular-nums text-primary">{weeklyMomentum}/7</span> days
                       this week
-                    </span>
-                    <span className="text-body-sm text-secondary">
+                    </motion.span>
+                    <motion.span
+                      variants={scenes ? listItem : undefined}
+                      className="text-body-sm text-secondary"
+                    >
                       <span className="font-semibold tabular-nums text-primary">
                         {src.profile.totalFocusMinutes}
                       </span>{' '}
                       focus minutes total
-                    </span>
+                    </motion.span>
                   </div>
                 </div>
-              </section>
+              </motion.section>
             ) : null}
 
             {/* ------------------------------------------ ZONE C: decks ------- */}
@@ -788,7 +907,7 @@ const Dashboard = () => {
                   <h2 className="font-mono uppercase text-label-mono text-tertiary">Decks</h2>
                   <span className="text-label-sm text-tertiary">most overdue first</span>
                 </div>
-                <div className="mt-3 border-t border-faint">
+                <motion.div {...sceneProps(0.5)} className="mt-3 border-t border-faint">
                   {sortedDecks.length === 0 ? (
                     <EmptyState
                       title="No decks yet"
@@ -806,8 +925,10 @@ const Dashboard = () => {
                       // NULL means never studied and renders as exactly that.
                       const tier = stalenessTier(deck.last_reviewed);
                       return (
-                        <div
+                        <motion.div
                           key={deck.id}
+                          variants={scenes ? listItem : undefined}
+                          whileHover={reduce ? undefined : { x: 3 }}
                           role="button"
                           tabIndex={0}
                           onClick={() => navigate('/flashcards')}
@@ -836,7 +957,16 @@ const Dashboard = () => {
                               aria-label={`${deck.matured} of ${deck.total} cards mastered`}
                             >
                               <div className="h-[3px] w-full overflow-hidden rounded-[2px] bg-accent-wash">
-                                <div className="h-full bg-accent" style={{ width: `${masteredPct}%` }} />
+                                {/* Draws once from the left after the row
+                                    lands - the meter is data arriving, not
+                                    decoration. */}
+                                <motion.div
+                                  className="h-full bg-accent"
+                                  style={{ width: `${masteredPct}%`, transformOrigin: 'left' }}
+                                  initial={scenes ? { scaleX: 0 } : false}
+                                  animate={{ scaleX: 1 }}
+                                  transition={{ ...smooth, delay: 0.65 }}
+                                />
                               </div>
                             </div>
                           ) : null}
@@ -865,11 +995,11 @@ const Dashboard = () => {
                               }`}
                             />
                           </div>
-                        </div>
+                        </motion.div>
                       );
                     })
                   )}
-                </div>
+                </motion.div>
               </section>
             ) : null}
 

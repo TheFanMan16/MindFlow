@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback, useId } from 
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from '../motion';
-import { snappy, reduced } from '../motion/transitions';
+import { pop, reduced } from '../motion/transitions';
 import { Skeleton } from './ui';
 
 /**
@@ -144,11 +144,11 @@ export const CommandPalette = ({ loading = false }) => {
             role="dialog"
             aria-modal="true"
             aria-label="Command palette"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -8 }}
+            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.94, y: -10 }}
             animate={
               reduce
                 ? { opacity: 1, transition: reduced }
-                : { opacity: 1, scale: 1, y: 0, transition: snappy }
+                : { opacity: 1, scale: 1, y: 0, transition: pop }
             }
             exit={{ opacity: 0, transition: reduced }}
             className="relative w-full max-w-lg overflow-hidden rounded-lg border border-line bg-raised shadow-raised"
@@ -213,8 +213,11 @@ export const CommandPalette = ({ loading = false }) => {
                       {items.map((cmd) => {
                         flatIndex += 1;
                         const active = flatIndex === index;
+                        // Rows cascade on OPEN only - re-animating on every
+                        // keystroke while filtering would flicker.
+                        const entering = query === '' && !reduce;
                         return (
-                          <button
+                          <motion.button
                             key={`${group}-${cmd.label}`}
                             id={`${listId}-opt-${flatIndex}`}
                             type="button"
@@ -222,6 +225,9 @@ export const CommandPalette = ({ loading = false }) => {
                             aria-selected={active}
                             data-active={active}
                             onClick={() => run(cmd)}
+                            initial={entering ? { opacity: 0, y: 6 } : false}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ ...pop, delay: Math.min(flatIndex, 8) * 0.02 }}
                             className={[
                               'group relative flex w-full items-center justify-between gap-3 rounded-[4px] px-3 py-2 text-left',
                               'transition-colors duration-micro hover:bg-hover active:bg-active',
@@ -229,7 +235,11 @@ export const CommandPalette = ({ loading = false }) => {
                             ].join(' ')}
                           >
                             {active ? (
-                              <span
+                              /* layoutId: the accent bar physically slides to
+                                 the active row as selection moves. */
+                              <motion.span
+                                layoutId={reduce ? undefined : 'palette-active'}
+                                transition={pop}
                                 className="absolute inset-y-1 left-0 w-0.5 bg-accent"
                                 aria-hidden="true"
                               />
@@ -241,7 +251,7 @@ export const CommandPalette = ({ loading = false }) => {
                             <span className="truncate text-label-sm text-secondary">
                               {cmd.hint}
                             </span>
-                          </button>
+                          </motion.button>
                         );
                       })}
                     </div>

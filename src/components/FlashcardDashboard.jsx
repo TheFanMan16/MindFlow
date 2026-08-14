@@ -1068,6 +1068,8 @@ const FlashcardDashboard = () => {
         as={motion.div}
         layoutId={`deck-${deck.id}`}
         transition={reduce ? { duration: 0 } : smooth}
+        whileHover={reduce ? undefined : { y: -2 }}
+        whileTap={reduce ? undefined : { scale: 0.98 }}
         interactive
         role="button"
         tabIndex={isDeleting ? -1 : 0}

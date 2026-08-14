@@ -1,4 +1,5 @@
 import React from 'react';
+import { m as motion, useReducedMotion } from 'framer-motion';
 import { AnimatedNumber } from '../../motion/AnimatedNumber';
 import { Skeleton } from './Skeleton';
 
@@ -23,7 +24,8 @@ import { Skeleton } from './Skeleton';
  * matching the reference dashboard's tile row.
  */
 
-const Sparkline = ({ points }) => {
+const Sparkline = ({ points, drawDelay = null }) => {
+  const reduce = useReducedMotion();
   if (!Array.isArray(points) || points.length < 2) return null;
   const w = 72;
   const h = 20;
@@ -39,10 +41,27 @@ const Sparkline = ({ points }) => {
     .slice(-2)
     .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
     .join(' ');
+  // Scene entrance: the line draws itself once (drawDelay set), then the
+  // accent tip lands. Static on revisits and under reduced motion.
+  const draws = drawDelay !== null && !reduce;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" aria-hidden="true">
-      <polyline points={base} stroke="var(--text-disabled)" strokeWidth="1.5" />
-      <polyline points={now} stroke="var(--accent)" strokeWidth="1.5" />
+      <motion.polyline
+        points={base}
+        stroke="var(--text-disabled)"
+        strokeWidth="1.5"
+        initial={draws ? { pathLength: 0, opacity: 0 } : false}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: drawDelay || 0 }}
+      />
+      <motion.polyline
+        points={now}
+        stroke="var(--accent)"
+        strokeWidth="1.5"
+        initial={draws ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2, delay: (drawDelay || 0) + 0.55 }}
+      />
     </svg>
   );
 };
@@ -54,6 +73,8 @@ export const StatTile = ({
   delta,
   deltaTone,
   sparkline,
+  /* Scene entrance: when set, the sparkline draws itself after this delay. */
+  drawDelay = null,
   format,
   countUp = false,
   loading = false,
@@ -114,7 +135,7 @@ export const StatTile = ({
       {delta || sparkline ? (
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className={`text-label-sm ${deltaColor}`}>{delta}</span>
-          <Sparkline points={sparkline} />
+          <Sparkline points={sparkline} drawDelay={drawDelay} />
         </div>
       ) : null}
     </div>

@@ -1,5 +1,7 @@
 import React from 'react';
-import { Toaster, toast } from 'react-hot-toast';
+import { Toaster, ToastBar, toast } from 'react-hot-toast';
+import { m as motion, useReducedMotion } from 'framer-motion';
+import { pop, reduced } from '../../motion/transitions';
 
 /**
  * Themed wrapper over react-hot-toast, which the app already uses
@@ -12,7 +14,27 @@ import { Toaster, toast } from 'react-hot-toast';
  * vanish mid-read. toast.loading()'s built-in spinner is suppressed (icon:
  * null): nothing in this system loops, so a loading toast is its in-progress
  * verb as plain text until the caller resolves it.
+ *
+ * Entry rides the house `pop` spring from the top edge (ToastBar with the
+ * library keyframes disabled); exit is a quick fade-scale. Reduced motion:
+ * opacity only.
  */
+const AnimatedToast = ({ t }) => {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.96 }}
+      animate={
+        t.visible
+          ? { opacity: 1, y: 0, scale: 1, transition: reduce ? reduced : pop }
+          : { opacity: 0, y: reduce ? 0 : -8, scale: reduce ? 1 : 0.97, transition: { duration: 0.15 } }
+      }
+    >
+      <ToastBar toast={t} style={{ animation: 'none' }} />
+    </motion.div>
+  );
+};
+
 export const AppToaster = () => (
   <Toaster
     position="top-right"
@@ -37,7 +59,9 @@ export const AppToaster = () => (
       },
       loading: { icon: null },
     }}
-  />
+  >
+    {(t) => <AnimatedToast t={t} />}
+  </Toaster>
 );
 
 export { toast };

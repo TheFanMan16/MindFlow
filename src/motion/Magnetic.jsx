@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react';
-import { motion, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
+import { m as motion, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
 import { snappy } from './transitions';
 
 /**

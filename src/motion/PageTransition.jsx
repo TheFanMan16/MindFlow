@@ -1,6 +1,6 @@
 import React from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
-import { pageInitial, pageEnter, pageExit } from './variants';
+import { m as motion, useReducedMotion } from 'framer-motion';
+import { sharedAxis } from './variants';
 import { reduced } from './transitions';
 
 /**
@@ -17,23 +17,43 @@ import { reduced } from './transitions';
  *     </PageTransition>
  *   </AnimatePresence>
  *
- * Exit is a 120ms fade with a 4px downward drift; enter is fadeUp on the
- * entrance spring. `initial={false}` on the presence wrapper matters: the
- * first paint should not double-animate content that already choreographs
- * its own entrance.
+ * Navigation is SPATIAL: the primary routes live on one axis in sidebar
+ * order, and a route change slides toward the direction of travel
+ * (sharedAxis). Unknown or off-rail routes keep the vertical fade-up.
+ * The OWNER computes `dir` (1 deeper / -1 back / 0 off-rail) and passes it
+ * both here and as `custom` on the AnimatePresence wrapper - the exiting
+ * page must slide by the NEW direction, which only AnimatePresence can
+ * deliver to a leaving child. `routeDirection` is the shared helper.
  *
  * NOTE this creates a transform context while animating - anything inside
  * that uses position:fixed (modals) must portal to document.body, which
  * ui/Modal does.
  */
-export const PageTransition = ({ children, className = '' }) => {
+const NAV_ORDER = ['/dashboard', '/focus', '/recall', '/feynman', '/flashcards', '/settings', '/profile'];
+const orderOf = (path) => {
+  if (!path) return -1;
+  if (path === '/') return 0;
+  return NAV_ORDER.findIndex((p) => path.startsWith(p));
+};
+
+/** Direction of travel between two pathnames on the sidebar axis. */
+export const routeDirection = (fromPath, toPath) => {
+  const from = orderOf(fromPath);
+  const to = orderOf(toPath);
+  if (from === -1 || to === -1 || from === to) return 0;
+  return Math.sign(to - from);
+};
+
+export const PageTransition = ({ children, dir = 0, className = '' }) => {
   const reduce = useReducedMotion();
 
   return (
     <motion.div
-      initial={reduce ? { opacity: 0 } : pageInitial}
-      animate={reduce ? { opacity: 1, transition: reduced } : pageEnter}
-      exit={reduce ? { opacity: 0, transition: reduced } : pageExit}
+      custom={dir}
+      variants={reduce ? undefined : sharedAxis}
+      initial={reduce ? { opacity: 0 } : 'initial'}
+      animate={reduce ? { opacity: 1, transition: reduced } : 'animate'}
+      exit={reduce ? { opacity: 0, transition: reduced } : 'exit'}
       className={`h-full w-full ${className}`}
     >
       {children}

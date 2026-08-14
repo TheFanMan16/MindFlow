@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'framer-motion';
+import { m as motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'framer-motion';
 
 /**
  * A number that ticks to its new value on a spring. Used for every stat,
@@ -18,11 +18,14 @@ export const AnimatedNumber = ({
   /* Proportional figures on display-size values (tabular at that size reads
      loose and gappy); keep tabular where digits align in columns. */
   tabular = true,
+  /* Spring override for hero moments (e.g. heroSettle) - default physics
+     stay untouched for the dozens of existing call sites. */
+  springConfig,
   className = '',
 }) => {
   const reduce = useReducedMotion();
   const mv = useMotionValue(countUp ? 0 : value);
-  const spring = useSpring(mv, { stiffness: 120, damping: 26 });
+  const spring = useSpring(mv, springConfig || { stiffness: 120, damping: 26 });
   const text = useTransform(spring, (v) => format(v));
 
   useEffect(() => {

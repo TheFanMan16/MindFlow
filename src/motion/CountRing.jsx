@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { motion, useMotionValue, useTransform, animate, useReducedMotion } from 'framer-motion';
+import { m as motion, useMotionValue, useTransform, animate, useReducedMotion } from 'framer-motion';
 import { slow } from './transitions';
 
 const TONES = {

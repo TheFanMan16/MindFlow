@@ -13,6 +13,23 @@ describe('TextReveal', () => {
     // string or the reveal shreds it for screen readers.
     expect(screen.getByRole('heading', { name: 'Study it once.' })).toBeInTheDocument();
   });
+
+  it('play={false} renders the plain element with no animated fragments', () => {
+    const { container } = render(<TextReveal text="Study it once." as="h1" play={false} />);
+    const h1 = screen.getByRole('heading', { name: 'Study it once.' });
+    expect(h1.textContent).toBe('Study it once.');
+    // Scene revisits must not re-perform: no aria-hidden word wrappers.
+    expect(container.querySelector('[aria-hidden="true"]')).toBeNull();
+  });
+});
+
+describe('showpiece vocabulary', () => {
+  it('exports the new springs and variants through the barrel', async () => {
+    const barrel = await import('./index');
+    for (const name of ['pop', 'heroSettle', 'drift', 'riseIn', 'sceneContainer', 'sweepCell', 'drawPath', 'sharedAxis']) {
+      expect(barrel[name], name).toBeTruthy();
+    }
+  });
 });
 
 describe('Stagger', () => {

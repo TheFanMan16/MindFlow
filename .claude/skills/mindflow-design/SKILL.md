@@ -140,12 +140,35 @@ Format as duration, never a raw day count: "yesterday", "4 days", "3 weeks",
 "2 months". `66 days ago` is unreadable — nobody converts that in their head.
 Null is a real state: render "never studied", not a date and not zero.
 
-## Motion
+## Motion — showpiece doctrine
 
-Durations 120 / 180 / 260 / 380ms. Ease `cubic-bezier(.19,1,.22,1)`.
-Buttons `whileTap scale .97`. Rows `whileHover x:2`. Nothing loops, nothing
-animates on scroll, nothing travels more than 12px. `useReducedMotion()` gates
-everything — when true, opacity only.
+Motion is a signature layer, not seasoning. The physics vocabulary lives in
+`src/motion/transitions.js` (snappy · smooth · entrance · slow · pop ·
+heroSettle · drift) — never inline durations.
+
+- **Scene entrances**: each view choreographs its first paint — panels rise
+  (`riseIn`, 24px + overshoot), children stagger on the house rhythm
+  (0.04/0.06/0.08), lines draw themselves (`drawPath`), grids sweep in. A
+  scene lasts ≤ ~1s and TAPERS down-page: de-emphasis is hierarchy. Play the
+  full scene once per session; revisits get a fast fade so navigation stays
+  snappy. A zone's choreography fires when ITS data settles — never before.
+- **Touch**: everything pressable responds with an overshoot spring
+  (`whileTap` .97, pills and palettes on `pop`). Rows `whileHover x:2-4`.
+  Cards may tilt ≤4° under the pointer.
+- **Navigation is spatial**: route changes slide on a shared axis in the
+  direction of travel (`sharedAxis`); overlays scale from their origin.
+- **Travel ceiling 32px**; transform/opacity ONLY (never width/top/filter);
+  no scroll-linked animation, no parallax.
+- **Ambient**: at most ONE ambient element per view, and it must pass the
+  screenshot test — invisible in a still, felt in the room. Opacity/position
+  drift only. This is the sole sanctioned loop; data never loops.
+- **Numbers**: animate on first reveal (once per session) or on change —
+  never re-perform on re-render, and never display a value mid-flight as if
+  settled (readers must not catch a number lying).
+- **Reduced motion is absolute**: `useReducedMotion()` gates every piece;
+  when true — opacity-only, instant numbers, no tilt, no ambient, scenes
+  render settled. Three layers stay in place: MotionConfig "user", the CSS
+  floor in index.css, per-component fallbacks.
 
 ## Copy
 

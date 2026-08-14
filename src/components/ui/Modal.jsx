@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { smooth, reduced } from '../../motion/transitions';
+import { m as motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { pop, reduced } from '../../motion/transitions';
 
 /**
  * Modal. bg-raised, 14px outer radius, and the system's single permitted
@@ -96,11 +96,11 @@ export const Modal = ({ open, onClose, title, children, footer, className = '', 
             aria-modal="true"
             aria-label={typeof title === 'string' ? title : undefined}
             tabIndex={-1}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
+            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 10 }}
             animate={
               reduce
                 ? { opacity: 1, transition: reduced }
-                : { opacity: 1, scale: 1, y: 0, transition: smooth }
+                : { opacity: 1, scale: 1, y: 0, transition: pop }
             }
             exit={{ opacity: 0, transition: reduced }}
             className={[

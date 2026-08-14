@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { m as motion, useReducedMotion } from 'framer-motion';
 import { entrance } from './transitions';
 
 /**
@@ -13,11 +13,13 @@ import { entrance } from './transitions';
  * heading into N unrelated fragments for a screen reader. Under reduced
  * motion it renders the plain element, no wrappers at all.
  */
-export const TextReveal = ({ text, as: Tag = 'h1', delay = 0, className = '' }) => {
+export const TextReveal = ({ text, as: Tag = 'h1', delay = 0, play = true, className = '' }) => {
   const reduce = useReducedMotion();
   const words = String(text).split(' ');
 
-  if (reduce) return <Tag className={className}>{text}</Tag>;
+  // `play` lets a scene run its reveal once per session and render the plain
+  // element on revisits - a moment repeated on every nav stops being one.
+  if (reduce || !play) return <Tag className={className}>{text}</Tag>;
 
   return (
     <Tag className={className} aria-label={text}>

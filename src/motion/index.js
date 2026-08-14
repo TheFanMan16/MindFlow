@@ -8,7 +8,19 @@
  * same layoutId inside one <LayoutGroup> and framer animates between them.
  * ui/Tabs implements the pill pattern; re-exported here for custom cases.
  */
-export { snappy, smooth, entrance, slow, reduced } from './transitions';
+export {
+  snappy,
+  smooth,
+  entrance,
+  slow,
+  reduced,
+  pop,
+  heroSettle,
+  drift,
+  STAGGER_FAST,
+  STAGGER,
+  SCENE_STEP,
+} from './transitions';
 export {
   fadeUp,
   fadeScale,
@@ -21,6 +33,11 @@ export {
   stepSlide,
   rFade,
   rStagger,
+  riseIn,
+  sceneContainer,
+  sweepCell,
+  drawPath,
+  sharedAxis,
 } from './variants';
 export { PageTransition } from './PageTransition';
 export { Stagger } from './Stagger';
@@ -30,4 +47,8 @@ export { Magnetic } from './Magnetic';
 export { FlipCard } from './FlipCard';
 export { CountRing } from './CountRing';
 export { Ticker } from './Ticker';
-export { LayoutGroup, AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+/* `m as motion`: every motion component in the app renders through LazyMotion
+   (MotionProvider mounts domMax at the root, strict mode). The full `motion`
+   proxy would drag the whole feature set into the eager bundle. */
+export { LayoutGroup, AnimatePresence, m as motion, useReducedMotion } from 'framer-motion';
+export { MotionProvider } from './MotionProvider';

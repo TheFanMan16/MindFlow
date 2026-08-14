@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { snappy, reduced } from '../../motion/transitions';
+import { m as motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { pop, reduced } from '../../motion/transitions';
 
 /**
  * Anchored popover menu. bg-raised, soft border, the modal shadow,
@@ -92,7 +92,7 @@ export const Popover = ({ trigger, children, side = 'bottom', align = 'start', c
             animate={
               reduce
                 ? { opacity: 1, transition: reduced }
-                : { opacity: 1, scale: 1, y: 0, transition: snappy }
+                : { opacity: 1, scale: 1, y: 0, transition: pop }
             }
             exit={{ opacity: 0, transition: reduced }}
             className={`absolute z-40 min-w-[180px] rounded-lg border border-line bg-raised p-1 shadow-raised ${pos}`}

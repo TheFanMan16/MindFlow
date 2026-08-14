@@ -1,7 +1,8 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppToaster } from './components/ui';
 import { AnimatePresence, PageTransition } from './motion';
+import { routeDirection } from './motion/PageTransition';
 import { supabase } from './lib/supabaseClient';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
@@ -84,6 +85,15 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const { sentryTriggered, setSentryTriggered } = useAuth();
+
+  // Spatial route direction: previous pathname -> current, on the sidebar
+  // axis. Computed per render (location changes re-render App), consumed by
+  // AnimatePresence/PageTransition below.
+  const prevPathRef = useRef(location.pathname);
+  const navDir = routeDirection(prevPathRef.current, location.pathname);
+  useEffect(() => {
+    prevPathRef.current = location.pathname;
+  }, [location.pathname]);
 
   const handleResumeSession = () => {
     // Hide the modal
@@ -350,13 +360,15 @@ function App() {
 
       {/* Global Toast Notifications */}
       <AppToaster />
-      {/* Route transitions: exit is a 120ms fade-down, enter rides the
-          entrance spring. mode="wait" sequences them; initial={false} stops
-          the first paint from double-animating pages that choreograph their
-          own entrances. Routes must receive this location so the exiting
-          tree keeps rendering the old route during its exit. */}
-      <AnimatePresence mode="wait" initial={false}>
-      <PageTransition key={location.pathname}>
+      {/* Route transitions are SPATIAL: primary routes slide on the sidebar
+          axis toward the direction of travel; off-rail routes keep the
+          fade-up. `custom` on AnimatePresence hands the NEW direction to the
+          exiting page. mode="wait" sequences them; initial={false} stops the
+          first paint from double-animating pages that choreograph their own
+          entrances. Routes must receive this location so the exiting tree
+          keeps rendering the old route during its exit. */}
+      <AnimatePresence mode="wait" initial={false} custom={navDir}>
+      <PageTransition key={location.pathname} dir={navDir}>
       {/* Outer boundary for routes that render outside MainLayout. */}
       <Suspense fallback={<RouteFallback />}>
       <Routes location={location}>

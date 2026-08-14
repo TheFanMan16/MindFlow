@@ -15,7 +15,9 @@ import {
   Stagger,
   FlipCard,
   CountRing,
+  AnimatedNumber,
   smooth,
+  pop,
   reduced,
 } from '../motion';
 
@@ -893,7 +895,9 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             <Stagger.Item className="mt-8 flex justify-center">
               <CountRing value={mastery / 100} size={168} strokeWidth={8} tone="accent">
                 <div className="text-center">
-                  <div className="text-display-sm text-primary">{mastery}%</div>
+                  <div className="text-display-sm text-primary">
+                    <AnimatedNumber value={mastery} countUp tabular={false} />%
+                  </div>
                   <div className="mt-1 text-label-sm text-secondary">Mastery</div>
                 </div>
               </CountRing>
@@ -908,11 +912,15 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
               <div className="text-label-sm text-secondary">Next due</div>
               <div className="mt-2 flex items-center justify-between text-body-sm text-secondary">
                 <span>Returning soon</span>
-                <span className="text-primary">{dueSoon}</span>
+                <span className="text-primary">
+                  <AnimatedNumber value={dueSoon} countUp />
+                </span>
               </div>
               <div className="mt-1 flex items-center justify-between text-body-sm text-secondary">
                 <span>Scheduled ahead</span>
-                <span className="text-primary">{scheduledAhead}</span>
+                <span className="text-primary">
+                  <AnimatedNumber value={scheduledAhead} countUp />
+                </span>
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Badge variant="danger">Again {studySessionData.again}</Badge>
@@ -963,8 +971,9 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const displayIndex = Math.min(safeCardIndex + 1, flashcards.length);
 
   // Framer targets for the active card. Under reduced motion everything
-  // degrades to opacity-only.
-  const cardTransition = reduce ? reduced : smooth;
+  // degrades to opacity-only. `pop` gives the incoming card one visible
+  // overshoot - it lands in the hand rather than parking.
+  const cardTransition = reduce ? reduced : pop;
   const enterTarget = reduce ? { opacity: 0 } : { opacity: 0, y: 28, scale: 0.97 };
   const centerTarget = reduce
     ? { opacity: 1 }

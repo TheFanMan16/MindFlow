@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Card, Button } from '../components/ui';
-import { motion, useReducedMotion } from '../motion';
+import { motion, useReducedMotion, pop } from '../motion';
 import { entrance, reduced } from '../motion/transitions';
 
 const Success = () => {
@@ -66,9 +66,14 @@ const Success = () => {
         className="w-full max-w-md"
       >
         <Card className="flex flex-col items-center p-8 text-center md:p-10">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-pill bg-success-wash">
+          <motion.div
+            initial={reduce ? false : { scale: 0, rotate: -12 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={reduce ? reduced : { ...pop, delay: 0.15 }}
+            className="mb-6 flex h-16 w-16 items-center justify-center rounded-pill bg-success-wash"
+          >
             <Check className="h-8 w-8 text-success" strokeWidth={1.5} aria-hidden="true" />
-          </div>
+          </motion.div>
 
           <h1 className="text-display-sm text-primary">Payment successful</h1>
 

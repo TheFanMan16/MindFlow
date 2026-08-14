@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Lightbulb, LayoutGrid, Timer, Zap, BookOpen, Layers, Settings, LogOut, User, LogIn, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { motion } from '../motion';
-import { snappy } from '../motion/transitions';
+import { pop } from '../motion/transitions';
 import { Popover, PopoverItem, PopoverSeparator, Button } from './ui';
 
 /**
@@ -121,7 +121,7 @@ const Sidebar = () => {
                 {active ? (
                   <motion.span
                     layoutId="active-nav"
-                    transition={snappy}
+                    transition={pop}
                     className="absolute inset-0 rounded-sm border border-line bg-raised"
                     aria-hidden="true"
                   />
@@ -196,7 +196,7 @@ const Sidebar = () => {
                 {active ? (
                   <motion.span
                     layoutId="active-tab"
-                    transition={snappy}
+                    transition={pop}
                     className="absolute inset-x-2 inset-y-1 rounded-sm bg-raised"
                     aria-hidden="true"
                   />

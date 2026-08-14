@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useContext, createContext } from 'react';
-import { motion, useInView, useReducedMotion } from 'framer-motion';
+import { m as motion, useInView, useReducedMotion } from 'framer-motion';
 import { smooth } from './transitions';
 
 /**

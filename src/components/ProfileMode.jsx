@@ -7,11 +7,13 @@ import { supabase } from '../lib/supabaseClient';
 import ConfirmModal from './ConfirmModal';
 import ProgressHeatmap from './ProgressHeatmap';
 import { Breadcrumb, Card, Button, Badge, StatTile, Skeleton } from './ui';
+import { motion, useReducedMotion, entrance } from '../motion';
 import { getLoopStreak } from '../utils/studyLoop';
 
 export default function ProfileMode() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const reduce = useReducedMotion();
   const [userEmail, setUserEmail] = useState('');
   const [memberSince, setMemberSince] = useState(new Date().getFullYear());
   const [showSignOutModal, setShowSignOutModal] = useState(false);
@@ -133,7 +135,12 @@ export default function ProfileMode() {
       <div className="mx-auto w-full max-w-5xl">
         <Breadcrumb trail={['MindFlow', 'Profile']} />
 
-        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-[300px_1fr]">
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={entrance}
+          className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-[300px_1fr]"
+        >
           {/* Left column: identity */}
           {loadingUser ? (
             /* Skeleton mirrors the identity card exactly - avatar circle,
@@ -243,7 +250,7 @@ export default function ProfileMode() {
               <ProgressHeatmap />
             </div>
           </Card>
-        </div>
+        </motion.div>
       </div>
 
       {/* Sign Out Confirmation Modal */}

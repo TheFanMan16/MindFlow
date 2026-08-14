@@ -7,6 +7,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { MotionConfig } from 'framer-motion';
+import { MotionProvider } from './motion/MotionProvider';
 import { initErrorTracking } from './lib/errors';
 import './index.css';
 
@@ -83,15 +84,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           reduced motion, so a future ungated animation degrades instead of
           shipping at full motion. Components still gate individually for
           their bespoke fallbacks (crossfades, static renders). */}
-      <MotionConfig reducedMotion="user">
-        <BrowserRouter>
-          <AuthProvider>
-            <TimerProvider>
-              <App />
-            </TimerProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </MotionConfig>
+      <MotionProvider>
+        <MotionConfig reducedMotion="user">
+          <BrowserRouter>
+            <AuthProvider>
+              <TimerProvider>
+                <App />
+              </TimerProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </MotionConfig>
+      </MotionProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );
