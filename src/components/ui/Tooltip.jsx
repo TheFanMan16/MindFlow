@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { m as motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { snappy, reduced } from '../../motion/transitions';
 
 /**
