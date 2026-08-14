@@ -10,7 +10,7 @@ import { getAuthHeader } from '../utils/authHeader';
 import { aiFetch, AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
 import { downloadAnkiCsv } from '../utils/ankiExport';
 import UpgradeModal from './UpgradeModal';
-import { Button, Card, Field, Input, Textarea, Modal, Badge, Tabs, Progress } from './ui';
+import { Button, Card, Field, Input, Textarea, Modal, Badge, Tabs, Progress, EmptyState } from './ui';
 import { motion, useReducedMotion, Stagger, shake } from '../motion';
 
 const GENERATE_STATUS_MESSAGES = [
@@ -27,17 +27,21 @@ const COLD_START_NOTICE_MS = 8000;
 const ROTATE_INTERVAL_MS = 3000;
 
 /**
- * Local generation-progress block: thin Progress line that advances per
- * stage, rotating mono status copy, the honest 8s cold-start notice, and a
- * Cancel button wired to the AbortController.
+ * Local generation-progress block: thin Progress line plus staged status
+ * copy, the honest 8s cold-start notice, and a Cancel button wired to the
+ * AbortController. The backend reports no real fraction, so the copy walks
+ * the stages ONCE and parks on the last one until the response lands -
+ * it never cycles back (recycled copy reads as a stall, and nothing in
+ * this system loops).
  */
 const GenerationStatus = ({ messages, onCancel }) => {
-  const [messageIndex, setMessageIndex] = useState(0);
+  const [stage, setStage] = useState(0);
   const [showColdStartNotice, setShowColdStartNotice] = useState(false);
+  const lastStage = messages.length - 1;
 
   useEffect(() => {
-    const rotate = setInterval(
-      () => setMessageIndex((i) => i + 1),
+    const advance = setInterval(
+      () => setStage((s) => Math.min(s + 1, lastStage)),
       ROTATE_INTERVAL_MS
     );
     const coldStart = setTimeout(
@@ -45,26 +49,29 @@ const GenerationStatus = ({ messages, onCancel }) => {
       COLD_START_NOTICE_MS
     );
     return () => {
-      clearInterval(rotate);
+      clearInterval(advance);
       clearTimeout(coldStart);
     };
-  }, []);
+  }, [lastStage]);
 
-  const message = messages[messageIndex % messages.length];
-  // Decorative pacing only - the backend reports no real progress, so the
-  // line climbs per rotation and parks at 90% until the response lands.
-  const progress = Math.min(0.18 + messageIndex * 0.22, 0.9);
+  const message = messages[stage];
+  // Advances per stage, parks short of done - never claims completion the
+  // backend hasn't reported.
+  const progress = Math.min(0.18 + stage * 0.22, 0.9);
 
   return (
     <div className="flex w-full max-w-sm flex-col items-center gap-4 px-4 py-8 text-center">
-      <Progress value={progress} label="Generating deck" className="w-full" />
+      {/* bg-inset wrapper supplies the 2px track behind the accent fill */}
+      <div className="w-full bg-inset">
+        <Progress value={progress} label="Generating deck" />
+      </div>
       <div aria-live="polite" className="text-label-sm text-secondary">
         {message}
       </div>
       {showColdStartNotice && (
         <p className="max-w-sm text-body-sm text-secondary">
           First request of the day can take up to a minute — we're waking the
-          AI up. Hang tight.
+          AI up.
         </p>
       )}
       {onCancel && (
@@ -77,19 +84,23 @@ const GenerationStatus = ({ messages, onCancel }) => {
 };
 
 /**
- * Local error block: danger card, softened to secondary text for cold-start
- * timeouts, with an optional Retry action. Keyed shake on new error text.
+ * Local error block: one sentence on a negative wash (border stays neutral
+ * per the destructive-surface pattern), softened to secondary text for
+ * cold-start timeouts, plus the ONE action that resolves it (Retry) when
+ * the failed request can be re-sent. Keyed shake on new error text.
+ * rounded-md because it nests inside rounded-lg parents (dropzone, column).
  */
 const ErrorNotice = ({ error, timedOut = false, onRetry }) => {
   const reduce = useReducedMotion();
   return (
     <motion.div
       key={error}
+      role="alert"
       animate={reduce ? undefined : shake}
-      className="flex w-full flex-col items-start gap-3 rounded-lg border border-danger-line bg-danger-wash px-4 py-3 text-left"
+      className="flex w-full flex-col items-start gap-3 rounded-md border border-line bg-negative-wash px-4 py-3 text-left"
     >
-      <p className={`text-body-sm ${timedOut ? 'text-secondary' : 'text-danger'}`}>{error}</p>
-      {timedOut && onRetry && (
+      <p className={`text-body-sm ${timedOut ? 'text-secondary' : 'text-negative'}`}>{error}</p>
+      {onRetry && (
         <Button variant="secondary" size="sm" mono onClick={onRetry}>
           Try again
         </Button>
@@ -108,6 +119,19 @@ const clamp = (lines) => ({
   wordBreak: 'break-word',
 });
 
+/**
+ * PDF/paste -> AI flashcard generation. State design:
+ * - Dropzone: default / hover / dragover / keyboard focus (global ring) /
+ *   inert while a generation is in flight.
+ * - Loading is staged honest progress (GenerationStatus) with a live
+ *   Cancel; every other control disables while it runs.
+ * - Errors keep the file so the row can offer Retry next to Remove; quota
+ *   errors (403) route to the upgrade surface instead of a dead Retry.
+ * - A successful request with zero usable cards is an EMPTY RESULT, not an
+ *   error: EmptyState names what's missing and offers the fix.
+ * - Focus styling comes from the global :focus-visible rule in index.css;
+ *   nothing here re-declares or suppresses it.
+ */
 const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -121,10 +145,13 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [deckTitle, setDeckTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null); // Inline failure inside the save modal - Save doubles as Retry
   const [revealedCards, setRevealedCards] = useState(new Set()); // Track which cards have revealed answers
   const [editingCardIndex, setEditingCardIndex] = useState(null); // Track which card is being edited
   const [editingCardData, setEditingCardData] = useState(null); // Store temporary edit data
-  const [timedOut, setTimedOut] = useState(false); // Offer a retry after a cold-start timeout
+  const [timedOut, setTimedOut] = useState(false); // Softens error copy after a cold-start timeout
+  const [canRetry, setCanRetry] = useState(false); // Retryable failure (timeout/server) vs quota
+  const [emptyResult, setEmptyResult] = useState(false); // Request succeeded, zero usable cards
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState(null);
   const fileInputRef = useRef(null);
@@ -161,6 +188,8 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     setIsLoading(true);
     setError(null);
     setTimedOut(false);
+    setCanRetry(false);
+    setEmptyResult(false);
     setFile(uploadedFile);
 
     const controller = new AbortController();
@@ -208,7 +237,10 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       );
 
       if (validCards.length === 0) {
-        throw new Error('No valid flashcards generated');
+        // The request succeeded but nothing card-worthy came back - an
+        // empty result, not an error. EmptyState offers the fix.
+        setEmptyResult(true);
+        return;
       }
 
       // Store generated cards for preview
@@ -233,15 +265,17 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
         // Keep the file around so Retry can resend it without re-picking.
         setError(AI_TIMEOUT_MESSAGE);
         setTimedOut(true);
+        setCanRetry(true);
         return;
       }
       if (import.meta.env.DEV) {
         console.error('PDF to Flashcard error:', err);
       }
-      const errorMessage = err.message || 'Failed to generate flashcards from PDF';
-      setError(errorMessage);
-      toast.error(errorMessage);
-      setFile(null);
+      // Keep the file: the file card renders the error row with Retry next
+      // to Remove instead of dumping the user back at the dropzone. The
+      // inline row is the error surface - no duplicate toast.
+      setError(err.message || 'Failed to generate flashcards from PDF');
+      setCanRetry(true);
     } finally {
       setIsLoading(false);
       abortRef.current = null;
@@ -253,23 +287,27 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     e.stopPropagation();
     setIsDragActive(false);
 
+    // Inert while a generation is in flight (preventDefault above still
+    // stops the browser from navigating to the dropped file).
+    if (isLoading) return;
+
     const uploadedFile = e.dataTransfer.files?.[0];
     if (uploadedFile) {
       handleUpload(uploadedFile);
     }
-  }, [handleUpload]);
+  }, [handleUpload, isLoading]);
 
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragActive(true);
-  }, []);
+    if (!isLoading) setIsDragActive(true);
+  }, [isLoading]);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragActive(true);
-  }, []);
+    if (!isLoading) setIsDragActive(true);
+  }, [isLoading]);
 
   const handleDragLeave = useCallback((e) => {
     e.preventDefault();
@@ -305,6 +343,8 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     setIsLoading(true);
     setError(null);
     setTimedOut(false);
+    setCanRetry(false);
+    setEmptyResult(false);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -333,7 +373,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             style: {
               background: 'var(--bg-raised)',
               color: 'var(--text-primary)',
-              border: '1px solid var(--danger-line)',
+              border: '1px solid var(--line)',
             },
             icon: <Lock size={16} strokeWidth={1.5} />,
           });
@@ -365,7 +405,10 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       );
 
       if (validCards.length === 0) {
-        throw new Error('No valid flashcards generated');
+        // Empty result, not an error - the pasted text survives so "Edit
+        // your text" returns straight to it.
+        setEmptyResult(true);
+        return;
       }
 
       // Store generated cards for preview
@@ -386,14 +429,15 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
       if (err instanceof AiTimeoutError) {
         setError(AI_TIMEOUT_MESSAGE);
         setTimedOut(true);
+        setCanRetry(true);
         return;
       }
       if (import.meta.env.DEV) {
         console.error('Text to Flashcard error:', err);
       }
-      const errorMessage = err.message || 'Failed to generate flashcards from text';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      // The inline row (with Retry) is the error surface - no duplicate toast.
+      setError(err.message || 'Failed to generate flashcards from text');
+      setCanRetry(true);
     } finally {
       setIsLoading(false);
       abortRef.current = null;
@@ -405,8 +449,11 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     setPastedText('');
     setError(null);
     setTimedOut(false);
+    setCanRetry(false);
+    setEmptyResult(false);
     setGeneratedCards(null);
     setShowSaveModal(false);
+    setSaveError(null);
     setDeckTitle('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -426,6 +473,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     }
 
     setIsSaving(true);
+    setSaveError(null);
     try {
       const result = await saveGeneratedDeck(generatedCards, deckTitle, user.id);
 
@@ -449,16 +497,26 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
         throw new Error(result.error || 'Failed to save deck');
       }
     } catch (err) {
-      console.error('Save deck error:', err);
-      toast.error(err.message || 'Failed to save deck. Please try again.');
+      if (import.meta.env.DEV) {
+        console.error('Save deck error:', err);
+      }
+      // The modal's inline alert is the error surface - no duplicate toast.
+      // The primary Save button doubles as Retry, so the modal stays open.
+      setSaveError("The deck didn't save — press Save to try again.");
     } finally {
       setIsSaving(false);
     }
-  }, [generatedCards, deckTitle, user]);
+  }, [generatedCards, deckTitle, user, onDeckSaved]);
 
   // Show preview and save modal
   const handleShowSaveModal = useCallback(() => {
     setShowSaveModal(true);
+  }, []);
+
+  // Dismissing the modal drops any save error with it - reopening starts clean.
+  const closeSaveModal = useCallback(() => {
+    setShowSaveModal(false);
+    setSaveError(null);
   }, []);
 
   // Toggle reveal for a specific card
@@ -528,6 +586,36 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
     />
   );
 
+  // Empty result: the request succeeded but produced zero usable cards.
+  // One sentence naming what's missing, one action that resolves it.
+  if (emptyResult) {
+    return (
+      <div className="flex flex-col gap-3">
+        {upgradeModal}
+        <EmptyState
+          icon={<FileText size={18} strokeWidth={1.5} />}
+          title="No flashcards came out of that material"
+          description={
+            activeTab === 'upload'
+              ? 'Usually the PDF is scanned images with no selectable text.'
+              : 'The text was too short or fragmented to turn into question-answer pairs.'
+          }
+          action={
+            activeTab === 'upload' ? (
+              <Button variant="secondary" size="sm" mono onClick={clearFile}>
+                Try a different PDF
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" mono onClick={() => setEmptyResult(false)}>
+                Edit your text
+              </Button>
+            )
+          }
+        />
+      </div>
+    );
+  }
+
   // Show preview section if cards are generated
   if (generatedCards && generatedCards.length > 0) {
     return (
@@ -538,7 +626,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             <div className="flex items-center gap-2.5">
               <Badge variant="success">Generated</Badge>
               <span className="text-body font-medium text-primary">
-                <span className="font-mono">{generatedCards.length}</span> flashcards ready
+                <span>{generatedCards.length}</span> flashcards ready
               </span>
             </div>
             <p className="text-body-sm text-secondary">
@@ -564,7 +652,9 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                       type="button"
                       aria-label={`Edit card ${index + 1}`}
                       onClick={(e) => startEditing(index, e)}
-                      className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-sm border border-transparent text-secondary transition-colors duration-150 hover:border-line hover:bg-hover hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+                      // 28px visual, 40px hit target via the pseudo-element.
+                      // Focus ring comes from the global :focus-visible rule.
+                      className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-sm border border-transparent text-secondary transition-colors duration-micro hover:border-line hover:bg-hover hover:text-primary active:bg-active after:absolute after:-inset-1.5 after:content-['']"
                     >
                       <Pencil size={14} strokeWidth={1.5} />
                     </button>
@@ -593,7 +683,9 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                         <Button variant="ghost" size="sm" onClick={cancelEdit}>
                           Cancel
                         </Button>
-                        <Button variant="primary" size="sm" mono onClick={() => saveEdit(index)}>
+                        {/* secondary, not primary: "Save to Library" below is
+                            this view's ONE accent action */}
+                        <Button variant="secondary" size="sm" mono onClick={() => saveEdit(index)}>
                           Save
                         </Button>
                       </div>
@@ -601,11 +693,9 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                   ) : (
                     // View Mode: Show card content
                     <>
-                      {/* Question (Front) */}
+                      {/* Question (Front) - no ordinal numeral: grid position
+                          already communicates order */}
                       <div className="mb-3 pr-8">
-                        <div aria-hidden="true" className="mb-1 text-label-sm text-tertiary">
-                          {String(index + 1).padStart(2, '0')}
-                        </div>
                         <div className="text-body-sm font-medium leading-5 text-primary" style={clamp(3)}>
                           {card.front || card.question}
                         </div>
@@ -655,13 +745,13 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
         {/* Save Modal */}
         <Modal
           open={showSaveModal}
-          onClose={() => setShowSaveModal(false)}
+          onClose={closeSaveModal}
           title="Save deck to library"
           footer={
             <>
               <Button
                 variant="secondary"
-                onClick={() => setShowSaveModal(false)}
+                onClick={closeSaveModal}
                 disabled={isSaving}
               >
                 Cancel
@@ -671,6 +761,9 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                 mono
                 onClick={handleSaveToLibrary}
                 disabled={isSaving}
+                aria-busy={isSaving || undefined}
+                // min-width so the Save -> Saving... swap doesn't shift layout
+                className="min-w-[96px]"
               >
                 {isSaving ? 'Saving...' : 'Save'}
               </Button>
@@ -691,6 +784,17 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
               autoFocus
             />
           </Field>
+          {/* Save failure lives here, not in a toast - the modal stays open
+              and the primary Save button doubles as Retry. rounded-sm inside
+              the rounded-lg modal per the nested-radius rule. */}
+          {saveError && (
+            <div
+              role="alert"
+              className="mt-4 rounded-sm border border-negative-line bg-negative-wash px-3 py-2 text-body-sm text-negative"
+            >
+              {saveError}
+            </div>
+          )}
         </Modal>
       </div>
     );
@@ -717,7 +821,9 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             type="button"
             aria-label="Remove file"
             onClick={clearFile}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-line text-secondary transition-colors duration-150 hover:border-danger-line hover:bg-danger-wash hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+            // 32px visual, 40px hit target via the pseudo-element. Focus
+            // ring comes from the global :focus-visible rule.
+            className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-line text-secondary transition-colors duration-micro hover:bg-negative-wash hover:text-negative active:bg-active after:absolute after:-inset-1 after:content-['']"
           >
             <X size={16} strokeWidth={1.5} />
           </button>
@@ -726,7 +832,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
           <ErrorNotice
             error={error}
             timedOut={timedOut}
-            onRetry={() => handleUpload(file)}
+            onRetry={canRetry ? () => handleUpload(file) : undefined}
           />
         )}
       </div>
@@ -745,6 +851,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
           ]}
           value={activeTab}
           onChange={(tab) => {
+            if (isLoading) return; // no mode switch mid-generation
             setActiveTab(tab);
             setError(null);
           }}
@@ -758,6 +865,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
           tabIndex={isLoading ? -1 : 0}
           aria-label="Upload a PDF"
           aria-disabled={isLoading || undefined}
+          aria-busy={isLoading || undefined}
           onDrop={handleDrop}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
@@ -771,12 +879,15 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
           }}
           className={[
             'flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed px-8 py-12 text-center',
-            'transition-colors duration-150',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
-            isDragActive
+            'transition-colors duration-micro',
+            isDragActive && !isLoading
               ? 'border-accent-line bg-accent-wash'
-              : 'border-line bg-surface hover:border-strong hover:bg-hover',
-            isLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+              : 'border-line bg-surface',
+            // While generating, the zone goes inert but NOT dimmed - its
+            // content is the live progress readout, not disabled chrome.
+            isLoading
+              ? 'cursor-default'
+              : 'cursor-pointer hover:border-strong hover:bg-hover active:bg-active',
           ].join(' ')}
         >
           <input
@@ -799,13 +910,13 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                 size={40}
                 strokeWidth={1.5}
                 aria-hidden="true"
-                className={`mb-5 transition-colors duration-150 ${isDragActive ? 'text-accent' : 'text-secondary'}`}
+                className={`mb-5 transition-colors duration-micro ${isDragActive ? 'text-accent' : 'text-secondary'}`}
               />
-              <div className={`mb-2 text-body font-medium transition-colors duration-150 ${isDragActive ? 'text-accent' : 'text-primary'}`}>
+              <div className={`mb-2 text-body font-medium transition-colors duration-micro ${isDragActive ? 'text-accent' : 'text-primary'}`}>
                 {isDragActive ? 'Drop your PDF here' : 'Drag & drop your lecture PDF (or click to browse)'}
               </div>
               <div className="text-body-sm text-secondary">
-                Max file size: <span className="font-mono">5MB</span>
+                Max file size: <span>5MB</span>
               </div>
             </>
           )}
@@ -826,6 +937,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
                 onChange={(e) => setPastedText(e.target.value)}
                 placeholder="Paste your notes or summary here..."
                 className="min-h-[300px]"
+                disabled={isLoading}
               />
             </Field>
           </Card>
@@ -845,6 +957,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             className="w-full"
             onClick={handleGenerateFromText}
             disabled={isLoading || !pastedText.trim()}
+            aria-busy={isLoading || undefined}
           >
             {isLoading ? (
               'Generating...'
@@ -860,7 +973,7 @@ const PDFToFlashcardUploader = ({ onFlashcardsGenerated, onDeckSaved }) => {
             <ErrorNotice
               error={error}
               timedOut={timedOut}
-              onRetry={handleGenerateFromText}
+              onRetry={canRetry ? handleGenerateFromText : undefined}
             />
           )}
         </div>

@@ -44,12 +44,14 @@
   --accent-ink: #16110A; /* text on accent fills */
   --accent-wash: rgba(233, 169, 77, 0.10);
   --accent-line: rgba(233, 169, 77, 0.28);
+  --focus-ring: rgba(233, 169, 77, 0.45); /* focus-visible ONLY: 2px ring, 2px offset */
 
   /* ------------------------------------------------------- semantic --- */
   /* Muted, never saturated. positive 6.01 / negative 4.78 on surface. */
   --positive: #6E9E78;
   --negative: #C9635E;
   --negative-wash: rgba(201, 99, 94, 0.10);
+  --negative-line: rgba(201, 99, 94, 0.28); /* red hairline for error edges */
   --positive-wash: rgba(110, 158, 120, 0.10);
 
   /* ------------------------------------------------------ elevation --- */
@@ -83,12 +85,12 @@
   /* Old semantic names still referenced by components resolve to the new
      tokens, keeping this file the single source. Do not use in new code. */
   --on-accent: var(--accent-ink);
-  --accent-ring: var(--accent-line);
+  --accent-ring: var(--focus-ring);
   --success: var(--positive);
   --success-wash: var(--positive-wash);
   --danger: var(--negative);
   --danger-wash: var(--negative-wash);
-  --danger-line: rgba(201, 99, 94, 0.28);
+  --danger-line: var(--negative-line);
   /* NO TOKEN EQUIVALENT in the new spec - flagged in the migration report:
      warning collapses into the accent family (amber IS the warning hue
      here); feature identity tints have no home and go neutral. */

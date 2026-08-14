@@ -1,12 +1,33 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTimer } from '../context/TimerContext';
 
+/**
+ * Floating session pill - proof the timer keeps counting after you leave
+ * /focus, and the one-press way back. It is a real button: default is the
+ * raised floating pill, hover fills bg-hover at duration-micro, pressed
+ * fills bg-active, and keyboard focus rides the app-wide ring (no local
+ * overrides). It renders only while a session is actually running, and not
+ * on the focus routes themselves - the full timer is already on screen
+ * there, and the shell never shows the same action twice in one viewport.
+ *
+ * The static positive dot is redundant with the label + ticking digits by
+ * design (state is never color alone); nothing about it pulses.
+ *
+ * The app shell renders inside a transform context, which would trap
+ * position:fixed - so the pill portals to document.body like other overlays.
+ */
 const MiniTimer = () => {
   const { timerState } = useTimer();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Don't render if timer is not running
-  if (!timerState || !timerState.isRunning) {
+  const onFocusRoute =
+    location.pathname.startsWith('/focus') || location.pathname.startsWith('/study');
+
+  // Nothing running (or the full timer is already in view): no pill.
+  if (!timerState || !timerState.isRunning || onFocusRoute) {
     return null;
   }
 
@@ -38,19 +59,22 @@ const MiniTimer = () => {
     }
   };
 
-  // The app shell renders inside a transform context, which would trap
-  // position:fixed - so the pill portals to document.body like other overlays.
   return createPortal(
-    <div
-      className="fixed flex items-center gap-3 rounded-pill border border-line bg-raised py-2 pl-4 pr-3 shadow-raised"
-      style={{ top: '20px', right: '20px', zIndex: 1000 }}
+    <button
+      type="button"
+      onClick={() => navigate('/focus')}
+      aria-label={`${getModeLabel()} running, ${getDisplayTime()} - return to session`}
+      className="fixed right-5 top-5 flex items-center gap-3 rounded-pill border border-line
+                 bg-raised py-2 pl-4 pr-3 text-left shadow-raised
+                 transition-colors duration-micro hover:bg-hover active:bg-active"
+      style={{ zIndex: 1000 }}
     >
-      <div className="flex flex-col gap-0.5">
-        <div className="text-label-sm text-secondary">{getModeLabel()}</div>
-        <div className="text-body tabular-nums text-primary">{getDisplayTime()}</div>
-      </div>
-      <span className="h-2 w-2 rounded-pill bg-success" aria-hidden="true" />
-    </div>,
+      <span className="flex flex-col gap-0.5">
+        <span className="text-label-sm text-secondary">{getModeLabel()}</span>
+        <span className="text-body tabular-nums text-primary">{getDisplayTime()}</span>
+      </span>
+      <span className="h-2 w-2 rounded-full bg-positive" aria-hidden="true" />
+    </button>,
     document.body
   );
 };

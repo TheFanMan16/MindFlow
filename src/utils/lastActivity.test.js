@@ -160,8 +160,13 @@ describe('Dashboard wiring', () => {
     expect(dashboardSource).not.toContain('lastUsed_');
   });
 
-  it('sources the label from real recorded activity', () => {
-    expect(dashboardSource).toContain('getLastActivityAt');
+  it('derives the last session from loop active days plus the timer history', () => {
+    // Zone A's current/slipping/dormant split keys off the most recent of
+    // the server-backed active days (getLoopActiveDays) and the local
+    // focus-timer history - not the removed dashboard-level shim.
+    expect(dashboardSource).toContain('getLoopActiveDays');
+    expect(dashboardSource).toContain('timerSessionHistory');
+    expect(dashboardSource).not.toContain('getLastActivityAt');
   });
 });
 
@@ -185,8 +190,17 @@ describe('formatTimeAgo', () => {
     ['2026-08-03T09:00:00.000Z', '3 hours ago'],
     ['2026-08-02T12:00:00.000Z', '1 day ago'],
     ['2026-07-31T12:00:00.000Z', '3 days ago'],
+    ['2026-07-13T12:00:00.000Z', '3 weeks ago'],
+    ['2026-02-11T12:00:00.000Z', '6 months ago'],
+    ['2024-08-03T12:00:00.000Z', '2 years ago'],
   ])('formats %s as %s', (timestamp, expected) => {
     expect(formatTimeAgo(timestamp, now)).toBe(expected);
+  });
+
+  it('never emits a raw day count past a week', () => {
+    // The reported bug: "last session 173 days ago" in 11px gray.
+    const bugCase = new Date(now.getTime() - 173 * 86400000).toISOString();
+    expect(formatTimeAgo(bugCase, now)).toBe('6 months ago');
   });
 
   it('singularises correctly at exactly one unit', () => {

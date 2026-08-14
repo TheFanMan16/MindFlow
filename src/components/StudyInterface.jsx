@@ -6,8 +6,8 @@ import { recordActivationMilestone } from '../utils/activation';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { updateCardProgress } from '../utils/spacedRepetition';
-import { ArrowLeft, BookOpen } from 'lucide-react';
-import { Button, Card, Badge, StatTile, Progress, Switch, EmptyState } from './ui';
+import { ArrowLeft, BookOpen, Hand, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Button, Card, Badge, StatTile, Progress, Switch, EmptyState, Skeleton } from './ui';
 import {
   motion,
   AnimatePresence,
@@ -39,6 +39,33 @@ const CardFace = ({ children }) => (
   </Card>
 );
 
+/**
+ * Skeleton of a card face: two text-title-shaped lines, centered like the
+ * real question text. Rendered inside the same h-96 stack slot as the live
+ * card so the initial load and the between-cards save hold identical
+ * dimensions - nothing jumps when real content lands.
+ */
+const CardFaceSkeleton = () => (
+  <CardFace>
+    <div className="flex w-full flex-col items-center gap-3" aria-hidden="true">
+      <Skeleton className="h-5 w-2/3" />
+      <Skeleton className="h-5 w-2/5" />
+    </div>
+  </CardFace>
+);
+
+/**
+ * The four SRS grades in keyboard order. Rendered as one row of secondary
+ * buttons - grading is a repeated action, so none of them gets the accent
+ * fill (the flip gesture on the card itself is this view's primary action).
+ */
+const GRADES = [
+  { key: 'again', num: '1', label: 'Again' },
+  { key: 'hard', num: '2', label: 'Hard' },
+  { key: 'good', num: '3', label: 'Good' },
+  { key: 'easy', num: '4', label: 'Easy' },
+];
+
 const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -53,7 +80,15 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [slideDirection, setSlideDirection] = useState(null); // 'left' | 'right' | 'up'
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null); // Fetch failure - inline retry, no dead end
+  const [fetchTick, setFetchTick] = useState(0);    // Bumped by Retry to re-run the fetch effect
   const [sessionComplete, setSessionComplete] = useState(false);
+
+  // Grade submit lifecycle: which grade is in flight (button shows "Saving...",
+  // card slot shows a skeleton) and the last failed submit ({ grade, message }),
+  // surfaced inline next to the grade row with a single retry action.
+  const [submittingGrade, setSubmittingGrade] = useState(null);
+  const [gradeError, setGradeError] = useState(null);
 
   // Funnel: fire once on the completion transition, whichever grading path
   // ended the session. A >=5-card review is the recall half of activation.
@@ -124,6 +159,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
       try {
         setLoading(true);
+        setLoadError(null);
 
         // If the deck belongs to a topic with an exam date, reviews get
         // backward-planned toward it. Failure here is non-fatal.
@@ -147,13 +183,15 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
           .order('created_at', { ascending: true });
 
         if (cardsError) {
-          toast.error('Failed to load flashcards');
+          // Inline error screen with a retry - a toast would vanish and leave
+          // a misleading "deck is empty" state behind it.
+          setLoadError(true);
           setLoading(false);
           return;
         }
 
         if (!cardsData || cardsData.length === 0) {
-          toast.error('No flashcards found in this deck');
+          // Genuinely empty deck: the empty-state early return handles it.
           setLoading(false);
           return;
         }
@@ -182,25 +220,25 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
         setFlashcards(orderedCards);
         setStudySessionData(prev => ({ ...prev, totalCards: orderedCards.length }));
       } catch (error) {
-        toast.error('An error occurred while loading flashcards');
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
     };
 
     fetchFlashcards();
-  }, [deckId, user]);
+  }, [deckId, user, fetchTick]);
 
   // Core action handlers for Stacked Deck interaction model
   const handleFlip = useCallback((e) => {
-    if (!sessionComplete && flashcards.length > 0 && !isAnimating) {
+    if (!sessionComplete && flashcards.length > 0 && !isAnimating && !gradeLockRef.current) {
       setIsFlipped(prev => !prev);
     }
   }, [sessionComplete, flashcards.length, isAnimating]);
 
   const handleMarkGood = useCallback(() => {
-    // Guard: prevent rapid clicking during animation
-    if (exitDirection || sessionComplete) return;
+    // Guard: prevent rapid clicking during animation or a pending grade submit
+    if (exitDirection || sessionComplete || gradeLockRef.current) return;
 
     // Guard: check bounds
     if (currentCardIndex >= flashcards.length - 1) {
@@ -237,8 +275,8 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
   }, [exitDirection, sessionComplete, currentCardIndex, flashcards, supabase]);
 
   const handleMarkBad = useCallback(() => {
-    // Guard: prevent rapid clicking during animation
-    if (exitDirection || sessionComplete) return;
+    // Guard: prevent rapid clicking during animation or a pending grade submit
+    if (exitDirection || sessionComplete || gradeLockRef.current) return;
 
     // Guard: check bounds
     if (currentCardIndex >= flashcards.length - 1) {
@@ -329,19 +367,23 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
     };
 
     const rating = ratingMap[grade];
-    if (!rating) {
-      toast.error('Invalid grade. Please try again.');
-      return;
-    }
+    if (!rating) return; // unreachable from the UI - keys and buttons only emit mapped grades
 
     gradeLockRef.current = true;
+    setGradeError(null);
+    setSubmittingGrade(grade);
 
-    // Update SRS progress in Supabase
+    // Update SRS progress in Supabase. While this is in flight the pressed
+    // button reads "Saving..." and the card slot holds a skeleton.
     const currentBox = currentCard.box || 1;
     const result = await updateCardProgress(supabase, currentCard.id, rating, currentBox, { examDate });
 
+    setSubmittingGrade(null);
+
     if (!result.success) {
-      toast.error(result.error || 'Failed to update card');
+      // Inline, next to the control that failed - the one retry action
+      // re-submits the same grade. The card stays put; nothing is lost.
+      setGradeError({ grade, message: "That grade didn't save." });
       gradeLockRef.current = false;
       return;
     }
@@ -378,8 +420,8 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
     });
 
     if (isRepeatSoon) {
-      // Show temporary "REPEATING SOON" label for zones 1 & 2
-      setGestureLabel('REPEATING SOON');
+      // Temporary HUD label for zones 1 & 2
+      setGestureLabel('Repeating soon');
       setTimeout(() => {
         setGestureLabel('');
       }, 800);
@@ -423,11 +465,25 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
         return;
       }
 
+      // Enter/Space on a focused control must press THAT control - never get
+      // swallowed by the flip shortcut. The flashcard itself (role="button",
+      // marked data-flashcard) is the one interactive target whose activation
+      // IS the flip, so it stays on the shortcut path below.
+      if (e.key === ' ' || e.key === 'Enter') {
+        const interactive =
+          e.target instanceof Element
+            ? e.target.closest('button, a, [role="button"]')
+            : null;
+        if (interactive && !interactive.hasAttribute('data-flashcard')) {
+          return;
+        }
+      }
+
       switch (e.key) {
         case ' ': // Spacebar - Flip card
         case 'Enter': // role="button" contract: Enter must activate too
           e.preventDefault();
-          if (!sessionComplete && flashcards.length > 0) {
+          if (!sessionComplete && flashcards.length > 0 && !gradeLockRef.current) {
             setIsFlipped(prev => !prev);
           }
           break;
@@ -532,21 +588,21 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
       if (category === "Thumb_Up") {
         // Thumb up = Mark as Good (know it) OR Keep Studying (if session complete)
         if (sessionComplete) {
-          triggerAction("👍 Keep Studying", handleKeepStudying);
+          triggerAction("Keep studying", handleKeepStudying);
         } else {
-          triggerAction("👍 Good", handleMarkGood);
+          triggerAction("Good", handleMarkGood);
         }
       } else if (category === "Thumb_Down") {
         // Thumb down = Mark as Bad (don't know it) OR Back to Dashboard (if session complete)
         if (sessionComplete) {
-          triggerAction("👎 Back", handleBackToDashboard);
+          triggerAction("Back", handleBackToDashboard);
         } else {
-          triggerAction("👎 Bad", handleMarkBad);
+          triggerAction("Review later", handleMarkBad);
         }
       } else if (category === "Open_Palm") {
         // Open palm = Flip card
         if (!sessionComplete) {
-          triggerAction("✋ Flip", handleFlip);
+          triggerAction("Flip", handleFlip);
         }
       }
     }
@@ -562,7 +618,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
     // Update visuals
     setGestureLabel(label);
     setIsCooldownVisual(true);
-    setDebugStatus("Cooldown 🔒");
+    setDebugStatus("Cooldown");
 
     // Reset counter
     gestureCountRef.current = 0;
@@ -725,27 +781,84 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
 
 
   // Early returns - MUST come after all hooks
+
+  // Loading: a static skeleton of the exact study layout - 2px position bar,
+  // header row, h-96 card, four h-9 grade buttons, hint line - so the real
+  // screen lands on top of it without a single element moving.
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="text-label-sm text-secondary">Loading flashcards</div>
-          <Progress value={0.3} label="Loading" className="w-40" />
+      <div
+        className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden"
+        aria-busy="true"
+      >
+        <span className="sr-only">Loading flashcards</span>
+        <Skeleton className="absolute inset-x-0 top-0 z-20 h-0.5 rounded-none" />
+        <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-3 p-5" aria-hidden="true">
+          <Skeleton className="h-8 w-36" />
+          <Skeleton className="h-4 w-14" />
+          <Skeleton className="h-5 w-40" />
+        </div>
+        <div className="relative z-10 w-full max-w-2xl px-6">
+          <div className="relative h-96 w-full">
+            <CardFaceSkeleton />
+          </div>
+        </div>
+        <div className="relative z-10 mt-8 flex items-center gap-2" aria-hidden="true">
+          {GRADES.map(({ key }) => (
+            <Skeleton key={key} className="h-9 w-24" />
+          ))}
+        </div>
+        <div className="relative z-10 mt-4" aria-hidden="true">
+          <Skeleton className="h-5 w-44" />
         </div>
       </div>
     );
   }
 
-  if (!deckId || flashcards.length === 0) {
+  // Fetch failed: name it and offer the one action that fixes it. Falling
+  // through to the empty state here would lie ("deck is empty" vs "network").
+  if (loadError) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center p-6">
+        <div
+          role="alert"
+          className="flex w-full max-w-md flex-col items-center gap-4 rounded-lg border border-danger-line bg-danger-wash px-6 py-8 text-center"
+        >
+          <p className="text-body text-primary">Flashcards for this deck didn't load.</p>
+          <Button variant="secondary" onClick={() => setFetchTick((t) => t + 1)}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!deckId) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center p-6">
         <EmptyState
           icon={<BookOpen size={20} strokeWidth={1.5} />}
-          title="No flashcards found"
-          description="This deck doesn't have any flashcards yet."
+          title="No deck is selected to study."
           action={
-            <Button variant="primary" onClick={() => navigate('/dashboard')}>
-              Back to Dashboard
+            <Button variant="primary" onClick={() => navigate('/flashcards')}>
+              Choose a deck
+            </Button>
+          }
+          className="w-full max-w-md"
+        />
+      </div>
+    );
+  }
+
+  if (flashcards.length === 0) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center p-6">
+        <EmptyState
+          icon={<BookOpen size={20} strokeWidth={1.5} />}
+          title="This deck has no cards to study yet."
+          action={
+            <Button variant="primary" onClick={() => navigate('/flashcards')}>
+              Add cards in the Library
             </Button>
           }
           className="w-full max-w-md"
@@ -787,23 +900,23 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             </Stagger.Item>
 
             <Stagger.Item className="mt-8 grid grid-cols-2 gap-3">
-              <StatTile label="Cards reviewed" value={studySessionData.reviewed} countUp />
-              <StatTile label="Accuracy" value={accuracy} unit="%" countUp />
+              <StatTile label="Cards reviewed" value={studySessionData.reviewed} countUp inset />
+              <StatTile label="Accuracy" value={accuracy} unit="%" countUp inset />
             </Stagger.Item>
 
-            <Stagger.Item className="mt-3 rounded-lg border border-line bg-surface p-4">
+            <Stagger.Item className="mt-3 rounded-md border border-line bg-surface p-4">
               <div className="text-label-sm text-secondary">Next due</div>
               <div className="mt-2 flex items-center justify-between text-body-sm text-secondary">
                 <span>Returning soon</span>
-                <span className="font-mono text-primary">{dueSoon}</span>
+                <span className="text-primary">{dueSoon}</span>
               </div>
               <div className="mt-1 flex items-center justify-between text-body-sm text-secondary">
                 <span>Scheduled ahead</span>
-                <span className="font-mono text-primary">{scheduledAhead}</span>
+                <span className="text-primary">{scheduledAhead}</span>
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Badge variant="danger">Again {studySessionData.again}</Badge>
-                <Badge variant="warning">Hard {studySessionData.hard}</Badge>
+                <Badge variant="neutral">Hard {studySessionData.hard}</Badge>
                 <Badge variant="accent">Good {studySessionData.good}</Badge>
                 <Badge variant="success">Easy {studySessionData.easy}</Badge>
               </div>
@@ -819,8 +932,16 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             </Stagger.Item>
 
             {isGestureMode && (
-              <Stagger.Item className="mt-4 text-center text-label-sm text-secondary">
-                Gestures active: 👍 keep studying · 👎 back
+              <Stagger.Item className="mt-4 flex items-center justify-center gap-2 text-label-sm text-secondary">
+                <span className="inline-flex items-center gap-1">
+                  <ThumbsUp size={12} strokeWidth={1.5} aria-hidden="true" />
+                  keep studying
+                </span>
+                <span aria-hidden="true" className="text-tertiary">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <ThumbsDown size={12} strokeWidth={1.5} aria-hidden="true" />
+                  back to dashboard
+                </span>
               </Stagger.Item>
             )}
           </Stagger>
@@ -909,21 +1030,23 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={reduce ? reduced : smooth}
-            className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60"
+            className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center"
           >
-            <div className="flex flex-col items-center gap-5 rounded-lg border border-line bg-raised p-8 shadow-raised">
+            {/* House scrim: canvas at 80%, never black - content stacks above via relative */}
+            <div aria-hidden="true" className="absolute inset-0 bg-canvas opacity-80" />
+            <div className="relative flex flex-col items-center gap-5 rounded-lg border border-line bg-raised p-8 shadow-raised">
               <div className="text-title text-primary">Gesture Controls</div>
               <div className="flex flex-col items-start gap-3">
                 <div className="flex items-center gap-3 text-body text-secondary">
-                  <span aria-hidden="true">🖐️</span>
+                  <Hand size={16} strokeWidth={1.5} aria-hidden="true" />
                   <span>Open Palm: Flip Card</span>
                 </div>
                 <div className="flex items-center gap-3 text-body text-secondary">
-                  <span aria-hidden="true">👍</span>
+                  <ThumbsUp size={16} strokeWidth={1.5} aria-hidden="true" />
                   <span>Thumbs Up: I Know It (Right)</span>
                 </div>
                 <div className="flex items-center gap-3 text-body text-secondary">
-                  <span aria-hidden="true">👎</span>
+                  <ThumbsDown size={16} strokeWidth={1.5} aria-hidden="true" />
                   <span>Thumbs Down: Review Later (Left)</span>
                 </div>
               </div>
@@ -966,88 +1089,108 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
               variants={exitVariants}
               exit="exit"
               transition={cardTransition}
-              className="absolute inset-0 z-10 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+              className="absolute inset-0 z-10 rounded-lg"
               role="button"
+              data-flashcard=""
               tabIndex={0}
               aria-label="Flashcard. Click or press Space to flip"
+              aria-busy={submittingGrade ? true : undefined}
             >
-              <FlipCard
-                className="h-full w-full cursor-pointer"
-                flipped={isFlipped}
-                onFlip={handleFlip}
-                front={
-                  <CardFace>
-                    <div className="text-title text-primary">
-                      {currentCard?.front || currentCard?.question || 'No question available'}
-                    </div>
-                  </CardFace>
-                }
-                back={
-                  <CardFace>
-                    <div className="text-title text-primary">
-                      {currentCard?.back || currentCard?.answer || 'No answer available'}
-                    </div>
-                    {currentCard?.explanation && (
-                      <div className="mt-4 w-full border-t border-line pt-4 text-body-sm text-secondary">
-                        {currentCard.explanation}
+              {submittingGrade ? (
+                /* Between cards: the grade is saving. Same slot, same
+                   dimensions - a matched skeleton, never a spinner. */
+                <CardFaceSkeleton />
+              ) : (
+                <FlipCard
+                  className="h-full w-full cursor-pointer"
+                  flipped={isFlipped}
+                  onFlip={handleFlip}
+                  front={
+                    <CardFace>
+                      <div className="text-title text-primary">
+                        {currentCard?.front || currentCard?.question || 'No question available'}
                       </div>
-                    )}
-                  </CardFace>
-                }
-              />
+                    </CardFace>
+                  }
+                  back={
+                    <CardFace>
+                      <div className="text-title text-primary">
+                        {currentCard?.back || currentCard?.answer || 'No answer available'}
+                      </div>
+                      {currentCard?.explanation && (
+                        <div className="mt-4 w-full border-t border-line pt-4 text-body-sm text-secondary">
+                          {currentCard.explanation}
+                        </div>
+                      )}
+                    </CardFace>
+                  }
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         </motion.div>
       </div>
 
-      {/* Grade buttons: 1-4 (Again / Hard / Good / Easy) */}
+      {/* Grade buttons: 1-4 (Again / Hard / Good / Easy).
+          States: disabled until the card is flipped (you grade what you saw);
+          the in-flight button keeps its width via a stacked label swap to
+          "Saving..." + aria-busy and ignores pointers; its siblings disable
+          until the submit resolves. Hover/press/focus come from Button and
+          the global focus ring. */}
       <div className="relative z-10 mt-8 flex items-center gap-2">
-        <Button
-          variant="secondary"
-          disabled={!isFlipped}
-          onClick={() => handleGrade('again')}
-          aria-label="Grade 1: Again"
-        >
-          <span aria-hidden="true" className="text-label-sm text-tertiary">1</span>
-          Again
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={!isFlipped}
-          onClick={() => handleGrade('hard')}
-          aria-label="Grade 2: Hard"
-        >
-          <span aria-hidden="true" className="text-label-sm text-tertiary">2</span>
-          Hard
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={!isFlipped}
-          onClick={() => handleGrade('good')}
-          aria-label="Grade 3: Good"
-        >
-          <span aria-hidden="true" className="text-label-sm text-tertiary">3</span>
-          Good
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={!isFlipped}
-          onClick={() => handleGrade('easy')}
-          aria-label="Grade 4: Easy"
-        >
-          <span aria-hidden="true" className="text-label-sm text-tertiary">4</span>
-          Easy
-        </Button>
+        {GRADES.map(({ key, num, label }) => {
+          const isSaving = submittingGrade === key;
+          return (
+            <Button
+              key={key}
+              variant="secondary"
+              disabled={!isFlipped || (submittingGrade !== null && !isSaving)}
+              aria-busy={isSaving || undefined}
+              className={isSaving ? 'pointer-events-none' : ''}
+              onClick={() => handleGrade(key)}
+              aria-label={`Grade ${num}: ${label}`}
+            >
+              <span aria-hidden="true" className="text-label-sm text-tertiary">{num}</span>
+              {/* Both labels share one grid cell so the button is sized for
+                  the wider one from the start - zero shift entering loading */}
+              <span className="grid text-center">
+                <span className={`col-start-1 row-start-1 ${isSaving ? 'invisible' : ''}`}>
+                  {label}
+                </span>
+                <span
+                  aria-hidden={isSaving ? undefined : true}
+                  className={`col-start-1 row-start-1 ${isSaving ? '' : 'invisible'}`}
+                >
+                  Saving...
+                </span>
+              </span>
+            </Button>
+          );
+        })}
       </div>
 
-      {/* Keyboard hint row */}
-      <div className="relative z-10 mt-4 flex items-center gap-2 text-label-sm text-secondary">
-        <KeyHint>space</KeyHint>
-        <span>flip</span>
-        <span aria-hidden="true" className="text-tertiary">·</span>
-        <KeyHint>1-4</KeyHint>
-        <span>grade</span>
-      </div>
+      {/* Below the grades: either the inline submit failure (one sentence,
+          one retry) or the keyboard hint row - same slot, so the error never
+          pushes the deck around. */}
+      {gradeError ? (
+        <div
+          role="alert"
+          className="relative z-10 mt-4 flex items-center gap-3 rounded-md border border-danger-line bg-danger-wash py-1 pl-4 pr-1"
+        >
+          <span className="text-body-sm text-danger">{gradeError.message}</span>
+          <Button variant="ghost" size="sm" onClick={() => handleGrade(gradeError.grade)}>
+            Retry
+          </Button>
+        </div>
+      ) : (
+        <div className="relative z-10 mt-4 flex items-center gap-2 text-label-sm text-secondary">
+          <KeyHint>space</KeyHint>
+          <span>flip</span>
+          <span aria-hidden="true" className="text-tertiary">·</span>
+          <KeyHint>1-4</KeyHint>
+          <span>grade</span>
+        </div>
+      )}
 
       {/* Webcam HUD - Bottom Right (only when gesture mode is enabled) */}
       {isGestureMode && (
@@ -1057,7 +1200,7 @@ const StudyInterface = ({ deckId: propDeckId, onExit }) => {
             <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>Status: {debugStatus}</div>
             <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>Detected: {debugGesture}</div>
             <div className={isCooldownVisual ? 'text-danger' : 'text-secondary'}>
-              Confidence: <span className="font-mono">{debugScore}%</span>
+              Confidence: <span>{debugScore}%</span>
             </div>
           </div>
 

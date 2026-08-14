@@ -1,14 +1,33 @@
 import React, { useCallback, useState, useRef } from 'react';
-import { FileText, Loader2, UploadCloud, X } from 'lucide-react';
+import { FileText, UploadCloud, X } from 'lucide-react';
+import { Button, EmptyState, Progress } from './ui';
 
+/**
+ * Client-side PDF text extraction (pdf.js) feeding the blurting flow.
+ * State design:
+ * - Dropzone: default / hover / dragover / keyboard focus (global ring) /
+ *   inert while parsing.
+ * - Parsing progress is REAL: pdf.js reports the page count, so the bar
+ *   advances page-by-page - an honest fraction, no spinner, no loop.
+ * - A parse failure KEEPS the file and renders one sentence plus a Retry
+ *   action beside the existing Remove control - never a dead-end message.
+ * - A PDF that parses but has no text layer (scanned images) is an EMPTY
+ *   result, not an error: EmptyState names the problem and offers the one
+ *   action that resolves it.
+ * - Focus styling comes from the global :focus-visible rule in index.css;
+ *   nothing here re-declares or suppresses it.
+ */
 const PDFUploader = ({ onTextExtracted }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [emptyExtract, setEmptyExtract] = useState(false); // parsed fine, zero text
+  // { page, total } while parsing - drives the honest progress fraction.
+  const [parseProgress, setParseProgress] = useState({ page: 0, total: 0 });
   const fileInputRef = useRef(null);
 
-  const parsePdf = async (file) => {
+  const parsePdf = async (file, onPageParsed) => {
     return new Promise((resolve, reject) => {
       // 1. Check for the library
       if (!window.pdfjsLib) {
@@ -31,7 +50,7 @@ const PDFUploader = ({ onTextExtracted }) => {
         try {
           const typedarray = new Uint8Array(e.target.result);
 
-          // 4. Parse
+          // 4. Parse page-by-page, reporting the real fraction as we go
           const loadingTask = window.pdfjsLib.getDocument(typedarray);
           const pdf = await loadingTask.promise;
 
@@ -41,6 +60,7 @@ const PDFUploader = ({ onTextExtracted }) => {
             const textContent = await page.getTextContent();
             const pageText = textContent.items.map(item => item.str).join(' ');
             fullText += pageText + '\n';
+            onPageParsed?.(i, pdf.numPages);
           }
           resolve(fullText);
         } catch (error) {
@@ -55,28 +75,39 @@ const PDFUploader = ({ onTextExtracted }) => {
   const extractTextFromPDF = useCallback(async (file) => {
     setIsProcessing(true);
     setError(null);
+    setEmptyExtract(false);
     setSelectedFile(file); // Store the file for the file card
+    setParseProgress({ page: 0, total: 0 });
 
     try {
-      const fullText = await parsePdf(file);
-      // Set the extracted text
-      onTextExtracted(fullText.trim());
-      setIsProcessing(false);
-    } catch (err) {
-      // Log detailed error for debugging
-      console.error('PDF extraction error:', err);
-      console.error('Error message:', err.message);
-      console.error('Error stack:', err.stack);
+      const fullText = await parsePdf(file, (page, total) =>
+        setParseProgress({ page, total })
+      );
+      const trimmed = fullText.trim();
 
-      setError(`Failed to extract text from PDF: ${err.message || 'Unknown error'}. Please try another file or paste text manually.`);
+      if (!trimmed) {
+        // The PDF parsed but carries no text layer (scanned images) - an
+        // empty result, not an error. EmptyState below offers the fix.
+        setEmptyExtract(true);
+        return;
+      }
+
+      onTextExtracted(trimmed);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error('PDF extraction error:', err);
+      }
+      // KEEP the file so Retry can rerun extraction without re-picking.
+      setError(err.message || 'the file could not be read');
+    } finally {
       setIsProcessing(false);
-      setSelectedFile(null); // Clear file on error
     }
   }, [onTextExtracted]);
 
   const clearFile = useCallback(() => {
     setSelectedFile(null);
     setError(null);
+    setEmptyExtract(false);
     onTextExtracted(''); // Clear extracted text
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -87,6 +118,10 @@ const PDFUploader = ({ onTextExtracted }) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragActive(false);
+
+    // Inert while parsing (preventDefault above still stops the browser
+    // from navigating to the dropped file).
+    if (isProcessing) return;
 
     // 1. Grab file INSTANTLY (Sync) - before any async operations
     const file = e.dataTransfer.files?.[0];
@@ -99,19 +134,19 @@ const PDFUploader = ({ onTextExtracted }) => {
     } else {
       setError('Please upload a PDF file.');
     }
-  }, [extractTextFromPDF]);
+  }, [extractTextFromPDF, isProcessing]);
 
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragActive(true);
-  }, []);
+    if (!isProcessing) setIsDragActive(true);
+  }, [isProcessing]);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragActive(true);
-  }, []);
+    if (!isProcessing) setIsDragActive(true);
+  }, [isProcessing]);
 
   const handleDragLeave = useCallback((e) => {
     e.preventDefault();
@@ -135,6 +170,22 @@ const PDFUploader = ({ onTextExtracted }) => {
     }
   }, [extractTextFromPDF]);
 
+  // Empty result: the PDF parsed cleanly but contains no selectable text.
+  if (emptyExtract && selectedFile) {
+    return (
+      <EmptyState
+        icon={<FileText size={18} strokeWidth={1.5} />}
+        title={`No selectable text in ${selectedFile.name}`}
+        description="Scanned or image-only PDFs carry no text layer - paste the text manually instead."
+        action={
+          <Button variant="secondary" size="sm" mono onClick={clearFile}>
+            Try a different PDF
+          </Button>
+        }
+      />
+    );
+  }
+
   // Show file card if file is selected
   if (selectedFile && !isProcessing) {
     return (
@@ -153,7 +204,8 @@ const PDFUploader = ({ onTextExtracted }) => {
             </div>
           </div>
 
-          {/* Remove */}
+          {/* Remove - 32px visual, 40px hit target via the pseudo-element.
+              Focus ring comes from the global :focus-visible rule. */}
           <button
             type="button"
             aria-label="Remove file"
@@ -162,18 +214,26 @@ const PDFUploader = ({ onTextExtracted }) => {
               clearFile();
             }}
             className={[
-              'flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-line text-secondary',
-              'transition-colors duration-150 hover:border-danger-line hover:bg-danger-wash hover:text-danger',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
+              'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-line text-secondary',
+              'transition-colors duration-micro hover:bg-negative-wash hover:text-negative active:bg-active',
+              "after:absolute after:-inset-1 after:content-['']",
             ].join(' ')}
           >
             <X className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
 
+        {/* Per-file error row: one sentence + the one action that resolves
+            it (Retry re-runs extraction on the kept file; Remove is above). */}
         {error && (
-          <div className="rounded-sm border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger">
-            {error}
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-negative-wash px-4 py-3"
+          >
+            <p className="text-body-sm text-negative">Couldn't extract text: {error}</p>
+            <Button variant="secondary" size="sm" mono onClick={() => extractTextFromPDF(selectedFile)}>
+              Try again
+            </Button>
           </div>
         )}
       </div>
@@ -185,6 +245,7 @@ const PDFUploader = ({ onTextExtracted }) => {
       role="button"
       tabIndex={isProcessing ? -1 : 0}
       aria-label="Upload a PDF: drag and drop, or activate to browse"
+      aria-disabled={isProcessing || undefined}
       aria-busy={isProcessing}
       onDrop={handleDrop}
       onDragEnter={handleDragEnter}
@@ -199,12 +260,15 @@ const PDFUploader = ({ onTextExtracted }) => {
       }}
       className={[
         'flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed px-8 py-12 text-center',
-        'transition-colors duration-150',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
-        isDragActive
+        'transition-colors duration-micro',
+        isDragActive && !isProcessing
           ? 'border-accent-line bg-accent-wash'
-          : 'border-line bg-surface hover:border-strong hover:bg-hover',
-        isProcessing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+          : 'border-line bg-surface',
+        // While parsing, the zone goes inert but NOT dimmed - its content
+        // is the live progress readout, not disabled chrome.
+        isProcessing
+          ? 'cursor-default'
+          : 'cursor-pointer hover:border-strong hover:bg-hover active:bg-active',
       ].join(' ')}
     >
       <input
@@ -217,26 +281,43 @@ const PDFUploader = ({ onTextExtracted }) => {
       />
 
       {isProcessing ? (
-        <>
-          <Loader2 className="mb-4 h-10 w-10 animate-spin text-accent motion-reduce:animate-none" strokeWidth={1.5} aria-hidden="true" />
-          <div className="text-body text-secondary">Extracting text from PDF...</div>
-        </>
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
+          {/* Real fraction: pdf.js told us the page count. The bg-inset
+              wrapper supplies the 2px track behind the accent fill. */}
+          <div className="w-full bg-inset">
+            <Progress
+              value={parseProgress.total ? parseProgress.page / parseProgress.total : 0}
+              label="Extracting text"
+            />
+          </div>
+          <div aria-live="polite" className="text-body-sm tabular-nums text-secondary">
+            {parseProgress.total
+              ? `Extracting text - page ${parseProgress.page} of ${parseProgress.total}`
+              : 'Opening PDF…'}
+          </div>
+        </div>
       ) : (
         <>
           <UploadCloud
-            className={`mb-5 h-12 w-12 transition-colors duration-150 ${isDragActive ? 'text-accent' : 'text-tertiary'}`}
+            className={`mb-5 h-12 w-12 transition-colors duration-micro ${isDragActive ? 'text-accent' : 'text-tertiary'}`}
             strokeWidth={1.5}
             aria-hidden="true"
           />
-          <div className={`text-body font-medium transition-colors duration-150 ${isDragActive ? 'text-accent' : 'text-primary'}`}>
+          <div className={`text-body font-medium transition-colors duration-micro ${isDragActive ? 'text-accent' : 'text-primary'}`}>
             {isDragActive ? 'Drop your PDF here' : 'Drag & Drop your Lecture Slides (PDF) here'}
           </div>
           <div className="mt-1 text-body-sm text-secondary">or click to browse</div>
         </>
       )}
 
-      {error && (
-        <div className="mt-4 rounded-sm border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger">
+      {/* Dropzone-level error (no file kept): the zone itself is the
+          resolving action - drop or pick a PDF. rounded-md inside the
+          rounded-lg zone per the nested-radius rule. */}
+      {error && !isProcessing && (
+        <div
+          role="alert"
+          className="mt-4 rounded-md border border-line bg-negative-wash px-4 py-3 text-body-sm text-negative"
+        >
           {error}
         </div>
       )}

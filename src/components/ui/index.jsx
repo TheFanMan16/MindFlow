@@ -21,3 +21,4 @@ export { Breadcrumb } from './Breadcrumb';
 export { Progress } from './Progress';
 export { StepRail } from './StepRail';
 export { SaveButton } from './SaveButton';
+export { Staleness, stalenessRowClass } from './Staleness';

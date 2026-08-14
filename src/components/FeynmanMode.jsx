@@ -16,6 +16,7 @@ import {
   EmptyState,
   Field,
   Input,
+  Skeleton,
   SkeletonText,
   Textarea,
 } from './ui';
@@ -67,7 +68,7 @@ const JargonTerm = ({ children }) => {
   );
 };
 
-/** Local primitive: the rotating analysis status line. Opacity-only crossfade, instant under reduce. */
+/** Local primitive: the analysis status line. Opacity-only crossfade per step, instant under reduce. */
 const RotatingStatus = ({ message }) => {
   const reduce = useReducedMotion();
   if (reduce) {
@@ -102,6 +103,9 @@ const FeynmanMode = () => {
   const [feedback, setFeedback] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
+  // Per-field validation messages, rendered inline by Field (which wires
+  // aria-invalid + aria-describedby). Cleared as soon as the field changes.
+  const [fieldErrors, setFieldErrors] = useState({ concept: null, explanation: null });
   const [aiUsageCount, setAiUsageCount] = useState(0);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState(null);
@@ -135,12 +139,18 @@ const FeynmanMode = () => {
     fetchUsage();
   }, [user?.id]);
 
-  // Rotate the analyzing status line every ~1.8s; cleared on completion/unmount.
+  // Steps the analyzing status line through its messages ONCE and parks on
+  // the last - recycled copy reads as a stall. The interval clears itself
+  // once parked; the cleanup covers completion/unmount.
   useEffect(() => {
     if (!isAnalyzing) return undefined;
     setStatusIndex(0);
+    const lastIndex = ANALYZE_STATUS_MESSAGES.length - 1;
+    let step = 0;
     const id = setInterval(() => {
-      setStatusIndex((i) => (i + 1) % ANALYZE_STATUS_MESSAGES.length);
+      step = Math.min(step + 1, lastIndex);
+      setStatusIndex(step);
+      if (step === lastIndex) clearInterval(id);
     }, STATUS_ROTATE_MS);
     return () => clearInterval(id);
   }, [isAnalyzing]);
@@ -148,17 +158,14 @@ const FeynmanMode = () => {
   // Analyze explanation using backend API
   const analyzeExplanation = async () => {
     // Checked again on the server - this is fast feedback, not the control.
+    // Errors land inline on the fields themselves, not in a toast.
     const conceptError = validateAiInput(concept, 'concept', 'A concept');
-    if (conceptError) {
-      toast.error(conceptError);
-      return;
-    }
-
     const explanationError = validateAiInput(explanation, 'explanation', 'Your explanation');
-    if (explanationError) {
-      toast.error(explanationError);
+    if (conceptError || explanationError) {
+      setFieldErrors({ concept: conceptError, explanation: explanationError });
       return;
     }
+    setFieldErrors({ concept: null, explanation: null });
 
     setIsAnalyzing(true);
     setFeedback(null);
@@ -251,6 +258,15 @@ const FeynmanMode = () => {
 
   const submitDisabled = isAnalyzing || !concept.trim() || !explanation.trim();
 
+  // A score with no notes, no missed concepts and no simpler version is not
+  // feedback the user can act on - that renders as the results-empty state.
+  const feedbackHasContent = Boolean(
+    feedback &&
+      (feedback.feedback ||
+        (Array.isArray(feedback.missing_concepts) && feedback.missing_concepts.length > 0) ||
+        feedback.simplification)
+  );
+
   return (
     <>
       <UpgradeModal
@@ -282,29 +298,52 @@ const FeynmanMode = () => {
           <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Left: editor */}
             <Card className="flex flex-col p-6">
-              <Field label="Target Concept">
+              {/* Inputs lock while the request is in flight - editing a
+                  submission mid-analysis would desync input and feedback. */}
+              <Field label="Target Concept" error={fieldErrors.concept}>
                 <Input
                   value={concept}
-                  onChange={(e) => setConcept(e.target.value)}
+                  onChange={(e) => {
+                    setConcept(e.target.value);
+                    if (fieldErrors.concept) {
+                      setFieldErrors((prev) => ({ ...prev, concept: null }));
+                    }
+                  }}
                   placeholder="e.g., TCP vs UDP, Photosynthesis, Quantum Entanglement..."
+                  disabled={isAnalyzing}
                 />
               </Field>
 
-              <Field label="Your Explanation" className="mt-5 flex-1">
+              <Field
+                label="Your Explanation"
+                error={fieldErrors.explanation}
+                className="mt-5 flex-1"
+              >
                 <Textarea
                   value={explanation}
-                  onChange={(e) => setExplanation(e.target.value)}
+                  onChange={(e) => {
+                    setExplanation(e.target.value);
+                    if (fieldErrors.explanation) {
+                      setFieldErrors((prev) => ({ ...prev, explanation: null }));
+                    }
+                  }}
                   placeholder="Explain a concept as if you're teaching it to someone new. Try to avoid jargon and use simple language..."
                   className="min-h-[280px] flex-1 resize-none leading-relaxed"
+                  disabled={isAnalyzing}
                 />
               </Field>
 
               <div className="mt-5 flex justify-end">
+                {/* Loading contract: min-width holds the button's footprint
+                    through the label swap, aria-busy set, pointer events off
+                    via disabled. No spinner. */}
                 <Button
                   mono
                   variant="primary"
+                  className="min-w-[7.5rem]"
                   onClick={analyzeExplanation}
                   disabled={submitDisabled}
+                  aria-busy={isAnalyzing || undefined}
                 >
                   {isAnalyzing ? 'Analyzing...' : 'Analyze'}
                 </Button>
@@ -323,11 +362,31 @@ const FeynmanMode = () => {
               </div>
 
               {isAnalyzing ? (
-                <div className="flex flex-1 flex-col gap-6">
+                /* Skeletons cut to the exact shapes the feedback renders in:
+                   score box with its 104px ring, two missed-concept rows, the
+                   simpler-version panel. Static by rule - no pulse. */
+                <div className="flex flex-1 flex-col gap-6" aria-busy="true">
                   <RotatingStatus message={ANALYZE_STATUS_MESSAGES[statusIndex]} />
-                  <SkeletonText lines={3} />
-                  <SkeletonText lines={4} />
-                  <SkeletonText lines={3} />
+                  <div className="flex flex-wrap items-center gap-6 rounded-md border border-line bg-canvas p-5">
+                    <Skeleton className="h-[104px] w-[104px]" />
+                    <div className="min-w-[12rem] flex-1">
+                      <Skeleton className="h-3.5 w-24" />
+                      <SkeletonText lines={2} className="mt-3" />
+                    </div>
+                  </div>
+                  <div>
+                    <Skeleton className="mb-3 h-3.5 w-28" />
+                    <div className="flex flex-col gap-2">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  </div>
+                  <div>
+                    <Skeleton className="mb-3 h-3.5 w-28" />
+                    <div className="rounded-md border border-line bg-canvas p-5">
+                      <SkeletonText lines={3} />
+                    </div>
+                  </div>
                 </div>
               ) : analysisError ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 text-center">
@@ -345,11 +404,22 @@ const FeynmanMode = () => {
                     description={'Click "Analyze" to get feedback on your explanation'}
                   />
                 </div>
+              ) : !feedbackHasContent ? (
+                // The AI scored the request but sent back no notes, no missed
+                // concepts, no simpler version - nothing worth rendering.
+                <div className="flex flex-1 items-center justify-center">
+                  <EmptyState
+                    className="w-full"
+                    icon={<Lightbulb size={18} strokeWidth={1.5} aria-hidden="true" />}
+                    title="The AI returned nothing usable"
+                    description={'No feedback came back for this explanation - press "Analyze" to try again'}
+                  />
+                </div>
               ) : (
                 <Stagger className="flex flex-col gap-6">
                   {/* Score */}
                   <Stagger.Item>
-                    <div className="flex flex-wrap items-center gap-6 rounded-lg border border-line bg-canvas p-5">
+                    <div className="flex flex-wrap items-center gap-6 rounded-md border border-line bg-canvas p-5">
                       <CountRing
                         value={Math.max(0, Math.min(1, feedback.score / 100))}
                         size={104}
@@ -423,7 +493,7 @@ const FeynmanMode = () => {
                           <Copy size={14} strokeWidth={1.5} aria-hidden="true" />
                         </Button>
                       </div>
-                      <div className="rounded-lg border border-line bg-canvas p-5">
+                      <div className="rounded-md border border-line bg-canvas p-5">
                         <p className="text-body leading-relaxed text-primary">
                           {feedback.simplification}
                         </p>

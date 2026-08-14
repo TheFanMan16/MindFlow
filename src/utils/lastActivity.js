@@ -11,6 +11,8 @@
  * activity.
  */
 
+import { formatRelative } from './staleness';
+
 const SESSION_HISTORY_KEY = 'timerSessionHistory';
 
 /**
@@ -104,6 +106,10 @@ export function formatSessionTimestamp(timestamp, now = new Date()) {
 /**
  * Human-readable elapsed time, e.g. "3 hours ago".
  *
+ * Past a week it hands over to the staleness scale's units ("3 weeks ago",
+ * "6 months ago") - a raw day count like "173 days ago" is unreadable as a
+ * duration, which is the whole reason utils/staleness.js exists.
+ *
  * @param {string|null} timestamp - ISO timestamp
  * @param {Date} [now] - injectable for testing
  * @returns {string|null} null when there is nothing to describe
@@ -126,5 +132,7 @@ export function formatTimeAgo(timestamp, now = new Date()) {
   if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
 
   const diffDays = Math.floor(diffMs / 86400000);
-  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+
+  return `${formatRelative(timestamp, now)} ago`;
 }

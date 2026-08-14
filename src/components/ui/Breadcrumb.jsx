@@ -1,9 +1,14 @@
 import React from 'react';
 
 /**
- * The top-of-page identity line: MINDFLOW / SECTION in mono micro-caps with
- * a leading tick, optional right-aligned slot (date, quick actions). One
+ * The top-of-page identity line: trail parts in label-sm with a leading
+ * hairline tick, optional right-aligned slot (date, quick actions). One
  * component so every page's first line is identical.
+ *
+ * Static wayfinding text, not navigation - the parts are plain strings, so
+ * there are no hover/focus/pressed states here. If a page needs clickable
+ * ancestors, pass real links in the `right` slot or use the router nav;
+ * do not bolt onClick onto these spans.
  */
 export const Breadcrumb = ({ trail = [], right, className = '' }) => (
   <div className={`flex flex-wrap items-center justify-between gap-3 ${className}`}>

@@ -1,13 +1,27 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from '../motion';
 import { snappy, reduced } from '../motion/transitions';
+import { Skeleton } from './ui';
 
 /**
  * Global command palette. Cmd+K / Ctrl+K from anywhere: navigate, start a
  * session, create a deck. fadeScale entrance, full keyboard model
- * (type-to-filter, arrows, Enter, Escape).
+ * (type-to-filter, arrows, Enter, Escape; Tab is trapped while open -
+ * focus never leaves the input, so it has nowhere legitimate to go).
+ *
+ * Two selection states, deliberately distinct: pointer hover is a quiet
+ * bg-hover fill that never steals the keyboard's place, while the
+ * arrow-key selection carries bg-accent-wash plus a 2px accent bar (and
+ * aria-selected), so it survives grayscale and a wandering mouse alike.
+ * Enter always runs the KEYBOARD selection; a click runs the row under
+ * the pointer. The input reports the selection via aria-activedescendant
+ * so focus never has to leave the field.
+ *
+ * `loading` (for callers that source commands async) swaps the list for
+ * static skeleton rows cut to the exact row metrics (36px rows, label
+ * and hint bars) - nothing shifts when real rows land, nothing pulses.
  *
  * Portals to document.body (PageTransition's transform context would trap
  * position:fixed). Mounted once in the app shell.
@@ -27,7 +41,7 @@ const COMMANDS = [
   { group: 'Actions', label: 'Panic mode', hint: 'Exam soon — triage', to: '/panic' },
 ];
 
-export const CommandPalette = () => {
+export const CommandPalette = ({ loading = false }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
@@ -35,6 +49,7 @@ export const CommandPalette = () => {
   const reduce = useReducedMotion();
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  const listId = useId();
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -79,6 +94,13 @@ export const CommandPalette = () => {
     if (e.key === 'Escape') {
       e.preventDefault();
       setOpen(false);
+    } else if (e.key === 'Tab') {
+      // DOM focus lives on the input for the palette's whole life
+      // (aria-activedescendant) - Tab in either direction could only walk
+      // behind the scrim, so trap it, mirroring the Modal contract.
+      e.preventDefault();
+    } else if (loading) {
+      // Nothing to traverse or run until commands arrive.
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       setIndex((i) => Math.min(i + 1, results.length - 1));
@@ -87,7 +109,9 @@ export const CommandPalette = () => {
       setIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      run(results[index]);
+      // No match under the cursor: keep the palette open so the query can
+      // be corrected instead of silently closing on a dead Enter.
+      if (results[index]) run(results[index]);
     }
   };
 
@@ -105,12 +129,14 @@ export const CommandPalette = () => {
     <AnimatePresence>
       {open ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[18vh]">
+          {/* Scrim: the canvas token faded up, matching ui/Modal - the
+              animated opacity IS the 0.8, so no opacity class to fight. */}
           <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: 0.8 }}
             exit={{ opacity: 0 }}
             transition={reduced}
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0 bg-canvas"
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
@@ -128,7 +154,10 @@ export const CommandPalette = () => {
             className="relative w-full max-w-lg overflow-hidden rounded-lg border border-line bg-raised shadow-raised"
             onKeyDown={onKeyDown}
           >
-            <div className="flex items-center gap-3 border-b border-line px-4">
+            {/* py-1.5 + h-9 keeps the row at its old 48px while giving the
+                input's 2px+2px focus outline room to render inside the
+                overflow-hidden shell instead of clipping at the top. */}
+            <div className="flex items-center gap-3 border-b border-line px-4 py-1.5">
               <span className="text-label-sm text-tertiary" aria-hidden="true">
                 ⌘K
               </span>
@@ -138,12 +167,37 @@ export const CommandPalette = () => {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Where to?"
                 aria-label="Search commands"
-                className="h-12 w-full bg-transparent text-body text-primary placeholder:text-tertiary focus:outline-none"
+                aria-controls={listId}
+                aria-activedescendant={
+                  !loading && results[index] ? `${listId}-opt-${index}` : undefined
+                }
+                className="h-9 w-full bg-transparent text-body text-primary placeholder:text-secondary"
               />
             </div>
 
-            <div ref={listRef} className="max-h-[300px] overflow-y-auto p-1.5" role="listbox">
-              {results.length === 0 ? (
+            <div
+              ref={listRef}
+              id={listId}
+              className="max-h-[300px] overflow-y-auto p-1.5"
+              role="listbox"
+              aria-busy={loading || undefined}
+            >
+              {loading ? (
+                /* Static placeholder cut to the real row metrics: one group
+                   label (12px bar) and five 36px rows with label + hint bars,
+                   so the loaded list lands without a shift. */
+                <div aria-hidden="true">
+                  <div className="flex h-8 items-end px-3 pb-1">
+                    <Skeleton className="h-3 w-14" />
+                  </div>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex h-9 items-center justify-between gap-3 px-3">
+                      <Skeleton className="h-3.5 w-28" />
+                      <Skeleton className="h-3 w-36" />
+                    </div>
+                  ))}
+                </div>
+              ) : results.length === 0 ? (
                 <p className="px-3 py-6 text-center text-body-sm text-secondary">
                   Nothing matches “{query}”.
                 </p>
@@ -153,30 +207,38 @@ export const CommandPalette = () => {
                   if (items.length === 0) return null;
                   return (
                     <div key={group}>
-                      <p className="px-3 pb-1 pt-2.5 text-label-sm text-tertiary">
+                      <p className="px-3 pb-1 pt-2.5 text-label-sm text-secondary">
                         {group}
                       </p>
                       {items.map((cmd) => {
                         flatIndex += 1;
                         const active = flatIndex === index;
-                        const i = flatIndex;
                         return (
                           <button
                             key={`${group}-${cmd.label}`}
+                            id={`${listId}-opt-${flatIndex}`}
                             type="button"
                             role="option"
                             aria-selected={active}
                             data-active={active}
-                            onMouseEnter={() => setIndex(i)}
                             onClick={() => run(cmd)}
                             className={[
-                              'flex w-full items-center justify-between gap-3 rounded-[4px] px-3 py-2 text-left',
-                              'transition-colors duration-150',
+                              'group relative flex w-full items-center justify-between gap-3 rounded-[4px] px-3 py-2 text-left',
+                              'transition-colors duration-micro hover:bg-hover active:bg-active',
                               active ? 'bg-accent-wash text-primary' : 'text-secondary',
                             ].join(' ')}
                           >
+                            {active ? (
+                              <span
+                                className="absolute inset-y-1 left-0 w-0.5 bg-accent"
+                                aria-hidden="true"
+                              />
+                            ) : null}
                             <span className="text-body-sm font-medium">{cmd.label}</span>
-                            <span className="truncate text-label-sm text-tertiary">
+                            {/* Secondary, not tertiary: the panel is raised
+                                and rows fill on hover/active - tertiary
+                                measures under 4.5:1 on all three grounds. */}
+                            <span className="truncate text-label-sm text-secondary">
                               {cmd.hint}
                             </span>
                           </button>
@@ -194,7 +256,7 @@ export const CommandPalette = () => {
                 ['↵', 'select'],
                 ['esc', 'close'],
               ].map(([key, what]) => (
-                <span key={what} className="flex items-center gap-1.5 text-label-sm text-tertiary">
+                <span key={what} className="flex items-center gap-1.5 text-label-sm text-secondary">
                   <kbd className="rounded-[3px] border border-line bg-surface px-1 py-0.5">{key}</kbd>
                   {what}
                 </span>

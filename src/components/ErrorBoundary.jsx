@@ -2,10 +2,20 @@ import React from 'react';
 import { reportError } from '../lib/errors';
 
 /**
- * Last-resort crash surface. Deliberately dependency-light: it must render
- * even when the component tree that broke includes the design system's own
- * primitives, so it uses plain elements styled by token variables - no ui/
- * imports, no framer.
+ * Last-resort crash surface - the app-level error state. Deliberately
+ * dependency-light: it must render even when the component tree that broke
+ * includes the design system's own primitives, so it uses plain elements
+ * with compiled token classes - no ui/ imports, no framer. (Tailwind's
+ * output is static CSS resolving to the same tokens.css variables, so it
+ * shares no failure mode with the React tree that just crashed.)
+ *
+ * The fallback follows the error-state contract: one sentence naming what
+ * broke (the thrown message, verbatim), one action that resolves it
+ * (Reload app - the single accent CTA on this screen). The component stack
+ * stays behind a collapsed <details> because it is diagnostic signal, not
+ * decoration. The reload button hovers to accent-hover, presses to
+ * accent-press, and takes the app-wide focus ring - nothing local overrides
+ * it.
  */
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -14,8 +24,9 @@ class ErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
-    // Update state so the next render will show the fallback UI
-    return { hasError: true };
+    // Capture the error here too, so the very first fallback paint can
+    // already name what broke (componentDidCatch lands a tick later).
+    return { hasError: true, error };
   }
 
   componentDidCatch(error, errorInfo) {
@@ -29,82 +40,36 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const message = (this.state.error?.message || String(this.state.error || ''))
+        .trim()
+        .replace(/\.$/, '');
       return (
-        <div
-          style={{
-            width: '100%',
-            height: '100vh',
-            backgroundColor: 'var(--bg-canvas)',
-            color: 'var(--text-primary)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '48px',
-            fontFamily: 'var(--font-sans)',
-          }}
-        >
-          <div
-            style={{
-              maxWidth: '560px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--danger-line)',
-              borderRadius: 'var(--r-lg)',
-              padding: '32px',
-            }}
-          >
-            <h1
-              style={{
-                fontSize: '24px',
-                fontWeight: '600',
-                letterSpacing: '-0.01em',
-                marginBottom: '12px',
-                color: 'var(--negative)',
-              }}
-            >
-              Something went wrong
-            </h1>
-            <p
-              style={{
-                fontSize: '15px',
-                color: 'var(--text-secondary)',
-                marginBottom: '20px',
-                lineHeight: '1.6',
-              }}
-            >
-              The app hit an error it could not recover from. Reloading usually fixes it; the
-              details below help if it keeps happening.
+        <div className="flex h-screen w-full flex-col items-center justify-center bg-canvas p-12 font-sans text-primary">
+          <div className="w-full max-w-[560px] rounded-lg border border-line bg-surface p-8 shadow-edge">
+            <h1 className="mb-3 text-title text-negative">The app crashed</h1>
+            <p className="mb-5 text-body text-secondary">
+              {message
+                ? `MindFlow hit an error it could not recover from: ${message}.`
+                : 'MindFlow hit an error it could not recover from.'}
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                this.setState({ hasError: false, error: null, errorInfo: null });
+                window.location.reload();
+              }}
+              className="inline-flex h-10 items-center justify-center rounded-sm bg-accent px-5
+                         text-body-sm font-medium text-on-accent transition-colors duration-micro
+                         hover:bg-accent-hover active:bg-accent-press"
+            >
+              Reload app
+            </button>
             {this.state.error && (
-              <details
-                style={{
-                  marginTop: '16px',
-                  padding: '14px',
-                  backgroundColor: 'var(--bg-canvas)',
-                  border: '1px solid var(--border-line)',
-                  borderRadius: 'var(--r-sm)',
-                  fontSize: '13px',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                <summary
-                  style={{
-                    cursor: 'pointer',
-                    marginBottom: '10px',
-                    color: 'var(--text-primary)',
-                    fontWeight: '500',
-                  }}
-                >
+              <details className="mt-5 rounded-sm border border-line bg-canvas p-3.5 text-body-sm text-secondary">
+                <summary className="cursor-pointer font-medium text-primary">
                   Error details
                 </summary>
-                <pre
-                  style={{
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    fontSize: '12px',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
+                <pre className="mt-2.5 whitespace-pre-wrap break-words font-mono text-label-sm font-normal">
                   {this.state.error.toString()}
                   {this.state.errorInfo && (
                     <>
@@ -115,25 +80,6 @@ class ErrorBoundary extends React.Component {
                 </pre>
               </details>
             )}
-            <button
-              onClick={() => {
-                this.setState({ hasError: false, error: null, errorInfo: null });
-                window.location.reload();
-              }}
-              style={{
-                marginTop: '20px',
-                backgroundColor: 'var(--accent)',
-                color: 'var(--accent-ink)',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: 'var(--r-sm)',
-                fontSize: '13px',
-                fontWeight: '500',
-                cursor: 'pointer',
-              }}
-            >
-              Reload app
-            </button>
           </div>
         </div>
       );

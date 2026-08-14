@@ -37,11 +37,12 @@ const H2 = ({ children }) => (
   <h2 className="mb-3 mt-8 text-title text-primary">{children}</h2>
 );
 
-/** In-copy mailto link, accent-toned with a visible focus ring. */
+/** In-copy mailto link, accent-toned. Keyboard focus is THE global
+    :focus-visible ring from index.css - no per-component ring here. */
 const MailLink = () => (
   <a
     href={`mailto:${CONTACT_EMAIL}`}
-    className="text-accent underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+    className="text-accent underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current"
   >
     {CONTACT_EMAIL}
   </a>

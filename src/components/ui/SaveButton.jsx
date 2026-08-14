@@ -5,39 +5,47 @@ import { snappy, reduced } from '../../motion/transitions';
 import { Button } from './Button';
 
 /**
- * A save action that reports its own lifecycle: label -> spinner -> check,
- * crossfaded through AnimatePresence. The parent owns the state machine
- * ('idle' | 'saving' | 'saved') because only it knows when the request
- * settles; this component just makes the state legible without a toast.
+ * A save action that reports its own lifecycle: label -> in-progress verb
+ * -> check, crossfaded through AnimatePresence. The parent owns the state
+ * machine ('idle' | 'saving' | 'saved') because only it knows when the
+ * request settles; this component just makes the state legible without a
+ * toast.
  *
- * Width is held steady by an invisible copy of the widest content so the
- * button never jitters as states swap.
+ * Saving follows the Button loading contract: aria-busy, pointer and click
+ * activation ignored, the label swaps to `savingLabel` - no spinner glyph,
+ * nothing loops. The button stays focusable through the save so keyboard
+ * users don't lose their place (disabled would eject focus mid-request).
+ *
+ * Width is held by invisible copies of BOTH labels stacked in one grid
+ * cell, so the button never jitters as states swap.
  */
-export const SaveButton = ({ state = 'idle', children = 'Save', className = '', ...rest }) => {
+export const SaveButton = ({
+  state = 'idle',
+  children = 'Save',
+  savingLabel = 'Saving...',
+  className = '',
+  ...rest
+}) => {
   const reduce = useReducedMotion();
 
   const content = {
     idle: <span>{children}</span>,
-    saving: (
-      <span
-        aria-label="Saving"
-        className="inline-block h-3.5 w-3.5 animate-spin rounded-pill border-2 border-current border-t-transparent motion-reduce:animate-none"
-      />
-    ),
+    saving: <span>{savingLabel}</span>,
     saved: <Check size={15} strokeWidth={2} aria-label="Saved" />,
   };
 
   return (
     <Button
       mono
-      disabled={state === 'saving'}
+      loading={state === 'saving'}
       className={`relative ${className}`}
       aria-live="polite"
       {...rest}
     >
-      {/* Invisible sizer keeps the width of the label state. */}
-      <span className="invisible" aria-hidden="true">
-        {children}
+      {/* Invisible sizer keeps the width of the wider label state. */}
+      <span className="inline-grid" aria-hidden="true">
+        <span className="invisible col-start-1 row-start-1">{children}</span>
+        <span className="invisible col-start-1 row-start-1">{savingLabel}</span>
       </span>
       <span className="absolute inset-0 flex items-center justify-center">
         <AnimatePresence mode="wait" initial={false}>

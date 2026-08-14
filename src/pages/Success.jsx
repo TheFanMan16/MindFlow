@@ -10,16 +10,18 @@ import { entrance, reduced } from '../motion/transitions';
 const Success = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
-  const [sessionId, setSessionId] = useState(null);
+  // Read synchronously - the URL is already there on first render, and the
+  // cleanup timer below strips it shortly after.
+  const [sessionId] = useState(() =>
+    new URLSearchParams(window.location.search).get('session_id')
+  );
+  // The payment itself succeeded (Stripe redirected here); this flag only
+  // covers the follow-up profile refresh, which can fail independently.
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const { refreshProfile } = useAuth();
   const reduce = useReducedMotion();
 
   useEffect(() => {
-    // Get session_id from URL
-    const params = new URLSearchParams(window.location.search);
-    const sid = params.get('session_id');
-    setSessionId(sid);
-
     const refreshUserProfile = async () => {
       try {
         // Refresh profile using AuthContext (this will trigger all listeners)
@@ -35,6 +37,7 @@ const Success = () => {
         window.dispatchEvent(new CustomEvent('profile-updated'));
       } catch (error) {
         console.error('Error refreshing user profile:', error);
+        setRefreshFailed(true);
       } finally {
         setIsLoading(false);
       }
@@ -82,6 +85,25 @@ const Success = () => {
             </div>
           )}
 
+          {refreshFailed && (
+            /* The charge went through; only the account refresh failed.
+               Say exactly that, plus what resolves it. */
+            <div
+              role="alert"
+              className="mt-6 w-full rounded-sm border border-danger-line bg-danger-wash px-4 py-3 text-left"
+            >
+              <p className="text-body-sm text-danger">
+                Payment confirmed, but refreshing your account hit an error.
+              </p>
+              <p className="mt-1 text-body-sm text-secondary">
+                Pro features can take a minute to appear — reload the dashboard
+                if they don't.
+              </p>
+            </div>
+          )}
+
+          {/* Loading per the loading-button spec: w-full holds width, label
+              swaps to the in-progress verb, aria-busy set, no spinner. */}
           <Button
             size="lg"
             mono
@@ -89,8 +111,9 @@ const Success = () => {
             className="mt-8 w-full"
             onClick={() => navigate('/dashboard')}
             disabled={isLoading}
+            aria-busy={isLoading || undefined}
           >
-            {isLoading ? 'Loading...' : 'Go to Dashboard'}
+            {isLoading ? 'Confirming your upgrade...' : 'Go to Dashboard'}
           </Button>
         </Card>
       </motion.div>

@@ -4,6 +4,11 @@ import React from 'react';
  * Status and identity chips. Feature colors appear ONLY here and in icon
  * tints: the hue at full strength for the text/icon, its 8% wash behind.
  * Never as a fill, never as a glow.
+ *
+ * Deliberately static: a Badge is a readout, never a control, so it carries
+ * no hover/focus/pressed/loading states. If a chip needs to be clickable,
+ * that is a Button (ghost, mono) wearing chip padding - not a Badge with
+ * an onClick.
  */
 const FEATURE = {
   focus: { color: 'var(--tint-focus)', background: 'var(--tint-focus-wash)' },

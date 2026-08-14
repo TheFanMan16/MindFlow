@@ -26,7 +26,19 @@ import { recordFocusMinutes } from '../utils/focusProgress';
 import { getTopics, findOrCreateTopic, recordFocusSession } from '../utils/studyLoop';
 import DurationInput from './DurationInput';
 import { toast } from 'react-hot-toast';
-import { Breadcrumb, Card, Button, Badge, Switch, Modal, Tabs, Input } from './ui';
+import {
+  Breadcrumb,
+  Card,
+  Button,
+  Badge,
+  Switch,
+  Modal,
+  Tabs,
+  Input,
+  EmptyState,
+  Skeleton,
+  Staleness,
+} from './ui';
 import { CountRing, Ticker, motion, AnimatePresence, useReducedMotion } from '../motion';
 import { smooth, snappy, reduced } from '../motion/transitions';
 
@@ -56,6 +68,15 @@ import { smooth, snappy, reduced } from '../motion/transitions';
  * scales to 1.04 and a mono FOCUSING label fades in; pause reverses it.
  * Completion flashes the ring to success and springs in a completion card
  * with the session stats and the recall handoff.
+ *
+ * Session log states: the localStorage read now happens after mount so the
+ * log has a real loading pass (static skeleton matched to row dimensions),
+ * a real error state when the stored JSON is corrupt (one sentence + "Clear
+ * log"), and an EmptyState before the first completed session. The header
+ * carries the shared Staleness label for the most recent session; row
+ * timestamps stay Geist Mono because a day-grouped time column is genuinely
+ * tabular. Reset is always rendered and disables (rather than vanishes)
+ * when there is nothing to reset, so the control row never reflows.
  */
 
 const TimerMode = () => {
@@ -79,6 +100,10 @@ const TimerMode = () => {
     }
   });
   const [activeSound, setActiveSound] = useState(null); // 'rain', 'forest', 'whitenoise', or null
+  // Wrapper ref for the task input (ui Input does not forward refs): the
+  // log's empty-state action moves focus here - the first step toward a
+  // loggable session - without duplicating the Start CTA in the viewport.
+  const taskWrapRef = useRef(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   // Rings the completion flash: set on pomodoro completion, cleared shortly after.
   const [justCompleted, setJustCompleted] = useState(false);
@@ -115,16 +140,22 @@ const TimerMode = () => {
   // Set when a session completes: drives the completion card with its
   // "Test what you just studied" handoff.
   const [recallHandoff, setRecallHandoff] = useState(null);
-  // Session History - load from localStorage on mount
-  const [sessionHistory, setSessionHistory] = useState(() => {
+  // Session history - read from localStorage AFTER mount rather than in the
+  // initializer, so the log has a real loading state (null = not read yet)
+  // and a real error state when the stored JSON is corrupt, instead of
+  // silently coercing both to "empty".
+  const [sessionHistory, setSessionHistory] = useState(null);
+  const [historyError, setHistoryError] = useState(false);
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem('timerSessionHistory');
-      return stored ? JSON.parse(stored) : [];
+      setSessionHistory(stored ? JSON.parse(stored) : []);
     } catch (error) {
       console.error('Failed to load session history from localStorage:', error);
-      return [];
+      setHistoryError(true);
     }
-  });
+  }, []);
 
   // Listen for changes to timer settings in localStorage
   useEffect(() => {
@@ -543,7 +574,8 @@ const TimerMode = () => {
       duration: duration, // in seconds
       timestamp: new Date().toISOString(),
     };
-    setSessionHistory((prev) => [newSession, ...prev].slice(0, 50)); // Keep last 50 sessions
+    setSessionHistory((prev) => [newSession, ...(prev || [])].slice(0, 50)); // Keep last 50 sessions
+    setHistoryError(false); // a fresh valid entry supersedes a corrupt stored log
 
     if (user?.id) {
       // Server-side record with topic resolution, so the session survives this
@@ -1191,8 +1223,10 @@ const TimerMode = () => {
     setActiveSound(value === 'off' ? null : value);
   };
 
-  // Save session history to localStorage whenever it changes
+  // Save session history to localStorage whenever it changes. null means the
+  // stored log has not been read yet - writing then would clobber it.
   useEffect(() => {
+    if (sessionHistory === null) return;
     try {
       localStorage.setItem('timerSessionHistory', JSON.stringify(sessionHistory));
     } catch (error) {
@@ -1253,15 +1287,29 @@ const TimerMode = () => {
     new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
   const logGroups = [];
-  for (const session of sessionHistory) {
+  for (const session of sessionHistory || []) {
     const label = dayLabel(session.timestamp);
     const last = logGroups[logGroups.length - 1];
     if (last && last.label === label) last.sessions.push(session);
     else logGroups.push({ label, sessions: [session] });
   }
 
+  // Error state escape hatch: the stored log is unreadable, so the only
+  // honest action is to discard it and start clean.
+  const handleClearLog = () => {
+    try {
+      localStorage.removeItem('timerSessionHistory');
+    } catch {
+      /* storage unavailable - state reset below still recovers the UI */
+    }
+    setHistoryError(false);
+    setSessionHistory([]);
+  };
+
   const sentryBlocked = isSentryActive && !isUserPresent;
-  const isDirty = isCountdownMode && workerTimeLeft !== workerDuration;
+  // Something to reset: a countdown that has left its full duration, or any
+  // elapsed flowmodoro time. Drives Reset's disabled state.
+  const isDirty = isCountdownMode ? workerTimeLeft !== workerDuration : timeElapsed > 0;
 
   // The run-state choreography: chrome recedes, the ring takes the stage.
   // Explicitly opacity-only under reduced motion - MotionConfig would make
@@ -1302,7 +1350,7 @@ const TimerMode = () => {
                     setIsSentryActive(!isSentryActive);
                   }}
                 />
-                {!isPro ? <Badge variant="accent">Pro</Badge> : null}
+                {!isPro ? <Badge variant="neutral">Pro</Badge> : null}
               </div>
               <Button
                 variant="ghost"
@@ -1348,7 +1396,7 @@ const TimerMode = () => {
             </motion.div>
 
             {/* Task intent */}
-            <motion.div {...chrome(-4)} className="mt-6 w-full max-w-xl">
+            <motion.div {...chrome(-4)} ref={taskWrapRef} className="mt-6 w-full max-w-xl">
               {isRunning ? (
                 <Card className="p-4">
                   <p className="text-label-sm text-secondary">Current task</p>
@@ -1407,7 +1455,7 @@ const TimerMode = () => {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1, transition: reduce ? reduced : { duration: 0.4 } }}
                       exit={{ opacity: 0, transition: reduced }}
-                      className="text-label-sm text-accent"
+                      className="text-label-sm text-secondary"
                     >
                       Focusing
                     </motion.p>
@@ -1436,16 +1484,18 @@ const TimerMode = () => {
                   )}
                 </Button>
 
-                {isDirty ? (
-                  <Button
-                    variant="secondary"
-                    size="lg"
-                    aria-label="Reset timer"
-                    onClick={handleReset}
-                  >
-                    <RotateCcw size={16} strokeWidth={1.5} />
-                  </Button>
-                ) : null}
+                {/* Always rendered: disabling instead of unmounting keeps the
+                    control row stable and gives Reset a real disabled state
+                    (nothing to reset at full duration / zero elapsed). */}
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  aria-label="Reset timer"
+                  onClick={handleReset}
+                  disabled={!isDirty}
+                >
+                  <RotateCcw size={16} strokeWidth={1.5} />
+                </Button>
 
                 {mode === 'flowmodoro' && timeElapsed > 0 ? (
                   <Button variant="secondary" size="lg" mono onClick={handleFinishWork}>
@@ -1453,12 +1503,6 @@ const TimerMode = () => {
                   </Button>
                 ) : null}
               </div>
-
-              {(mode === 'shortBreak' || mode === 'longBreak') && !isRunning ? (
-                <p className="mt-5 text-body-sm text-secondary">
-                  Take a well-deserved break. Rest your mind.
-                </p>
-              ) : null}
             </div>
 
             {/* Soundscapes */}
@@ -1485,10 +1529,74 @@ const TimerMode = () => {
             transition={smooth}
             className="lg:col-span-4"
           >
-            {sessionHistory.length > 0 ? (
-              <Card className="flex max-h-[calc(100vh-160px)] flex-col overflow-hidden lg:sticky lg:top-6">
+            {historyError ? (
+              /* Error: the stored log is unreadable JSON. One sentence, one
+                 action that resolves it. */
+              <Card className="p-4 lg:sticky lg:top-6">
+                <p className="text-body-sm text-secondary">
+                  Your session log could not be read from this browser&apos;s storage.
+                </p>
+                <div className="mt-3">
+                  <Button variant="secondary" size="sm" onClick={handleClearLog}>
+                    Clear log
+                  </Button>
+                </div>
+              </Card>
+            ) : sessionHistory === null ? (
+              /* Loading: static skeleton matched to the real log - same
+                 header, day-label line, and row anatomy (two-line left,
+                 duration + badge right, px-2 py-2), so nothing jumps. */
+              <Card aria-busy="true" className="lg:sticky lg:top-6">
                 <div className="border-b border-line px-4 py-3">
                   <p className="text-label-sm text-secondary">Session log</p>
+                </div>
+                <div className="p-2">
+                  <Skeleton className="mx-2 mb-1 mt-2 h-3.5 w-16" />
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 px-2 py-2">
+                      <div className="min-w-0">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="mt-1 h-3 w-12" />
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Skeleton className="h-4 w-7" />
+                        <Skeleton className="h-5 w-14" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ) : sessionHistory.length === 0 ? (
+              /* Empty: name what is missing, offer the one step toward it.
+                 While a session runs, the resolving action is already
+                 underway, so no button competes with it. */
+              <EmptyState
+                className="lg:sticky lg:top-6"
+                title="No sessions logged yet"
+                description={
+                  isRunning
+                    ? 'The session running now is logged here when it completes.'
+                    : 'Completed focus sessions are logged here, newest first.'
+                }
+                action={
+                  isRunning ? null : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => taskWrapRef.current?.querySelector('input')?.focus()}
+                    >
+                      Name your task
+                    </Button>
+                  )
+                }
+              />
+            ) : (
+              <Card className="flex max-h-[calc(100vh-160px)] flex-col overflow-hidden lg:sticky lg:top-6">
+                <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+                  <p className="text-label-sm text-secondary">Session log</p>
+                  {/* Shared staleness scale on the most recent session -
+                      recency is readable without scanning the rows. */}
+                  <Staleness at={sessionHistory[0]?.timestamp} prefix="last session" />
                 </div>
                 <div className="flex-1 overflow-y-auto p-2">
                   {logGroups.map((group, gi) => (
@@ -1513,7 +1621,9 @@ const TimerMode = () => {
                             <p className="truncate text-body-sm font-medium text-primary">
                               {session.task}
                             </p>
-                            <p className="font-mono text-label-sm text-secondary">
+                            {/* The one legitimate mono use: a day-grouped,
+                                genuinely tabular time column. */}
+                            <p className="font-mono text-label-sm tabular-nums text-secondary">
                               {timeLabel(session.timestamp)}
                             </p>
                           </div>
@@ -1521,7 +1631,7 @@ const TimerMode = () => {
                             <span className="text-body-sm tabular-nums text-secondary">
                               {Math.floor(session.duration / 60)}m
                             </span>
-                            <Badge variant={session.mode === 'pomodoro' ? 'accent' : 'neutral'}>
+                            <Badge variant="neutral">
                               {session.mode === 'pomodoro' ? 'Pomo' : 'Flow'}
                             </Badge>
                           </div>
@@ -1531,7 +1641,7 @@ const TimerMode = () => {
                   ))}
                 </div>
               </Card>
-            ) : null}
+            )}
           </motion.aside>
         </div>
       </div>
@@ -1585,9 +1695,11 @@ const TimerMode = () => {
               <button
                 type="button"
                 onClick={() => setIsVideoMinimized(false)}
+                // ~34px visual, 40px+ hit target via the pseudo extender.
                 className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-pill border
                            border-line bg-raised px-3.5 py-2 shadow-raised transition-colors
-                           duration-150 hover:border-strong"
+                           duration-150 hover:border-strong
+                           after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']"
               >
                 <span
                   aria-hidden="true"
@@ -1603,9 +1715,11 @@ const TimerMode = () => {
                   type="button"
                   onClick={() => setIsVideoMinimized(true)}
                   aria-label="Minimize Sentry video"
+                  // 24px visual, 40px hit target via the pseudo extender.
                   className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center
                              rounded-sm border border-line bg-surface text-secondary
-                             transition-colors duration-150 hover:text-primary"
+                             transition-colors duration-150 hover:text-primary
+                             after:absolute after:-inset-2 after:content-['']"
                 >
                   <Minus size={12} strokeWidth={1.5} />
                 </button>
@@ -1658,12 +1772,15 @@ const TimerMode = () => {
       {/* User missing overlay */}
       {isSentryActive && !isUserPresent
         ? createPortal(
-            <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 px-6 text-center">
-              <p className="text-label-sm text-danger">
+            <div className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6 text-center">
+              {/* Scrim as a sibling so content keeps full opacity - the house
+                  pattern from ui/Modal (canvas token faded up, never black). */}
+              <div className="absolute inset-0 bg-canvas opacity-90" aria-hidden="true" />
+              <p className="relative text-label-sm text-danger">
                 Sentry
               </p>
-              <p className="mt-3 text-display-sm text-danger">User missing — paused</p>
-              <p className="mt-2 max-w-[40ch] text-body text-secondary">
+              <p className="relative mt-3 text-display-sm text-danger">User missing — paused</p>
+              <p className="relative mt-2 max-w-[40ch] text-body text-secondary">
                 Return to your desk to resume the timer.
               </p>
             </div>,
@@ -1681,14 +1798,14 @@ const TimerMode = () => {
               exit={{ opacity: 0, transition: reduced }}
               className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4"
             >
-              <div className="w-full max-w-md rounded-lg border border-accent-line bg-raised p-5 shadow-raised">
+              <div className="w-full max-w-md rounded-lg border border-line bg-raised p-5 shadow-raised">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <motion.span
                       initial={reduce ? false : { scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={snappy}
-                      className="text-warning"
+                      className="text-secondary"
                     >
                       <Flame size={18} strokeWidth={1.5} />
                     </motion.span>

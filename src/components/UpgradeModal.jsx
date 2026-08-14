@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Check } from 'lucide-react';
 import { Modal, Button, Badge } from './ui';
 
 const PRO_FEATURES = [
@@ -14,6 +15,11 @@ const PRO_FEATURES = [
  * Graceful paywall: shown when a free user hits their AI limit, instead of a
  * raw error toast. Sells the upgrade, offers a way out, touches no billing
  * logic itself - the Settings page owns the actual Stripe flow.
+ *
+ * Initial focus goes to "Maybe later" (data-initial-focus): the modal
+ * interrupted the user, so the least committal control - not the sell -
+ * must be the first thing Enter acts on. Checkmarks are lucide icons, not
+ * glyph text: type never stands in for iconography here.
  */
 const UpgradeModal = ({ isOpen, onClose, message }) => {
   const navigate = useNavigate();
@@ -35,9 +41,7 @@ const UpgradeModal = ({ isOpen, onClose, message }) => {
         <ul className="flex flex-col gap-2">
           {PRO_FEATURES.map((feature) => (
             <li key={feature} className="flex items-center gap-2.5 text-body-sm text-secondary">
-              <span aria-hidden="true" className="font-mono text-accent">
-                ✓
-              </span>
+              <Check className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} aria-hidden="true" />
               {feature}
             </li>
           ))}
@@ -54,7 +58,7 @@ const UpgradeModal = ({ isOpen, onClose, message }) => {
           >
             See Pro plans
           </Button>
-          <Button variant="ghost" className="w-full" onClick={onClose}>
+          <Button variant="ghost" className="w-full" onClick={onClose} data-initial-focus="">
             Maybe later — limits reset tomorrow
           </Button>
         </div>

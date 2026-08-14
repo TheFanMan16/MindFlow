@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Lightbulb } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
-import toast from 'react-hot-toast';
-import { Button, Card, Field, Input } from '../../components/ui';
+import { Button, Card, Field, Input, Skeleton } from '../../components/ui';
 import { motion, useReducedMotion, Stagger, shake } from '../../motion';
 
 /** Flat wordmark: accent lucide bulb + name. No glow, no gradient. */
@@ -14,12 +13,27 @@ const Wordmark = () => (
   </span>
 );
 
+/**
+ * Recovery-link landing page: verifies the Supabase recovery session, then
+ * offers the new-password form. States, per the house contract:
+ * - validating: static, dimension-matched skeleton of the form (no spinner);
+ * - error: role=alert box for link/session/request failures; validation
+ *   lives on the Fields as inline errors (aria-invalid + aria-describedby),
+ *   never in toasts;
+ * - loading: the submit button holds its width, sets aria-busy and swaps
+ *   its label to the in-progress verb (Button's `loading` contract);
+ * - success: one sentence + the one action (back to sign in).
+ * Keyboard focus everywhere is THE global :focus-visible ring in index.css.
+ */
 const UpdatePassword = () => {
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Field-level validation errors, set on submit and cleared per-field on
+  // edit; the confirm field also gets live mismatch feedback while typing.
+  const [fieldErrors, setFieldErrors] = useState({});
   const [isRecoveryState, setIsRecoveryState] = useState(false);
   const [success, setSuccess] = useState(false);
   const [isValidating, setIsValidating] = useState(true);
@@ -391,14 +405,18 @@ const UpdatePassword = () => {
     setError(null);
     setSuccess(false);
 
-    // Validation
+    // Validation gates submission INLINE, on the fields themselves (Field
+    // wires aria-invalid + aria-describedby); the role=alert box is
+    // reserved for link/session/request failures.
+    const nextFieldErrors = {};
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
-      return;
+      nextFieldErrors.password = 'Password must be at least 6 characters.';
     }
-
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      nextFieldErrors.confirm = 'Passwords do not match.';
+    }
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
 
@@ -422,17 +440,13 @@ const UpdatePassword = () => {
         return;
       }
 
-      // Success! Show success message
+      // Success! The inline success state below is the single announcement
+      // (one sentence + one action) - no toast doubling it.
       setSuccess(true);
       setIsLoading(false);
 
       // Sign out the recovery session
       await supabase.auth.signOut();
-
-      // Show toast notification
-      toast.success('Password updated successfully!', {
-        duration: 3000,
-      });
     } catch (err) {
       console.error('Password update error:', err);
       setError(err.message || 'An unexpected error occurred. Please try again.');
@@ -456,58 +470,76 @@ const UpdatePassword = () => {
             </div>
           </div>
 
+          {/* Link/session/request failures only - validation errors live on
+              the fields. One sentence + the action that resolves it. */}
           {error && (
             <div
               role="alert"
-              className="mb-4 rounded-lg border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger"
+              className="mb-4 rounded-sm border border-negative-line bg-negative-wash px-4 py-3 text-body-sm text-negative"
             >
               {error}
             </div>
           )}
 
+          {/* Success: one sentence + the ONE action. The form and its CTAs
+              are unmounted here, so no CTA repeats in the viewport. */}
           {success && (
-            <div className="mb-4 rounded-lg border border-line bg-success-wash p-5 text-center">
+            <div className="rounded-md border border-line bg-positive-wash p-5 text-center">
               <CheckCircle2
                 size={20}
                 strokeWidth={1.5}
-                className="mx-auto mb-3 text-success"
+                className="mx-auto mb-3 text-positive"
                 aria-hidden="true"
               />
-              <p className="text-body font-medium text-primary">Password updated successfully</p>
-              <p className="mt-2 text-body-sm text-secondary">
-                Your password has been updated. You can now sign in with your new password.
+              <p className="text-body font-medium text-primary">Password updated</p>
+              <p className="mt-1.5 text-body-sm text-secondary">
+                Sign in with your new password to continue.
               </p>
-              <Link
-                to="/"
-                className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-sm border border-line px-4 text-body-sm font-medium text-primary transition-colors duration-150 hover:border-strong hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
-              >
-                Go to Login
-              </Link>
+              <Button variant="secondary" className="mt-4" onClick={() => navigate('/')}>
+                Go to sign in
+              </Button>
             </div>
           )}
 
+          {/* Link check in flight: a static, dimension-matched stand-in for
+              the form below (label / input / hint, label / input, submit)
+              so nothing jumps when the fields arrive. Nothing spins. */}
           {!success && isValidating && !isRecoveryState && !error && (
-            <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
-              <span
-                aria-hidden="true"
-                className="mb-1 h-8 w-8 animate-spin rounded-pill border-2 border-strong border-t-transparent motion-reduce:animate-none"
-              />
-              <p className="text-body-sm text-secondary">Validating password reset link...</p>
-              <p className="text-label-sm text-secondary">
-                Checking for recovery tokens in URL...
+            <div aria-busy="true" className="flex flex-col gap-4">
+              <p className="sr-only" role="status">
+                Verifying your password reset link...
               </p>
+              <div className="flex flex-col gap-1.5">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-5 w-44" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-9 w-full" />
+              </div>
+              <Skeleton className="h-11 w-full" />
             </div>
           )}
 
+          {/* noValidate: the browser's native bubbles would preempt the
+              house inline errors; the attributes stay as semantic hints. */}
           {!success && isRecoveryState && (
-            <form onSubmit={handleUpdatePassword}>
+            <form onSubmit={handleUpdatePassword} noValidate>
               <Stagger className="flex flex-col gap-4">
                 <Stagger.Item>
-                  <Field label="New Password" hint="Must be at least 6 characters">
+                  <Field
+                    label="New Password"
+                    hint="Must be at least 6 characters"
+                    error={fieldErrors.password}
+                  >
                     <Input
                       type="password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setFieldErrors((f) => ({ ...f, password: undefined }));
+                      }}
                       required
                       disabled={isLoading}
                       placeholder="Enter new password"
@@ -520,15 +552,19 @@ const UpdatePassword = () => {
                   <Field
                     label="Confirm New Password"
                     error={
-                      confirmPassword && password !== confirmPassword
-                        ? 'Passwords do not match'
-                        : undefined
+                      fieldErrors.confirm ||
+                      (confirmPassword && password !== confirmPassword
+                        ? 'Passwords do not match.'
+                        : undefined)
                     }
                   >
                     <Input
                       type="password"
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        setFieldErrors((f) => ({ ...f, confirm: undefined }));
+                      }}
                       required
                       disabled={isLoading}
                       placeholder="Confirm new password"
@@ -538,14 +574,20 @@ const UpdatePassword = () => {
                 </Stagger.Item>
 
                 <Stagger.Item>
+                  {/* Loading per the button contract: width held by the
+                      grid-stacked dual label, aria-busy, pointer events
+                      suppressed, still focusable. Not `disabled` - a
+                      submit attempt with bad values is what SURFACES the
+                      inline errors above. */}
                   <Button
                     type="submit"
                     mono
                     size="lg"
                     className="w-full"
-                    disabled={isLoading || password !== confirmPassword || password.length < 6}
+                    loading={isLoading}
+                    loadingLabel="Updating..."
                   >
-                    {isLoading ? 'Saving...' : 'Save New Password'}
+                    Update Password
                   </Button>
                 </Stagger.Item>
               </Stagger>

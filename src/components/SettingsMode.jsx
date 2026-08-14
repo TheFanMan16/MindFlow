@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabaseClient';
 import { capture } from '../lib/analytics';
 import config from '../config/api';
 import { getAuthHeader } from '../utils/authHeader';
@@ -13,8 +11,20 @@ import {
   requestNotificationPermission,
 } from '../utils/notifications';
 import { Clock, RefreshCw, ExternalLink, Trash2, Crown } from 'lucide-react';
-import { Breadcrumb, Card, Field, Input, Switch, Button, SaveButton, Badge } from './ui';
+import { Breadcrumb, Card, Field, Input, Switch, Button, SaveButton, Badge, Skeleton } from './ui';
 import { Stagger } from '../motion';
+
+/**
+ * Timer durations are held as raw strings so a half-typed value ("2", "")
+ * can exist without being silently coerced; validation happens against the
+ * parsed value and surfaces through the Field error line, never a coercion.
+ */
+const parseMinutes = (raw) => {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 180 ? n : null;
+};
+const minutesError = (raw) =>
+  parseMinutes(raw) === null ? 'Whole minutes, 1–180.' : undefined;
 
 /**
  * Local section wrapper: a system Card with the mono micro section label.
@@ -32,13 +42,12 @@ const SettingsSection = ({ label, danger = false, children, className = '' }) =>
 );
 
 const SettingsMode = () => {
-  const navigate = useNavigate();
   const { user, profile, refreshProfile } = useAuth();
 
-  // Timer Preferences
-  const [focusDuration, setFocusDuration] = useState(25);
-  const [shortBreakDuration, setShortBreakDuration] = useState(5);
-  const [longBreakDuration, setLongBreakDuration] = useState(15);
+  // Timer Preferences (raw strings; see parseMinutes above)
+  const [focusDuration, setFocusDuration] = useState('25');
+  const [shortBreakDuration, setShortBreakDuration] = useState('5');
+  const [longBreakDuration, setLongBreakDuration] = useState('15');
 
   // Sound Settings
   const [tickTockSound, setTickTockSound] = useState(false);
@@ -50,6 +59,7 @@ const SettingsMode = () => {
   const [subscriptionData, setSubscriptionData] = useState(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
   // Destructive-action confirmation
   const [showResetModal, setShowResetModal] = useState(false);
@@ -171,9 +181,9 @@ const SettingsMode = () => {
       const savedTickTock = localStorage.getItem('timer_tickTockSound');
       const savedVolume = localStorage.getItem('timer_alarmVolume');
 
-      if (savedFocus) setFocusDuration(parseInt(savedFocus, 10));
-      if (savedShortBreak) setShortBreakDuration(parseInt(savedShortBreak, 10));
-      if (savedLongBreak) setLongBreakDuration(parseInt(savedLongBreak, 10));
+      if (savedFocus) setFocusDuration(savedFocus);
+      if (savedShortBreak) setShortBreakDuration(savedShortBreak);
+      if (savedLongBreak) setLongBreakDuration(savedLongBreak);
       if (savedTickTock) setTickTockSound(savedTickTock === 'true');
       if (savedVolume) setAlarmVolume(parseInt(savedVolume, 10));
     } catch (error) {
@@ -181,16 +191,29 @@ const SettingsMode = () => {
     }
   }, []);
 
-  // Save timer durations to localStorage
+  // Per-field validation, live: the error line appears as soon as a value
+  // goes out of range and clears itself the moment it is fixed.
+  const timerErrors = {
+    focus: minutesError(focusDuration),
+    shortBreak: minutesError(shortBreakDuration),
+    longBreak: minutesError(longBreakDuration),
+  };
+  const timersInvalid = Boolean(
+    timerErrors.focus || timerErrors.shortBreak || timerErrors.longBreak
+  );
+
+  // Save timer durations to localStorage (only reachable with valid values -
+  // the SaveButton disables while any field carries an error).
   const saveTimerSettings = () => {
-    localStorage.setItem('timer_focusDuration', focusDuration.toString());
-    localStorage.setItem('timer_shortBreakDuration', shortBreakDuration.toString());
-    localStorage.setItem('timer_longBreakDuration', longBreakDuration.toString());
+    localStorage.setItem('timer_focusDuration', String(parseMinutes(focusDuration)));
+    localStorage.setItem('timer_shortBreakDuration', String(parseMinutes(shortBreakDuration)));
+    localStorage.setItem('timer_longBreakDuration', String(parseMinutes(longBreakDuration)));
     toast.success('Timer settings saved!');
   };
 
   // Drives the SaveButton state machine around the existing save handler.
   const handleSaveTimerSettings = () => {
+    if (timersInvalid) return;
     setTimerSaveState('saving');
     saveTimerSettings();
     setTimerSaveState('saved');
@@ -198,10 +221,11 @@ const SettingsMode = () => {
     timerSaveTimeoutRef.current = setTimeout(() => setTimerSaveState('idle'), 1500);
   };
 
-  // Save sound settings
-  const saveSoundSettings = () => {
-    localStorage.setItem('timer_tickTockSound', tickTockSound.toString());
-    localStorage.setItem('timer_alarmVolume', alarmVolume.toString());
+  // Save sound settings. Takes explicit values: the Switch handler passes
+  // the NEXT state, so we never persist a stale closure read.
+  const persistSoundSettings = (sound, volume) => {
+    localStorage.setItem('timer_tickTockSound', sound.toString());
+    localStorage.setItem('timer_alarmVolume', volume.toString());
     toast.success('Sound settings saved!');
   };
 
@@ -257,6 +281,8 @@ const SettingsMode = () => {
 
   const handleOpenBillingPortal = async () => {
     if (!user?.id) return;
+
+    setIsOpeningPortal(true);
     try {
       const response = await fetch(`${config.api.baseUrl}/create-portal-session`, {
         method: 'POST',
@@ -274,6 +300,8 @@ const SettingsMode = () => {
     } catch (err) {
       console.error('Billing portal error:', err);
       toast.error('An unexpected error occurred.');
+    } finally {
+      setIsOpeningPortal(false);
     }
   };
 
@@ -320,28 +348,31 @@ const SettingsMode = () => {
           <Stagger.Item>
             <SettingsSection label="Timer durations">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <Field label="Focus (min)">
+                <Field label="Focus (min)" error={timerErrors.focus}>
                   <Input
                     type="number"
+                    min={1}
+                    max={180}
                     value={focusDuration}
-                    onChange={(e) => setFocusDuration(parseInt(e.target.value) || 25)}
-                    className="font-mono"
+                    onChange={(e) => setFocusDuration(e.target.value)}
                   />
                 </Field>
-                <Field label="Short break (min)">
+                <Field label="Short break (min)" error={timerErrors.shortBreak}>
                   <Input
                     type="number"
+                    min={1}
+                    max={180}
                     value={shortBreakDuration}
-                    onChange={(e) => setShortBreakDuration(parseInt(e.target.value) || 5)}
-                    className="font-mono"
+                    onChange={(e) => setShortBreakDuration(e.target.value)}
                   />
                 </Field>
-                <Field label="Long break (min)">
+                <Field label="Long break (min)" error={timerErrors.longBreak}>
                   <Input
                     type="number"
+                    min={1}
+                    max={180}
                     value={longBreakDuration}
-                    onChange={(e) => setLongBreakDuration(parseInt(e.target.value) || 15)}
-                    className="font-mono"
+                    onChange={(e) => setLongBreakDuration(e.target.value)}
                   />
                 </Field>
               </div>
@@ -351,6 +382,7 @@ const SettingsMode = () => {
                   variant="secondary"
                   size="sm"
                   onClick={handleSaveTimerSettings}
+                  disabled={timersInvalid || timerSaveState === 'saving'}
                 >
                   Save timers
                 </SaveButton>
@@ -370,9 +402,9 @@ const SettingsMode = () => {
                 </div>
                 <Switch
                   checked={tickTockSound}
-                  onChange={() => {
-                    setTickTockSound(!tickTockSound);
-                    saveSoundSettings();
+                  onChange={(next) => {
+                    setTickTockSound(next);
+                    persistSoundSettings(next, alarmVolume);
                   }}
                   label="Tick tock sound"
                 />
@@ -390,6 +422,9 @@ const SettingsMode = () => {
                     {alarmVolume}%
                   </span>
                 </div>
+                {/* Focus ring comes from the global :focus-visible rule -
+                    no per-component ring. onBlur covers keyboard users, who
+                    adjust with arrows and never fire mouseup/touchend. */}
                 <input
                   id="settings-alarm-volume"
                   type="range"
@@ -399,9 +434,15 @@ const SettingsMode = () => {
                   onChange={(e) => {
                     setAlarmVolume(parseInt(e.target.value));
                   }}
-                  onMouseUp={saveSoundSettings}
-                  onTouchEnd={saveSoundSettings}
-                  className="w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+                  onMouseUp={() => persistSoundSettings(tickTockSound, alarmVolume)}
+                  onTouchEnd={() => persistSoundSettings(tickTockSound, alarmVolume)}
+                  onBlur={() => {
+                    // Keyboard path only - skip if mouseup already persisted.
+                    if (localStorage.getItem('timer_alarmVolume') !== String(alarmVolume)) {
+                      persistSoundSettings(tickTockSound, alarmVolume);
+                    }
+                  }}
+                  className="w-full cursor-pointer"
                   style={{ accentColor: 'var(--accent)' }}
                   aria-label="Alarm volume"
                 />
@@ -434,7 +475,28 @@ const SettingsMode = () => {
           {/* Billing */}
           <Stagger.Item>
             <SettingsSection label="Billing">
-              {actuallyHasPro ? (
+              {profile?.is_pro && subscriptionLoading ? (
+                /* Skeleton mirrors the Pro layout line for line (title+badge,
+                   description, billing date, two h-8 buttons) so nothing
+                   jumps when the real content lands. Static by rule. */
+                <div
+                  className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between"
+                  aria-busy="true"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5">
+                      <Skeleton className="h-6 w-36" />
+                      <Skeleton className="h-5 w-12" />
+                    </div>
+                    <Skeleton className="mt-2.5 h-4 w-64 max-w-full" />
+                    <Skeleton className="mt-4 h-4 w-44" />
+                  </div>
+                  <div className="flex w-full shrink-0 flex-col gap-2 md:w-48">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                </div>
+              ) : actuallyHasPro ? (
                 <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2.5">
@@ -454,23 +516,53 @@ const SettingsMode = () => {
                   </div>
 
                   <div className="flex w-full shrink-0 flex-col gap-2 md:w-auto">
-                    <Button variant="secondary" size="sm" onClick={handleOpenBillingPortal}>
-                      <ExternalLink size={15} strokeWidth={1.5} aria-hidden="true" />
-                      Manage subscription
+                    {/* Loading button per spec: width held by the invisible
+                        idle content, label swaps to the in-progress verb,
+                        aria-busy set, no spinner and nothing rotates. */}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="relative"
+                      onClick={handleOpenBillingPortal}
+                      disabled={isOpeningPortal}
+                      aria-busy={isOpeningPortal || undefined}
+                    >
+                      <span
+                        className={`inline-flex items-center gap-2 ${isOpeningPortal ? 'invisible' : ''}`}
+                        aria-hidden={isOpeningPortal || undefined}
+                      >
+                        <ExternalLink size={15} strokeWidth={1.5} aria-hidden="true" />
+                        Manage subscription
+                      </span>
+                      {isOpeningPortal && (
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          Opening portal...
+                        </span>
+                      )}
                     </Button>
+                    {/* Loading button per spec: width held by the invisible
+                        idle content, label swaps to the in-progress verb,
+                        aria-busy set, no spinner and nothing rotates. */}
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="relative"
                       onClick={handleSyncSubscription}
                       disabled={isSyncing}
+                      aria-busy={isSyncing || undefined}
                     >
-                      <RefreshCw
-                        size={15}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                        className={isSyncing ? 'animate-spin motion-reduce:animate-none' : ''}
-                      />
-                      {isSyncing ? 'Syncing...' : 'Refresh status'}
+                      <span
+                        className={`inline-flex items-center gap-2 ${isSyncing ? 'invisible' : ''}`}
+                        aria-hidden={isSyncing || undefined}
+                      >
+                        <RefreshCw size={15} strokeWidth={1.5} aria-hidden="true" />
+                        Refresh status
+                      </span>
+                      {isSyncing && (
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          Syncing...
+                        </span>
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -482,28 +574,28 @@ const SettingsMode = () => {
                       Unlock unlimited AI flashcards, Feynman analysis, and smart study tools.
                     </p>
                   </div>
+                  {/* Loading button per spec: the invisible idle content holds
+                      the width, the label swaps to the in-progress verb,
+                      aria-busy set, no spinner glyph. */}
                   <Button
                     variant="primary"
                     mono
-                    className="shrink-0 whitespace-nowrap"
+                    className="relative shrink-0 whitespace-nowrap"
                     onClick={handleSubscribe}
                     disabled={isSubscribing}
+                    aria-busy={isSubscribing || undefined}
                   >
-                    {isSubscribing ? (
-                      <>
-                        <RefreshCw
-                          size={15}
-                          strokeWidth={1.5}
-                          aria-hidden="true"
-                          className="animate-spin motion-reduce:animate-none"
-                        />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Crown size={15} strokeWidth={1.5} aria-hidden="true" />
-                        Upgrade for $8.99/mo
-                      </>
+                    <span
+                      className={`inline-flex items-center gap-2 ${isSubscribing ? 'invisible' : ''}`}
+                      aria-hidden={isSubscribing || undefined}
+                    >
+                      <Crown size={15} strokeWidth={1.5} aria-hidden="true" />
+                      Upgrade for $8.99/mo
+                    </span>
+                    {isSubscribing && (
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        Starting checkout...
+                      </span>
                     )}
                   </Button>
                 </div>

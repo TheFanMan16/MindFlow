@@ -8,11 +8,22 @@ import { snappy } from '../../motion/transitions';
  * of teleporting - this is the pattern the TimerMode mode row (Pomodoro /
  * Break / Flowmodoro) migrates onto.
  *
- * Controlled: items [{value, label}], value, onChange.
+ * Selection is never carried by color alone: the active tab wears the
+ * bordered bg-raised pill, a shape that survives grayscale.
+ *
+ * Per-tab states: rest text-secondary · hover bg-hover + text-primary at
+ * 120ms · focus-visible is the app-global ring (no local override - see
+ * src/index.css) · pressed bg-active · disabled text-disabled and inert.
+ * Loading/empty/error live with the panel a tab controls, not the strip;
+ * an empty items list renders nothing rather than an empty frame.
+ *
+ * Controlled: items [{value, label, disabled?}], value, onChange.
  */
-export const Tabs = ({ items, value, onChange, className = '' }) => {
+export const Tabs = ({ items = [], value, onChange, className = '' }) => {
   const reduce = useReducedMotion();
   const groupId = useId();
+
+  if (!items.length) return null;
 
   return (
     <div
@@ -27,12 +38,19 @@ export const Tabs = ({ items, value, onChange, className = '' }) => {
             role="tab"
             type="button"
             aria-selected={active}
+            disabled={item.disabled}
             onClick={() => onChange(item.value)}
             className={[
+              // 4px = the container's 6px outer radius minus its 2px
+              // padding (nested-radius rule).
               'relative rounded-[4px] px-3 py-1.5 text-label-sm',
-              'transition-colors duration-150',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
-              active ? 'text-primary' : 'text-secondary hover:text-primary',
+              // ~28px visual, 40px hit target via the pseudo extender.
+              "after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']",
+              'transition-colors duration-micro ease-std',
+              'disabled:pointer-events-none disabled:text-disabled',
+              active
+                ? 'text-primary'
+                : 'text-secondary hover:bg-hover hover:text-primary active:bg-active',
             ].join(' ')}
           >
             {active ? (

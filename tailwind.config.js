@@ -65,12 +65,12 @@ export default {
           hover: 'var(--accent-hover)',
           press: 'var(--accent-press)',
           ink: 'var(--accent-ink)',
-          ring: 'var(--accent-line)',
+          ring: 'var(--focus-ring)',
           wash: 'var(--accent-wash)',
           line: 'var(--accent-line)',
         },
         positive: { DEFAULT: 'var(--positive)', wash: 'var(--positive-wash)' },
-        negative: { DEFAULT: 'var(--negative)', wash: 'var(--negative-wash)' },
+        negative: { DEFAULT: 'var(--negative)', wash: 'var(--negative-wash)', line: 'var(--negative-line)' },
         /* legacy aliases (success/danger/warning + feature tints) - the
            warning family and identity tints have NO equivalent in the new
            spec; see the migration report. */

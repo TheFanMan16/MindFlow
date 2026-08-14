@@ -35,10 +35,14 @@ const AboutPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.A
 // production build, so both the route and the chunk are eliminated from it.
 const DesignSystem = import.meta.env.DEV ? lazy(() => import('./pages/DesignSystem')) : null;
 
-/** Shown while a route chunk is in flight. Mirrors the session-loading state. */
+/** Shown while a route chunk is in flight. Static by rule (nothing loops as
+    decoration): a page-shaped skeleton reserves the space the route will
+    fill, so the wait reads as layout, not theater. */
 const RouteFallback = () => (
-  <div className="flex h-full w-full items-center justify-center py-20">
-    <div className="w-10 h-10 rounded-pill border-4 border-line border-t-accent animate-spin motion-reduce:animate-none" />
+  <div className="mx-auto w-full max-w-[1080px] px-5 pt-8 md:px-8" aria-busy="true">
+    <span className="sr-only">Loading this view</span>
+    <div className="h-[200px] rounded-lg bg-surface shadow-edge" aria-hidden="true" />
+    <div className="mt-6 h-[101px] rounded-md bg-surface shadow-edge" aria-hidden="true" />
   </div>
 );
 
@@ -278,11 +282,12 @@ function App() {
   // Show loading state while checking session (but allow UpdatePassword and AuthCallback to render)
   if (loading && !isUpdatePasswordRoute && !isAuthCallbackRoute && !isPasswordRecovery) {
     return (
-      <div className="flex h-screen w-screen bg-canvas text-primary items-center justify-center">
-        <div className="flex flex-col items-center gap-6">
-          <div className="w-12 h-12 rounded-pill border-4 border-line border-t-accent animate-spin motion-reduce:animate-none" />
-          <div className="text-secondary text-lg">Loading...</div>
-        </div>
+      <div
+        className="flex h-screen w-screen bg-canvas text-primary items-center justify-center"
+        aria-busy="true"
+      >
+        {/* Static session check - no spinner (nothing loops as decoration). */}
+        <p className="text-body-sm text-secondary">Checking your session</p>
       </div>
     );
   }

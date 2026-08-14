@@ -57,10 +57,10 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
   ctx.textAlign = 'center';
 
   // Brand
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.fillStyle = token('--text-primary');
   ctx.font = font(700, 64);
   ctx.fillText('MindFlow', W / 2, 220);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.fillStyle = token('--text-secondary');
   ctx.font = font(500, 36);
   ctx.fillText('RECALL SESSION', W / 2, 300);
 
@@ -78,7 +78,7 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
   const radius = 260;
   ctx.lineWidth = 40;
   ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.strokeStyle = token('--line');
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.stroke();
@@ -90,7 +90,7 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
   ctx.fillStyle = token('--text-primary');
   ctx.font = font(700, 220);
   ctx.fillText(String(Math.round(score)), cx, cy + 60);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.fillStyle = token('--text-secondary');
   ctx.font = font(600, 48);
   ctx.fillText('% RECALLED', cx, cy + 150);
   if (grade) {
@@ -99,10 +99,11 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
     ctx.fillText(`Grade ${grade}`, cx, cy - 330);
   }
 
-  // Stat chips
+  // Stat chips - plain words, no emoji glyphs (they rasterize off-brand
+  // and add nothing the copy doesn't already say).
   const chips = [];
-  if (streak > 0) chips.push(`🔥 ${streak}-day streak`);
-  if (minutesFocused > 0) chips.push(`⏱ ${minutesFocused} min focused`);
+  if (streak > 0) chips.push(`${streak}-day streak`);
+  if (minutesFocused > 0) chips.push(`${minutesFocused} min focused`);
   if (chips.length > 0) {
     const chipY = 1360;
     const chipH = 110;
@@ -112,28 +113,28 @@ export function downloadRecapImage({ score, grade, topicName, streak, minutesFoc
     const total = widths.reduce((a, b) => a + b, 0) + gap * (chips.length - 1);
     let x = (W - total) / 2;
     chips.forEach((chip, i) => {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.fillStyle = token('--bg-raised');
       roundRect(ctx, x, chipY, widths[i], chipH, 55);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.strokeStyle = token('--line');
       ctx.lineWidth = 3;
       roundRect(ctx, x, chipY, widths[i], chipH, 55);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.fillStyle = token('--text-primary');
       ctx.fillText(chip, x + widths[i] / 2, chipY + 72);
       x += widths[i] + gap;
     });
   }
 
   // Date + tagline
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.fillStyle = token('--text-tertiary');
   ctx.font = font(500, 40);
   ctx.fillText(
     new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     W / 2,
     1610
   );
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.fillStyle = token('--text-secondary');
   ctx.font = font(600, 42);
   ctx.fillText('Study it once. Remember it on exam day.', W / 2, 1770);
 

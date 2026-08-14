@@ -50,6 +50,10 @@ const PanicMode = () => {
   const [plan, setPlan] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
   const [topic, setTopic] = useState(null);
+  // Errors stay silent until the first submit attempt, then live-update:
+  // they are derived from current values, so fixing a field clears its
+  // message without another submit.
+  const [attempted, setAttempted] = useState(false);
   const reduce = useReducedMotion();
 
   const hoursLeft = useMemo(() => {
@@ -59,17 +63,23 @@ const PanicMode = () => {
 
   const notesShortBy = Math.max(0, MIN_NOTES - notes.trim().length);
 
+  // Inline field errors (replace the old validation toasts - the message
+  // belongs next to the field it names, wired via aria-describedby).
+  const examAtError = attempted
+    ? !examAt
+      ? 'When is the exam? The plan is built backward from it.'
+      : hoursLeft <= 0
+        ? 'That exam time is in the past.'
+        : undefined
+    : undefined;
+  const notesError =
+    attempted && notesShortBy > 0
+      ? `Add at least ${notesShortBy} more characters so the AI has something to test you on.`
+      : undefined;
+
   const handleBuildPlan = async () => {
-    if (notesShortBy > 0) {
-      toast.error(`Add at least ${notesShortBy} more characters so the AI has something to test you on.`);
-      return;
-    }
-    if (!examAt || hoursLeft === null) {
-      toast.error('When is the exam? The plan is built backward from it.');
-      return;
-    }
-    if (hoursLeft <= 0) {
-      toast.error('That exam time is in the past.');
+    setAttempted(true);
+    if (notesShortBy > 0 || !examAt || hoursLeft === null || hoursLeft <= 0) {
       return;
     }
 
@@ -77,11 +87,19 @@ const PanicMode = () => {
     try {
       let resolvedTopic = null;
       if (user?.id) {
-        const name = examName.trim() || `Exam ${new Date(examAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-        resolvedTopic = await findOrCreateTopic(user.id, name);
-        if (resolvedTopic) {
-          // Date part only - topics track the day; the hour lives in the plan.
-          await setTopicExamDate(user.id, resolvedTopic.id, examAt.slice(0, 10));
+        try {
+          const name = examName.trim() || `Exam ${new Date(examAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+          resolvedTopic = await findOrCreateTopic(user.id, name);
+          if (resolvedTopic) {
+            // Date part only - topics track the day; the hour lives in the plan.
+            await setTopicExamDate(user.id, resolvedTopic.id, examAt.slice(0, 10));
+          }
+        } catch (err) {
+          // The plan is built locally - a topic-sync failure must not block
+          // it. The recall test still runs; cards just won't attach to a topic.
+          console.error('Topic sync failed:', err);
+          toast.error("Couldn't save this exam to your topics — the plan below still works.");
+          resolvedTopic = null;
         }
       }
       setTopic(resolvedTopic);
@@ -144,18 +162,18 @@ const PanicMode = () => {
                     placeholder="e.g. Bio 101 midterm"
                   />
                 </Field>
-                <Field label="When is it?">
+                <Field label="When is it?" error={examAtError}>
                   <Input
                     type="datetime-local"
                     value={examAt}
                     onChange={(e) => setExamAt(e.target.value)}
-                    className="font-mono"
+                   
                     style={{ colorScheme: 'dark' }}
                   />
                 </Field>
               </div>
 
-              <Field label="Your notes">
+              <Field label="Your notes" error={notesError}>
                 <Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -163,27 +181,34 @@ const PanicMode = () => {
                   className="min-h-[260px] leading-relaxed"
                 />
               </Field>
-              <p className={`-mt-3 text-body-sm ${notesShortBy > 0 ? 'text-danger' : 'text-success'}`}>
-                {notesShortBy > 0 ? (
-                  <>
-                    Add at least <span className="font-mono">{notesShortBy}</span> more characters so the AI has something to work with
-                  </>
-                ) : (
-                  <>
-                    <span className="font-mono">{notes.trim().length.toLocaleString()}</span> characters — ready
-                  </>
-                )}
-              </p>
+              {/* Live character counter; hidden while the Field error line
+                  above says the same thing, so the message never doubles. */}
+              {!notesError && (
+                <p className={`-mt-3 text-body-sm ${notesShortBy > 0 ? 'text-danger' : 'text-success'}`}>
+                  {notesShortBy > 0 ? (
+                    <>
+                      Add at least <span>{notesShortBy}</span> more characters so the AI has something to work with
+                    </>
+                  ) : (
+                    <>
+                      <span>{notes.trim().length.toLocaleString()}</span> characters — ready
+                    </>
+                  )}
+                </p>
+              )}
 
               {hoursLeft !== null && hoursLeft > 0 && (
                 <div className="flex items-center gap-2 text-body-sm text-warning">
                   <Hourglass className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
                   <span>
-                    <span className="font-mono">{runwayLabel}</span> until the exam
+                    <span>{runwayLabel}</span> until the exam
                   </span>
                 </div>
               )}
 
+              {/* Loading per the loading-button spec: w-full holds width,
+                  the label becomes the in-progress verb, aria-busy set,
+                  pointer events off via disabled. No spinner. */}
               <Button
                 size="lg"
                 mono
@@ -191,6 +216,7 @@ const PanicMode = () => {
                 className="w-full"
                 onClick={handleBuildPlan}
                 disabled={isStarting}
+                aria-busy={isStarting || undefined}
               >
                 {isStarting ? 'Building your triage plan…' : 'Build my triage plan'}
               </Button>
@@ -201,7 +227,7 @@ const PanicMode = () => {
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-title text-primary">
                 Your plan for the next{' '}
-                <span className="font-mono">
+                <span>
                   {hoursLeft < 48 ? `${Math.round(hoursLeft)} hours` : `${Math.round(hoursLeft / 24)} days`}
                 </span>
               </h2>

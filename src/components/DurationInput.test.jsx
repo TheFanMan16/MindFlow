@@ -17,7 +17,10 @@ function setup(props = {}) {
       {...props}
     />
   );
-  return { onCommit, input: screen.getByLabelText(/Duration/i) };
+  // getByRole rather than a label regex: the +/- steppers carry
+  // "Decrease/Increase <label>" aria-labels, so a /Duration/ regex now
+  // matches three controls. The number input is the only spinbutton.
+  return { onCommit, input: screen.getByRole('spinbutton') };
 }
 
 /** Types a string one character at a time, as a real user would. */
@@ -139,6 +142,48 @@ describe('DurationInput', () => {
     render(
       <DurationInput label="Other" value={50} min={1} max={120} onCommit={vi.fn()} />
     );
-    expect(screen.getByLabelText(/Other/i)).toHaveValue(50);
+    // Exact string: "Decrease Other" / "Increase Other" (the steppers) must
+    // not match, only the labelled input itself.
+    expect(screen.getByLabelText('Other')).toHaveValue(50);
+  });
+
+  it('steps the value and commits immediately', () => {
+    const { input, onCommit } = setup();
+
+    fireEvent.click(screen.getByRole('button', { name: /Increase/i }));
+
+    // A stepper click is already commit-shaped intent - no blur needed.
+    expect(onCommit).toHaveBeenCalledWith(26);
+    expect(input).toHaveValue(26);
+  });
+
+  it('steps from the draft the user is mid-way through typing', () => {
+    const { input, onCommit } = setup();
+
+    typeSequence(input, '40');
+    fireEvent.click(screen.getByRole('button', { name: /Decrease/i }));
+
+    expect(onCommit).toHaveBeenCalledWith(39);
+  });
+
+  it('disables the steppers at the bounds', () => {
+    setup({ value: 1 });
+    expect(screen.getByRole('button', { name: /Decrease/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Increase/i })).toBeEnabled();
+  });
+
+  it('flags an out-of-range draft for assistive tech while typing', () => {
+    const { input } = setup();
+
+    typeSequence(input, '500');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.blur(input);
+    // Committed value is clamped into range, so the flag clears and the
+    // notice explains the adjustment instead.
+    expect(input).not.toHaveAttribute('aria-invalid');
+    expect(input.getAttribute('aria-describedby')).toBe(
+      screen.getByRole('alert').getAttribute('id')
+    );
   });
 });

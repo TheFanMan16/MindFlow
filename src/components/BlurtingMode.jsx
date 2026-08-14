@@ -8,22 +8,23 @@ import { downloadRecapImage } from '../utils/recapImage';
 import { saveGeneratedDeck } from '../utils/deckUtils';
 import { useAuth } from '../context/AuthContext';
 import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
-import { supabase } from '../lib/supabaseClient';
 import { capture } from '../lib/analytics';
 import { recordActivationMilestone } from '../utils/activation';
 import { toast } from 'react-hot-toast';
 import { validateAiInput, MIN_LENGTHS } from '../utils/aiInput';
 import { AiTimeoutError, AiCancelledError, AI_TIMEOUT_MESSAGE } from '../utils/aiFetch';
-import AiLoadingIndicator from './AiLoadingIndicator';
 import UpgradeModal from './UpgradeModal';
 import {
   Button,
   Card,
   Badge,
+  EmptyState,
   Tabs,
   Textarea,
   Field,
   Progress,
+  Skeleton,
+  SkeletonText,
   StepRail,
   Breadcrumb,
 } from './ui';
@@ -37,6 +38,7 @@ import {
   stepSlide,
   shake,
   snappy,
+  entrance,
   reduced,
 } from '../motion';
 
@@ -69,6 +71,118 @@ const reducedStep = {
   initial: { opacity: 0 },
   animate: { opacity: 1, transition: reduced },
   exit: { opacity: 0, transition: reduced },
+};
+
+const STATUS_ROTATE_MS = 3000;
+// After this long we level with the user about backend cold starts instead
+// of letting an unexplained wait erode trust.
+const COLD_START_NOTICE_MS = 8000;
+
+/**
+ * Local primitive: the analysis status line. Advances through the request
+ * narrative with an opacity-only crossfade - a one-shot transition per
+ * message change, never an animation loop. Plain text swap under reduced
+ * motion. aria-live so screen readers hear the progress too.
+ */
+const RotatingStatus = ({ message }) => {
+  const reduce = useReducedMotion();
+  if (reduce) {
+    return (
+      <p aria-live="polite" className="text-label-sm text-secondary">
+        {message}
+      </p>
+    );
+  }
+  return (
+    <div aria-live="polite" className="relative h-4 min-w-[16rem] overflow-hidden">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.p
+          key={message}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={entrance}
+          className="absolute inset-0 text-label-sm text-secondary"
+        >
+          {message}
+        </motion.p>
+      </AnimatePresence>
+    </div>
+  );
+};
+
+/**
+ * The AI-request lifecycle, loading chapter. No spinner: static skeletons
+ * shaped exactly like the report card (160px ring + grade column + summary
+ * line) and the missing-concepts list that will replace them, so nothing
+ * jumps when results land. A status line narrates the request, an honest
+ * cold-start notice appears after 8s, and Cancel is the one escape hatch.
+ */
+const AnalysisPending = ({ onCancel }) => {
+  const [statusIndex, setStatusIndex] = useState(0);
+  const [showColdStartNotice, setShowColdStartNotice] = useState(false);
+
+  useEffect(() => {
+    // Steps through the request narrative ONCE and parks on the last
+    // message - recycled copy reads as a stall, and nothing in this
+    // system loops. The interval clears itself once parked.
+    const lastIndex = ANALYSIS_STATUS_MESSAGES.length - 1;
+    let step = 0;
+    const rotate = setInterval(() => {
+      step = Math.min(step + 1, lastIndex);
+      setStatusIndex(step);
+      if (step === lastIndex) clearInterval(rotate);
+    }, STATUS_ROTATE_MS);
+    const coldStart = setTimeout(() => setShowColdStartNotice(true), COLD_START_NOTICE_MS);
+    return () => {
+      clearInterval(rotate);
+      clearTimeout(coldStart);
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true">
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <RotatingStatus message={ANALYSIS_STATUS_MESSAGES[statusIndex]} />
+          {onCancel && (
+            <Button variant="ghost" size="sm" mono onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
+        </div>
+        {/* Same geometry as the report card: 160px ring, grade column, summary */}
+        <div className="flex flex-wrap items-center justify-center gap-x-14 gap-y-6 py-4">
+          <Skeleton className="h-[160px] w-[160px]" />
+          <div className="flex flex-col items-center gap-2">
+            <Skeleton className="h-3.5 w-12" />
+            <Skeleton className="h-12 w-10" />
+          </div>
+        </div>
+        <div className="mt-4 border-t border-line pt-4">
+          <SkeletonText lines={2} />
+        </div>
+        {showColdStartNotice && (
+          <p className="mt-4 text-body-sm text-secondary">
+            First request of the day can take up to a minute — we're waking the AI up.
+          </p>
+        )}
+      </Card>
+
+      {/* Missing-concepts placeholder: label row + three concept-row blocks */}
+      <Card className="p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <Skeleton className="h-3.5 w-32" />
+          <Skeleton className="h-5 w-8" />
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <Skeleton className="h-[60px] w-full" />
+          <Skeleton className="h-[60px] w-full" />
+          <Skeleton className="h-[60px] w-full" />
+        </div>
+      </Card>
+    </div>
+  );
 };
 
 const BlurtingMode = () => {
@@ -202,7 +316,7 @@ const BlurtingMode = () => {
 
   const handleAIAnalysis = async () => {
     if (!user?.id) {
-      alert('Please log in to use AI features.');
+      toast.error('Log in to use AI features.');
       return;
     }
 
@@ -632,7 +746,15 @@ ${sourceText.slice(0, 6000)}`;
                     {aiScore !== null && (
                       <Badge variant={scoreTone(aiScore)}>Recall: {aiScore}%</Badge>
                     )}
-                    <Button variant="secondary" size="sm" mono onClick={handleReset}>
+                    {/* Locked while a request is in flight - resetting mid-flight
+                        would orphan the response. */}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      mono
+                      onClick={handleReset}
+                      disabled={isAnalyzing || isGeneratingMissCards}
+                    >
                       Start Over
                     </Button>
                   </div>
@@ -667,7 +789,14 @@ ${sourceText.slice(0, 6000)}`;
                       Your Attempt
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap text-body-sm leading-relaxed text-primary">
-                      {userAttempt || '(Empty)'}
+                      {userAttempt.trim() ? (
+                        userAttempt
+                      ) : (
+                        <span className="text-tertiary">
+                          You didn't write anything before the timer ended — Start Over runs
+                          another round.
+                        </span>
+                      )}
                     </div>
                   </Card>
                 </div>
@@ -708,19 +837,27 @@ ${sourceText.slice(0, 6000)}`;
                   );
                 })()}
 
-                {isAnalyzing && (
-                  <Card className="p-6">
-                    <AiLoadingIndicator
-                      messages={ANALYSIS_STATUS_MESSAGES}
-                      accent="var(--tint-recall)"
-                      onCancel={() => abortRef.current?.abort()}
-                    />
-                  </Card>
-                )}
+                {isAnalyzing && <AnalysisPending onCancel={() => abortRef.current?.abort()} />}
 
                 {aiFeedback && !isAnalyzing && (
-                  aiFeedback.length === 0 || aiScore === 100 ? (
-                    // Perfect Recall Celebration
+                  aiScore === null && aiFeedback.length === 0 && (!aiQuiz || aiQuiz.length === 0) ? (
+                    // The AI answered but produced nothing gradeable: no score,
+                    // no missed concepts, no quiz. Name it and offer the one fix.
+                    <EmptyState
+                      title="The analysis came back empty"
+                      description="The AI couldn't grade this attempt."
+                      action={
+                        <Button variant="secondary" mono onClick={handleAIAnalysis}>
+                          Run the analysis again
+                        </Button>
+                      }
+                    />
+                  ) : aiScore === 100 || (aiScore === null && aiFeedback.length === 0) ? (
+                    // Perfect Recall celebration - earned only by a real 100,
+                    // or a response carrying no score at all alongside zero
+                    // misses. A lower score with an empty miss list falls
+                    // through to the report card so the real number renders
+                    // (and gets shared).
                     <Card className="flex flex-col items-center gap-4 p-8 text-center">
                       <CountRing value={1} size={160} strokeWidth={6} tone="success">
                         <div className="flex items-baseline gap-1">
@@ -739,8 +876,10 @@ ${sourceText.slice(0, 6000)}`;
                     </Card>
                   ) : (
                     <>
-                      {/* Report Card: the screenshot moment */}
-                      {aiGrade && aiScore !== null && (
+                      {/* Report Card: the screenshot moment. Guarded on the
+                          score alone - a graded number must render even when
+                          the letter grade went missing. */}
+                      {aiScore !== null && (
                         <Card className="p-6">
                           <div className="flex flex-wrap items-center justify-center gap-x-14 gap-y-6 py-4">
                             <CountRing
@@ -759,21 +898,23 @@ ${sourceText.slice(0, 6000)}`;
                               </div>
                             </CountRing>
 
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="text-label-sm text-secondary">
-                                Grade
-                              </span>
-                              {/* Stamps in after the ring starts drawing */}
-                              <motion.span
-                                initial={reduce ? { opacity: 0 } : { scale: 1.3, opacity: 0 }}
-                                animate={reduce ? { opacity: 1 } : { scale: 1, opacity: 1 }}
-                                transition={reduce ? reduced : { ...snappy, delay: 0.35 }}
-                                className="text-display leading-none"
-                                style={{ color: TONE_VARS[scoreTone(aiScore)] }}
-                              >
-                                {aiGrade}
-                              </motion.span>
-                            </div>
+                            {aiGrade && (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-label-sm text-secondary">
+                                  Grade
+                                </span>
+                                {/* Stamps in after the ring starts drawing */}
+                                <motion.span
+                                  initial={reduce ? { opacity: 0 } : { scale: 1.3, opacity: 0 }}
+                                  animate={reduce ? { opacity: 1 } : { scale: 1, opacity: 1 }}
+                                  transition={reduce ? reduced : { ...snappy, delay: 0.35 }}
+                                  className="text-display leading-none"
+                                  style={{ color: TONE_VARS[scoreTone(aiScore)] }}
+                                >
+                                  {aiGrade}
+                                </motion.span>
+                              </div>
+                            )}
                           </div>
 
                           {aiSummary && (
@@ -847,6 +988,9 @@ ${sourceText.slice(0, 6000)}`;
                                 {missDeck.cardCount} cards saved — open your flashcards
                               </Button>
                             ) : (
+                              // Loading contract: full width held, label swaps to
+                              // the in-progress verb, aria-busy set, pointer
+                              // events off via disabled. No spinner.
                               <Button
                                 variant="primary"
                                 size="lg"
@@ -854,6 +998,7 @@ ${sourceText.slice(0, 6000)}`;
                                 className="w-full"
                                 onClick={handleTurnMissesIntoCards}
                                 disabled={isGeneratingMissCards}
+                                aria-busy={isGeneratingMissCards || undefined}
                               >
                                 {isGeneratingMissCards
                                   ? 'Building cards from your misses…'
@@ -890,7 +1035,7 @@ ${sourceText.slice(0, 6000)}`;
                                   const showResult = quizAnswers[questionIndex] !== undefined;
 
                                   let stateClasses =
-                                    'border-line bg-canvas text-primary hover:border-strong hover:bg-hover';
+                                    'border-line bg-canvas text-primary hover:border-strong hover:bg-hover active:bg-active';
                                   let stateStyle;
                                   if (showResult) {
                                     if (isCorrect) {
@@ -922,9 +1067,10 @@ ${sourceText.slice(0, 6000)}`;
                                       disabled={showResult}
                                       style={stateStyle}
                                       className={[
+                                        // Focus comes from the global :focus-visible ring -
+                                        // no per-component override.
                                         'flex items-center gap-3 rounded-sm border px-4 py-3 text-left text-body-sm font-medium',
                                         'transition-colors duration-150',
-                                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
                                         showResult ? 'cursor-default' : '',
                                         stateClasses,
                                       ].join(' ')}

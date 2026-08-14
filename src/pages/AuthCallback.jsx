@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { Card, Button } from '../components/ui';
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -94,28 +95,34 @@ const AuthCallback = () => {
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center bg-canvas p-6">
       {error ? (
+        /* Error: the failure message, what happens next, and an immediate
+           way out - the auto-redirect still fires as a fallback. */
         <div
           role="alert"
-          className="w-full max-w-[400px] rounded-lg border border-danger-line bg-danger-wash p-6 text-center"
+          className="flex w-full max-w-[400px] flex-col items-center rounded-lg border border-danger-line bg-danger-wash p-6 text-center"
         >
           <p className="text-body-sm text-danger">{error}</p>
           <p className="mt-2 text-label-sm text-secondary">
-            Redirecting to login...
+            Sending you back to sign in…
           </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-4"
+            onClick={() => navigate('/login', { replace: true })}
+          >
+            Back to sign in now
+          </Button>
         </div>
       ) : (
-        <div className="flex flex-col items-center text-center">
-          <span
-            aria-hidden="true"
-            className="h-8 w-8 animate-spin rounded-pill border-2 border-strong border-t-transparent motion-reduce:animate-none"
-          />
-          <p className="mt-4 text-label-sm text-secondary">
-            Completing sign in...
+        /* Loading: static by rule (no spinner, nothing loops). This page is
+           transient - it resolves into a redirect, so words carry the state. */
+        <Card className="w-full max-w-[400px] p-6 text-center" aria-busy="true">
+          <p className="text-body font-medium text-primary">Completing sign in…</p>
+          <p className="mt-1.5 text-body-sm text-secondary">
+            Confirming your session — you'll land on the dashboard in a moment.
           </p>
-          <p className="mt-2 text-body-sm text-secondary">
-            Please wait while we authenticate you.
-          </p>
-        </div>
+        </Card>
       )}
     </div>
   );

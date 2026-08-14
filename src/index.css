@@ -56,11 +56,14 @@
     font-variant-numeric: tabular-nums slashed-zero;
   }
 
-  /* One focus treatment for the whole app: the accent hairline. */
-  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-    outline: 1px solid var(--accent);
+  /* One focus treatment for the whole app: a 2px accent ring at 45%
+     opacity, offset 2px. Outline follows the element's own border-radius,
+     so every control keeps its shape. :focus-visible only - pointer focus
+     stays quiet. Components must never re-declare or suppress this. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: 2px; /* fallback shape for radius-less inline links only */
   }
 
   ::selection {

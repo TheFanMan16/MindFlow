@@ -23,8 +23,10 @@ describe('NotFound', () => {
   it('says plainly that the page does not exist', () => {
     renderAt('/this-page-does-not-exist-12345');
 
-    expect(screen.getByText('404')).toBeInTheDocument();
     expect(screen.getByText(/doesn't exist/i)).toBeInTheDocument();
+    // The old oversized "404" numeral was decoration off the type scale;
+    // the sentence carries the information now, so the numeral must stay gone.
+    expect(screen.queryByText('404')).toBeNull();
   });
 
   it('shows which path failed, so a typo is distinguishable from a bug', () => {

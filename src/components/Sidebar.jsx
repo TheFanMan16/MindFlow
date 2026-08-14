@@ -17,6 +17,13 @@ import { Popover, PopoverItem, PopoverSeparator, Button } from './ui';
  * items on navigation - the shell's signature micro-interaction. Rail and
  * tab bar carry separate layoutIds; only one is visible at a time.
  *
+ * Nav item state model: default text-secondary · hover bg-hover fill at
+ * duration-micro · pressed bg-active · focus rides the app-wide ring (no
+ * local overrides, so index.css shows through) · the active route is marked
+ * by MORE than color - raised pill + hairline border + font-medium label +
+ * aria-current, so it survives grayscale. Items can carry `disabled: true`
+ * and drop out of the pointer and tab order in text-disabled.
+ *
  * Flat by law: bg-surface surface, hairline right border, 18px/1.5 Lucide
  * icons, accent for the active item. No glows, no per-mode colors.
  */
@@ -86,7 +93,7 @@ const Sidebar = () => {
           type="button"
           onClick={() => navigate('/dashboard')}
           className="flex h-14 items-center gap-2.5 border-b border-line px-[22px]
-                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+                     transition-colors duration-micro hover:bg-hover active:bg-active"
           aria-label="MindFlow home"
         >
           <Lightbulb size={20} strokeWidth={1.5} className="shrink-0 text-accent" />
@@ -103,11 +110,13 @@ const Sidebar = () => {
                 key={item.path}
                 type="button"
                 onClick={() => navigate(item.path)}
+                disabled={item.disabled}
                 aria-label={item.label}
                 aria-current={active ? 'page' : undefined}
                 className="relative flex h-9 items-center gap-3 rounded-sm px-2.5
-                           transition-colors duration-150
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+                           after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-['']
+                           transition-colors duration-micro
+                           hover:bg-hover active:bg-active disabled:pointer-events-none"
               >
                 {active ? (
                   <motion.span
@@ -120,13 +129,17 @@ const Sidebar = () => {
                 <Icon
                   size={18}
                   strokeWidth={1.5}
-                  className={`relative z-10 shrink-0 transition-colors duration-150 ${
-                    active ? 'text-accent' : 'text-secondary'
+                  className={`relative z-10 shrink-0 transition-colors duration-micro ${
+                    item.disabled ? 'text-disabled' : active ? 'text-accent' : 'text-secondary'
                   }`}
                 />
                 <span
                   className={`relative z-10 hidden text-body-sm nav:block ${
-                    active ? 'font-medium text-primary' : 'text-secondary'
+                    item.disabled
+                      ? 'text-disabled'
+                      : active
+                        ? 'font-medium text-primary'
+                        : 'text-secondary'
                   }`}
                 >
                   {item.label}
@@ -143,8 +156,7 @@ const Sidebar = () => {
               <button
                 type="button"
                 className="flex w-full items-center gap-2.5 rounded-sm px-2 py-2 transition-colors
-                           duration-150 hover:bg-hover focus-visible:outline-none
-                           focus-visible:ring-2 focus-visible:ring-accent-ring"
+                           duration-micro hover:bg-hover active:bg-active"
               >
                 <Avatar />
                 <span className="hidden min-w-0 flex-1 truncate text-left text-label-sm text-secondary nav:block">
@@ -165,8 +177,8 @@ const Sidebar = () => {
                 onClick={() => navigate('/login')}
                 aria-label="Sign in"
                 className="flex h-9 w-full items-center justify-center rounded-sm text-secondary
-                           transition-colors duration-150 hover:bg-hover hover:text-primary
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring nav:hidden"
+                           transition-colors duration-micro hover:bg-hover hover:text-primary
+                           active:bg-active nav:hidden"
               >
                 <LogIn size={18} strokeWidth={1.5} />
               </button>
@@ -193,7 +205,7 @@ const Sidebar = () => {
                 aria-label={item.label}
                 aria-current={active ? 'page' : undefined}
                 className="relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-2
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+                           transition-colors duration-micro active:bg-active"
               >
                 {active ? (
                   <motion.span

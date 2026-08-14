@@ -1,9 +1,18 @@
 import React from 'react';
 
 /**
- * Empty states say three things: what this space is for, why it is empty,
- * and the one action that fills it. No illustration clutter - an optional
- * icon slot in a soft frame, then words that do the work.
+ * The empty treatment, one shape everywhere: a single sentence naming what
+ * is missing (title), then the ONE action that resolves it. `description`
+ * is an optional second clause for when the sentence genuinely needs a
+ * "why" - not a paragraph slot. Never a blank box, never a bare "No data",
+ * no illustrations; the optional lucide icon in its soft frame is the only
+ * ornament.
+ *
+ * `action` must be exactly one element (React.Children.only enforces it) -
+ * a row of choices is a menu, not an empty state. When the resolving action
+ * lives elsewhere on the page (e.g. the primary CTA already in view - the
+ * same CTA never appears twice in one viewport), omit `action` and let the
+ * title point at it.
  */
 export const EmptyState = ({ icon, title, description, action, className = '' }) => (
   <div
@@ -18,7 +27,7 @@ export const EmptyState = ({ icon, title, description, action, className = '' })
     {description ? (
       <p className="mt-1.5 max-w-[36ch] text-body-sm text-secondary">{description}</p>
     ) : null}
-    {action ? <div className="mt-5">{action}</div> : null}
+    {action ? <div className="mt-5">{React.Children.only(action)}</div> : null}
   </div>
 );
 

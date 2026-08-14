@@ -60,7 +60,7 @@ export const CountRing = ({
           r={r}
           fill="none"
           strokeWidth={strokeWidth}
-          style={{ stroke: 'var(--border-line)' }}
+          style={{ stroke: 'var(--bg-inset)' }}
         />
         <motion.circle
           cx={size / 2}

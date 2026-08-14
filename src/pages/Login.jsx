@@ -18,14 +18,6 @@ const Wordmark = () => (
   </span>
 );
 
-/** Inline button spinner. */
-const Spinner = () => (
-  <span
-    aria-hidden="true"
-    className="inline-block h-4 w-4 animate-spin rounded-pill border-2 border-strong border-t-transparent motion-reduce:animate-none"
-  />
-);
-
 /** Google brand mark - brand fills kept so the logo stays recognizable. */
 const GoogleIcon = () => (
   <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
@@ -66,8 +58,26 @@ const DiscordIcon = () => (
   </svg>
 );
 
+/**
+ * The three OAuth providers, one config each. Google carries extra
+ * queryParams (offline access + consent) so account linking for the same
+ * email works; the others need only the redirect.
+ */
+const PROVIDERS = [
+  {
+    id: 'google',
+    label: 'Google',
+    Icon: GoogleIcon,
+    options: { queryParams: { access_type: 'offline', prompt: 'consent' } },
+  },
+  { id: 'github', label: 'GitHub', Icon: GitHubIcon, options: {} },
+  { id: 'discord', label: 'Discord', Icon: DiscordIcon, options: {} },
+];
+
 const Login = () => {
-  const [isLoading, setIsLoading] = useState(false);
+  // Which provider button is mid-redirect (null = none). Per-provider so
+  // only the pressed button reads busy; the other two just disable.
+  const [loadingProvider, setLoadingProvider] = useState(null);
   const [error, setError] = useState(null);
   const reduce = useReducedMotion();
 
@@ -78,100 +88,33 @@ const Login = () => {
     if (error) setShakeCount((c) => c + 1);
   }, [error]);
 
-  // Handle Google OAuth
-  const handleGoogleLogin = async () => {
-    capture('signup_started', { provider: 'google' });
+  const handleOAuthLogin = async ({ id, label, options }) => {
+    capture('signup_started', { provider: id });
     setError(null);
-    setIsLoading(true);
+    setLoadingProvider(id);
 
     try {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: id,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          // Enable account linking for same email
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          ...options,
         },
       });
 
       if (oauthError) {
-        const errorMsg = oauthError.message || 'Google sign-in failed';
+        const errorMsg = oauthError.message || `${label} sign-in failed`;
         setError(errorMsg);
         toast.error(errorMsg);
-        setIsLoading(false);
+        setLoadingProvider(null);
       }
       // OAuth redirects automatically, so we don't need to navigate manually
     } catch (err) {
       console.error('OAuth error:', err);
-      const errorMsg = err.message || 'OAuth sign-in failed';
+      const errorMsg = err.message || `${label} sign-in failed`;
       setError(errorMsg);
       toast.error(errorMsg);
-      setIsLoading(false);
-    }
-  };
-
-  // Handle GitHub OAuth
-  const handleGitHubLogin = async () => {
-    capture('signup_started', { provider: 'github' });
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          // Enable account linking for same email
-        },
-      });
-
-      if (oauthError) {
-        const errorMsg = oauthError.message || 'GitHub sign-in failed';
-        setError(errorMsg);
-        toast.error(errorMsg);
-        setIsLoading(false);
-      }
-      // OAuth redirects automatically, so we don't need to navigate manually
-    } catch (err) {
-      console.error('OAuth error:', err);
-      const errorMsg = err.message || 'OAuth sign-in failed';
-      setError(errorMsg);
-      toast.error(errorMsg);
-      setIsLoading(false);
-    }
-  };
-
-  // Handle Discord OAuth
-  const handleDiscordLogin = async () => {
-    capture('signup_started', { provider: 'discord' });
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'discord',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          // Enable account linking for same email
-        },
-      });
-
-      if (oauthError) {
-        const errorMsg = oauthError.message || 'Discord sign-in failed';
-        setError(errorMsg);
-        toast.error(errorMsg);
-        setIsLoading(false);
-      }
-      // OAuth redirects automatically, so we don't need to navigate manually
-    } catch (err) {
-      console.error('OAuth error:', err);
-      const errorMsg = err.message || 'OAuth sign-in failed';
-      setError(errorMsg);
-      toast.error(errorMsg);
-      setIsLoading(false);
+      setLoadingProvider(null);
     }
   };
 
@@ -195,77 +138,34 @@ const Login = () => {
             {error && (
               <div
                 role="alert"
-                className="mb-4 rounded-lg border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger"
+                className="mb-4 rounded-sm border border-danger-line bg-danger-wash px-4 py-3 text-body-sm text-danger"
               >
                 {error}
               </div>
             )}
 
-            <Stagger.Item className="mb-3">
-              <Button
-                variant="secondary"
-                size="lg"
-                className="w-full"
-                onClick={handleGoogleLogin}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Spinner />
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    <GoogleIcon />
-                    Sign in with Google
-                  </>
-                )}
-              </Button>
-            </Stagger.Item>
-
-            <Stagger.Item className="mb-3">
-              <Button
-                variant="secondary"
-                size="lg"
-                className="w-full"
-                onClick={handleGitHubLogin}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Spinner />
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    <GitHubIcon />
-                    Sign in with GitHub
-                  </>
-                )}
-              </Button>
-            </Stagger.Item>
-
-            <Stagger.Item>
-              <Button
-                variant="secondary"
-                size="lg"
-                className="w-full"
-                onClick={handleDiscordLogin}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Spinner />
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    <DiscordIcon />
-                    Sign in with Discord
-                  </>
-                )}
-              </Button>
-            </Stagger.Item>
+            {PROVIDERS.map((provider, i) => {
+              const { id, label, Icon } = provider;
+              const busy = loadingProvider === id;
+              return (
+                <Stagger.Item key={id} className={i < PROVIDERS.length - 1 ? 'mb-3' : ''}>
+                  {/* Loading per the loading-button spec: full width held, label
+                      swaps to the in-progress verb, aria-busy set, no spinner
+                      glyph. The untouched buttons just disable. */}
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    className="w-full"
+                    onClick={() => handleOAuthLogin(provider)}
+                    disabled={loadingProvider !== null}
+                    aria-busy={busy || undefined}
+                  >
+                    <Icon />
+                    {busy ? `Redirecting to ${label}...` : `Sign in with ${label}`}
+                  </Button>
+                </Stagger.Item>
+              );
+            })}
 
             <Stagger.Item>
               <p className="mt-6 text-center text-body-sm text-secondary">

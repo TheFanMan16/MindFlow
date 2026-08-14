@@ -6,10 +6,17 @@ import React from 'react';
  * This is the one implementation they migrate onto; for the animated
  * draw-on-reveal variant use motion/CountRing, which shares this geometry.
  *
- * `tone` maps to semantic colors only. Feature hues do not belong on rings.
+ * Track stroke is var(--bg-inset), the same well color the linear Progress
+ * track uses (the previous var(--border-line) resolved to nothing; no such
+ * token exists). `tone` maps to semantic colors only - feature hues do not
+ * belong on rings. A readout, not a control: no hover/focus/pressed states;
+ * value 0 renders the bare track, which IS the empty state.
  */
 const TONES = {
   accent: 'var(--accent)',
+  positive: 'var(--positive)',
+  negative: 'var(--negative)',
+  /* legacy tone names - same tokens, kept until call sites are swept */
   success: 'var(--positive)',
   danger: 'var(--negative)',
   warning: 'var(--warning)',
@@ -20,6 +27,7 @@ export const ProgressRing = ({
   size = 72,
   strokeWidth = 5,
   tone = 'accent',
+  label,
   className = '',
   children,
 }) => {
@@ -35,6 +43,7 @@ export const ProgressRing = ({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(clamped * 100)}
+      aria-label={label}
     >
       <svg width={size} height={size} className="-rotate-90">
         <circle
@@ -43,7 +52,7 @@ export const ProgressRing = ({
           r={r}
           fill="none"
           strokeWidth={strokeWidth}
-          style={{ stroke: 'var(--border-line)' }}
+          style={{ stroke: 'var(--bg-inset)' }}
         />
         <circle
           cx={size / 2}
