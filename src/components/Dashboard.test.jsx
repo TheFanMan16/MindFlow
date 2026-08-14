@@ -98,8 +98,8 @@ describe('Dashboard (zone architecture)', () => {
       profiles: { data: { streak_count: 5, total_focus_minutes: 240 }, error: null },
       decks: {
         data: [
-          { id: 'd1', name: 'Biochemistry', updated_at: iso(0) }, // fresh
-          { id: 'd2', name: 'Pharmacology', updated_at: iso(100) }, // dormant
+          { id: 'd1', title: 'Biochemistry', updated_at: iso(0) }, // fresh
+          { id: 'd2', title: 'Pharmacology', updated_at: iso(100) }, // dormant
         ],
         error: null,
       },

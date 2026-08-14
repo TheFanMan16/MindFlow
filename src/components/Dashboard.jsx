@@ -106,7 +106,7 @@ const Dashboard = () => {
   const [weeklyMomentum, setWeeklyMomentum] = useState(0);
   const [activeDays, setActiveDays] = useState([]);
   const [dailyMinutes, setDailyMinutes] = useState({}); // dateKey -> minutes
-  const [decks, setDecks] = useState([]); // {id, name, updated_at, total, matured, inProgress, due}
+  const [decks, setDecks] = useState([]); // {id, title, updated_at, total, matured, inProgress, due}
   const [examSaving, setExamSaving] = useState(null); // topic id mid-save
   const [examError, setExamError] = useState(null); // topic id whose save failed
 
@@ -194,7 +194,7 @@ const Dashboard = () => {
           { data: cardRows, error: cardError },
           { data: activityRows, error: activityError },
         ] = await Promise.all([
-          supabase.from('decks').select('id, name, updated_at').eq('user_id', userId),
+          supabase.from('decks').select('id, title, updated_at').eq('user_id', userId),
           supabase.from('flashcards').select('deck_id, box, next_review').eq('user_id', userId).limit(2000),
           supabase
             .from('daily_activity')
@@ -670,7 +670,7 @@ const Dashboard = () => {
                                      ${stalenessRowClass(tier)}`}
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-title-sm text-primary">{deck.name}</p>
+                            <p className="truncate text-title-sm text-primary">{deck.title || 'Untitled Deck'}</p>
                           </div>
                           {/* Tertiary fails 4.5:1 on bg-hover/bg-active, so the
                               row's `group` promotes tertiary-base labels to
