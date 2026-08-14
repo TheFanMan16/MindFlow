@@ -16,6 +16,11 @@ begin;
 --    defaults are (re)asserted explicitly below - restricted INSERTs
 --    (id, email only) must succeed even if live columns lack defaults.
 -- ------------------------------------------------------------------
+-- 001 declares full_name/avatar_url but the live table (created via the
+-- dashboard) lacks them - verified by a 42703 on first run of this script.
+alter table public.profiles add column if not exists full_name text;
+alter table public.profiles add column if not exists avatar_url text;
+
 alter table public.profiles add column if not exists is_pro boolean not null default false;
 alter table public.profiles add column if not exists is_admin boolean not null default false;
 alter table public.profiles add column if not exists ai_usage_count integer not null default 0;
