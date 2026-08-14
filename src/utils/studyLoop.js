@@ -2,9 +2,11 @@
  * The closed study loop's data layer: topics, focus sessions, recall attempts,
  * due cards and per-topic mastery.
  *
- * Every function here degrades gracefully (returns empty/null instead of
- * throwing) so the UI keeps working if the 005_study_loop migration has not
- * been applied yet - the loop features simply stay dormant.
+ * Write paths degrade gracefully (return empty/null instead of throwing) so a
+ * timer callback can never crash on a failed insert. Read paths accept
+ * `throwOnError` so the dashboard can tell "no data" apart from "query
+ * failed" - silently returning [] on error is how four missing production
+ * tables went unnoticed until 007_restore_study_loop found them.
  */
 import { supabase } from '../lib/supabaseClient';
 
@@ -16,7 +18,7 @@ const devError = (...args) => {
 // Topics
 // ============================================================
 
-export async function getTopics(userId) {
+export async function getTopics(userId, { throwOnError = false } = {}) {
   if (!userId) return [];
   try {
     const { data, error } = await supabase
@@ -27,6 +29,7 @@ export async function getTopics(userId) {
     if (error) throw error;
     return data || [];
   } catch (err) {
+    if (throwOnError) throw err;
     devError('getTopics failed:', err);
     return [];
   }
@@ -113,7 +116,7 @@ export async function recordFocusSession(userId, { title, topicId, mode, duratio
   }
 }
 
-export async function getRecentFocusSessions(userId, limit = 50) {
+export async function getRecentFocusSessions(userId, limit = 50, { throwOnError = false } = {}) {
   if (!userId) return [];
   try {
     const { data, error } = await supabase
@@ -125,6 +128,7 @@ export async function getRecentFocusSessions(userId, limit = 50) {
     if (error) throw error;
     return data || [];
   } catch (err) {
+    if (throwOnError) throw err;
     devError('getRecentFocusSessions failed:', err);
     return [];
   }
@@ -157,7 +161,7 @@ export async function recordRecallAttempt(userId, { topicId, score, grade, summa
   }
 }
 
-export async function getRecentRecallAttempts(userId, limit = 100) {
+export async function getRecentRecallAttempts(userId, limit = 100, { throwOnError = false } = {}) {
   if (!userId) return [];
   try {
     const { data, error } = await supabase
@@ -169,6 +173,7 @@ export async function getRecentRecallAttempts(userId, limit = 100) {
     if (error) throw error;
     return data || [];
   } catch (err) {
+    if (throwOnError) throw err;
     devError('getRecentRecallAttempts failed:', err);
     return [];
   }
@@ -179,25 +184,21 @@ export async function getRecentRecallAttempts(userId, limit = 100) {
 // ============================================================
 
 /**
- * Cards whose next_review has arrived. New cards (never reviewed) are not
- * "due" - they enter the schedule after their first study session.
+ * COUNT of cards whose next_review has arrived. A head-only count query: no
+ * rows ship to the browser and no row-limit can silently truncate the number
+ * (the old row-fetch capped at 200 and quietly under-reported past it).
+ * Cards with next_review NULL are excluded by the lte filter itself.
+ * Throws on query error - the dashboard owns per-zone error truth.
  */
-export async function getDueCards(userId, { limit = 200 } = {}) {
-  if (!userId) return [];
-  try {
-    const { data, error } = await supabase
-      .from('flashcards')
-      .select('id, deck_id, front, back, box, next_review')
-      .eq('user_id', userId)
-      .lte('next_review', new Date().toISOString())
-      .order('next_review', { ascending: true })
-      .limit(limit);
-    if (error) throw error;
-    return data || [];
-  } catch (err) {
-    devError('getDueCards failed:', err);
-    return [];
-  }
+export async function getDueCount(userId) {
+  if (!userId) return 0;
+  const { count, error } = await supabase
+    .from('flashcards')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .lte('next_review', new Date().toISOString());
+  if (error) throw error;
+  return count || 0;
 }
 
 /**
@@ -318,14 +319,15 @@ export function countActiveDaysThisWeek(dateKeys, today = new Date()) {
  * Every local day key with ANY completed loop activity: a focus session,
  * a recall attempt, or a day with recorded focus minutes.
  */
-export async function getLoopActiveDays(userId) {
+export async function getLoopActiveDays(userId, { throwOnError = false } = {}) {
   if (!userId) return [];
   try {
     const [sessions, attempts, activityResult] = await Promise.all([
-      getRecentFocusSessions(userId, 400),
-      getRecentRecallAttempts(userId, 400),
+      getRecentFocusSessions(userId, 400, { throwOnError }),
+      getRecentRecallAttempts(userId, 400, { throwOnError }),
       supabase.from('daily_activity').select('date').eq('user_id', userId),
     ]);
+    if (throwOnError && activityResult.error) throw activityResult.error;
 
     return [
       ...sessions.map((s) => toLocalDateKey(s.started_at)),
@@ -334,6 +336,7 @@ export async function getLoopActiveDays(userId) {
       ...((activityResult.data || []).map((row) => row.date)),
     ];
   } catch (err) {
+    if (throwOnError) throw err;
     devError('getLoopActiveDays failed:', err);
     return [];
   }
@@ -397,19 +400,24 @@ export function computeMastery({ recallScores = [], cardBoxes = [], sessionCount
  * [{ topic, mastery, recallTrend }] sorted by most recent activity.
  * recallTrend is the topic's recall scores oldest→newest for a sparkline.
  */
-export async function getTopicMastery(userId) {
+export async function getTopicMastery(userId, { throwOnError = false } = {}) {
   if (!userId) return [];
   try {
     const [topics, attempts] = await Promise.all([
-      getTopics(userId),
-      getRecentRecallAttempts(userId),
+      getTopics(userId, { throwOnError }),
+      getRecentRecallAttempts(userId, 100, { throwOnError }),
     ]);
     if (topics.length === 0) return [];
 
-    const [{ data: decks }, { data: sessions }] = await Promise.all([
+    const [decksResult, sessionsResult] = await Promise.all([
       supabase.from('decks').select('id, topic_id').eq('user_id', userId).not('topic_id', 'is', null),
       supabase.from('focus_sessions').select('id, topic_id').eq('user_id', userId).not('topic_id', 'is', null),
     ]);
+    if (throwOnError && (decksResult.error || sessionsResult.error)) {
+      throw decksResult.error || sessionsResult.error;
+    }
+    const { data: decks } = decksResult;
+    const { data: sessions } = sessionsResult;
 
     const deckIdsByTopic = new Map();
     (decks || []).forEach((d) => {
@@ -420,10 +428,11 @@ export async function getTopicMastery(userId) {
     const allDeckIds = (decks || []).map((d) => d.id);
     let cardsByDeck = new Map();
     if (allDeckIds.length > 0) {
-      const { data: cards } = await supabase
+      const { data: cards, error: cardsError } = await supabase
         .from('flashcards')
         .select('deck_id, box')
         .in('deck_id', allDeckIds);
+      if (throwOnError && cardsError) throw cardsError;
       (cards || []).forEach((c) => {
         if (!cardsByDeck.has(c.deck_id)) cardsByDeck.set(c.deck_id, []);
         cardsByDeck.get(c.deck_id).push(c.box || 1);
@@ -449,6 +458,7 @@ export async function getTopicMastery(userId) {
       })
       .filter((entry) => entry.mastery !== null);
   } catch (err) {
+    if (throwOnError) throw err;
     devError('getTopicMastery failed:', err);
     return [];
   }

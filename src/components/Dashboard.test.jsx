@@ -6,19 +6,21 @@ import { MemoryRouter } from 'react-router-dom';
  * Tests for the zone-architecture Dashboard.
  *
  * The page renders four zones (A: state of things, B: continuity strip,
- * C: deck rows, D: recessed topics) plus the non-data states the design
- * system requires: static per-zone skeletons while loading, one sentence +
- * a secondary Retry when the fetch fails, and a one-sentence + one-action
- * empty state when the user has data but zero decks. None of that is
- * type-checked - a broken import or a misused primitive fails at render,
- * not at build - so these mount the real tree and assert each state.
+ * C: deck rows, D: recessed topics). Data comes from six INDEPENDENT
+ * sources with allSettled semantics: each zone paints once when its own
+ * sources settle, shows a zone-scoped error naming only what actually
+ * failed, and a failure in one zone never blanks another zone's data.
+ * None of that is type-checked - these mount the real tree and assert
+ * each state.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const iso = (daysAgo) => new Date(Date.now() - daysAgo * DAY_MS).toISOString();
 
-// Per-table results, mutable per test. `fail` makes every query reject so
-// the fetch-error path can be exercised and then recovered from via Retry.
+// Per-table results, mutable per test. `fail` makes every supabase query
+// reject so partial-failure behaviour can be exercised (the studyLoop
+// helpers are mocked separately and keep succeeding - which is the point:
+// their zones must keep rendering).
 const db = vi.hoisted(() => ({
   fail: false,
   tables: {},
@@ -26,7 +28,7 @@ const db = vi.hoisted(() => ({
 
 // Chainable Supabase double. Builder methods return the same object; the
 // object is thenable, so both `.maybeSingle()` and a bare `await` resolve -
-// matching how Dashboard queries profiles, decks, flashcards and activity.
+// matching how Dashboard queries profiles, deck_overview and activity.
 vi.mock('../lib/supabaseClient', () => {
   const result = (table) =>
     db.fail
@@ -60,7 +62,8 @@ vi.mock('../context/AuthContext', () => ({
 }));
 
 vi.mock('../utils/studyLoop', () => ({
-  getDueCards: vi.fn().mockResolvedValue([{ id: 'c1' }, { id: 'c2' }]),
+  // Server-side head count - no rows, no cap (see studyLoop.getDueCount).
+  getDueCount: vi.fn().mockResolvedValue(2),
   getTopicMastery: vi.fn().mockResolvedValue([
     {
       topic: { id: 't1', name: 'Organic Chemistry', exam_date: null },
@@ -81,6 +84,7 @@ vi.mock('../utils/studyLoop', () => ({
 vi.mock('../utils/notifications', () => ({ maybeNotifyDueCards: vi.fn() }));
 
 import Dashboard from './Dashboard';
+import { getDueCount, getLoopActiveDays } from '../utils/studyLoop';
 
 const renderDashboard = () =>
   render(
@@ -92,22 +96,34 @@ const renderDashboard = () =>
 describe('Dashboard (zone architecture)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getDueCount.mockResolvedValue(2);
+    getLoopActiveDays.mockResolvedValue([]);
     localStorage.clear();
     db.fail = false;
     db.tables = {
-      profiles: { data: { streak_count: 5, total_focus_minutes: 240 }, error: null },
-      decks: {
+      profiles: { data: { total_focus_minutes: 240 }, error: null },
+      // deck_overview: the per-deck aggregate view (one query, server-side
+      // counts, last_reviewed = MAX(flashcards.last_reviewed)).
+      deck_overview: {
         data: [
-          { id: 'd1', title: 'Biochemistry', updated_at: iso(0) }, // fresh
-          { id: 'd2', title: 'Pharmacology', updated_at: iso(100) }, // dormant
-        ],
-        error: null,
-      },
-      flashcards: {
-        data: [
-          { deck_id: 'd1', box: 4, next_review: iso(1) }, // mastered + due
-          { deck_id: 'd1', box: 1, next_review: iso(-1) }, // seen, in-progress
-          { deck_id: 'd2', box: 2, next_review: iso(2) }, // in-progress + due
+          {
+            id: 'd1',
+            title: 'Biochemistry',
+            last_reviewed: iso(0), // fresh
+            total: 2,
+            matured: 1,
+            in_progress: 1,
+            due: 1,
+          },
+          {
+            id: 'd2',
+            title: 'Pharmacology',
+            last_reviewed: iso(100), // dormant
+            total: 1,
+            matured: 0,
+            in_progress: 1,
+            due: 1,
+          },
         ],
         error: null,
       },
@@ -148,7 +164,7 @@ describe('Dashboard (zone architecture)', () => {
     expect(await screen.findByText('3/7')).toBeInTheDocument();
   });
 
-  it('Zone C: deck rows use the shared staleness scale, never a raw day count', async () => {
+  it('Zone C: deck rows read study recency (last_reviewed) on the staleness scale', async () => {
     renderDashboard();
     const dormantRow = await screen.findByRole('button', { name: /Pharmacology/ });
     // 100 days -> "3 months" on the shared scale; the old "100d ago" is gone.
@@ -161,26 +177,35 @@ describe('Dashboard (zone architecture)', () => {
     expect(freshRow.className).not.toContain('bg-accent-wash');
   });
 
+  it('Zone C: a deck with no reviews reads "never studied", not a date and not zero', async () => {
+    db.tables.deck_overview.data[1].last_reviewed = null;
+    renderDashboard();
+    await screen.findByRole('button', { name: /Pharmacology/ });
+    expect(screen.getByText('never studied')).toBeInTheDocument();
+  });
+
   it('Zone C: progress bar splits mastered (accent) from in-progress (tertiary)', async () => {
     renderDashboard();
     const bar = await screen.findByRole('img', { name: '1 of 2 cards mastered' });
     const accent = bar.querySelector('.bg-accent');
     expect(accent).not.toBeNull();
     expect(accent.style.width).toBe('50%'); // 1 of 2 mastered
-    expect(accent.nextElementSibling.style.width).toBe('50%'); // 1 of 2 in boxes 1-2
+    expect(accent.nextElementSibling.style.width).toBe('50%'); // 1 of 2 in progress
   });
 
   it('Zone C: unseen cards stay off the bar - the bare track is the untouched remainder', async () => {
-    db.tables.flashcards.data = [
-      { deck_id: 'd1', box: 4, next_review: iso(1) }, // mastered
-      { deck_id: 'd1', box: 1, next_review: null }, // never reviewed
-    ];
+    // 2 cards: 1 mastered, 1 never reviewed - the view counts in_progress 0.
+    db.tables.deck_overview.data[0] = {
+      ...db.tables.deck_overview.data[0],
+      total: 2,
+      matured: 1,
+      in_progress: 0,
+      due: 1,
+    };
     renderDashboard();
     const bar = await screen.findByRole('img', { name: '1 of 2 cards mastered' });
     const accent = bar.querySelector('.bg-accent');
     expect(accent.style.width).toBe('50%');
-    // A card with no scheduled review has never been seen; claiming it as
-    // "in progress" would paint the whole track and hide the honest gap.
     expect(accent.nextElementSibling.style.width).toBe('0%');
   });
 
@@ -195,8 +220,7 @@ describe('Dashboard (zone architecture)', () => {
   });
 
   it('Zone C empty (data but zero decks): one sentence and one action, no blank box', async () => {
-    db.tables.decks.data = [];
-    db.tables.flashcards.data = [];
+    db.tables.deck_overview.data = [];
     renderDashboard();
     expect(await screen.findByText('No decks yet')).toBeInTheDocument();
     expect(
@@ -205,27 +229,43 @@ describe('Dashboard (zone architecture)', () => {
     expect(screen.getByRole('button', { name: 'Create a deck' })).toBeInTheDocument();
   });
 
-  it('fetch failure: states the failure in one sentence and recovers via Retry', async () => {
+  it('partial failure: failed zones name themselves; zones whose queries succeeded still render', async () => {
+    // Every direct supabase query fails; the queue sources (mocked helpers)
+    // succeed. Zone A must render real data while B and C admit failure -
+    // never a blanket "everything didn't load" over a queue that returned 200.
     db.fail = true;
     renderDashboard();
+    expect(await screen.findByRole('heading', { name: /cards due/ })).toBeInTheDocument();
     expect(
-      await screen.findByText(/Your queue, decks and stats didn't load\./)
+      await screen.findByText(/Your activity and focus stats didn't load\./)
     ).toBeInTheDocument();
+    expect(await screen.findByText(/Your decks didn't load\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Your queue, decks and stats didn't load/)).toBeNull();
+    // Exactly one Retry on the page, hosted by the first errored zone.
     const retry = screen.getByRole('button', { name: 'Retry' });
     db.fail = false;
     fireEvent.click(retry);
-    expect(await screen.findByRole('heading', { name: /cards due/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Pharmacology/ })).toBeInTheDocument();
+    expect(screen.queryByText(/didn't load/)).toBeNull();
   });
 
-  it('query-level failure ({data: null, error}) routes to the error state, not new-user onboarding', async () => {
+  it('queue-source failure: Zone A admits it while decks render from their own 200', async () => {
+    getDueCount.mockRejectedValue(Object.assign(new Error('boom'), { code: '42703' }));
+    renderDashboard();
+    expect(await screen.findByText(/Your review queue didn't load\./)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Pharmacology/ })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
+  });
+
+  it('query-level failure ({data: null, error}) routes to the zone error, not new-user onboarding', async () => {
     // Supabase resolves failed queries rather than rejecting; a discarded
     // error here used to render the misleading "Start here" hero.
-    db.tables.decks = { data: null, error: new Error('decks query failed') };
+    db.tables.deck_overview = { data: null, error: new Error('decks query failed') };
     renderDashboard();
-    expect(
-      await screen.findByText(/Your queue, decks and stats didn't load\./)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Your decks didn't load\./)).toBeInTheDocument();
     expect(screen.queryByText('Start here')).toBeNull();
+    // The queue's own sources succeeded, so Zone A shows the real queue.
+    expect(await screen.findByRole('heading', { name: /cards due/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 

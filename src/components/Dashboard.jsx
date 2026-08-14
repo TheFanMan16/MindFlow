@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Flame, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import {
-  getDueCards,
+  getDueCount,
   getTopicMastery,
   getLoopActiveDays,
   computeStreakFromDates,
@@ -96,49 +96,129 @@ const Dashboard = () => {
   const { user, profile, refreshProfile } = useAuth();
   const reduce = useReducedMotion();
 
-  const [stats, setStats] = useState({ sessionsCompleted: 0, streakCount: 0, totalFocusMinutes: 0 });
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState(false);
+  // Six independent data sources, each resolving or failing ON ITS OWN
+  // (Promise.allSettled semantics): one failed query must never blank data
+  // that arrived fine, and its error copy must name only what actually
+  // failed. status: 'loading' | 'ok' | 'error'. A zone renders exactly once,
+  // when every source it draws from has settled - partial sums never paint.
+  const SOURCES_LOADING = {
+    due: { status: 'loading', count: 0 }, // flashcards head-count
+    days: { status: 'loading', keys: [] }, // loop active-day keys
+    activity: { status: 'loading', minutes: {} }, // dateKey -> minutes
+    profile: { status: 'loading', totalFocusMinutes: 0 },
+    decks: { status: 'loading', rows: [] }, // deck_overview aggregates
+    topics: { status: 'loading', mastery: [] },
+  };
+  const [src, setSrc] = useState(SOURCES_LOADING);
+  const [sessionsCompleted, setSessionsCompleted] = useState(0); // localStorage
   const [retryToken, setRetryToken] = useState(0);
-  const [dueCards, setDueCards] = useState([]);
-  const [topicMastery, setTopicMastery] = useState([]);
-  const [loopStreak, setLoopStreak] = useState(0);
-  const [weeklyMomentum, setWeeklyMomentum] = useState(0);
-  const [activeDays, setActiveDays] = useState([]);
-  const [dailyMinutes, setDailyMinutes] = useState({}); // dateKey -> minutes
-  const [decks, setDecks] = useState([]); // {id, title, updated_at, total, matured, inProgress, due}
   const [examSaving, setExamSaving] = useState(null); // topic id mid-save
   const [examError, setExamError] = useState(null); // topic id whose save failed
+  const notifiedRef = useRef(null); // one due-cards notification per load
 
   // ------------------------------------------------------------ data ----
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
-    Promise.all([getDueCards(user.id), getTopicMastery(user.id), getLoopActiveDays(user.id)])
-      .then(([due, mastery, days]) => {
-        if (cancelled) return;
-        setDueCards(due);
-        setTopicMastery(mastery);
-        setActiveDays(days);
-        // Pro gets unlimited streak freezes, free bridges one missed day/week.
-        setLoopStreak(
-          computeStreakFromDates(days, new Date(), {
-            freezesPerWeek: profile?.is_pro ? Infinity : 1,
-          })
-        );
-        setWeeklyMomentum(countActiveDaysThisWeek(days));
-        maybeNotifyDueCards(due.length, {
-          streakSlipping: !days.includes(toLocalDateKey(new Date())),
-        });
-      })
-      .catch((error) => {
-        console.error('Error fetching study loop data:', error);
-        if (!cancelled) setFetchError(true);
+    const userId = user.id;
+
+    setSrc(SOURCES_LOADING);
+
+    // The Supabase error object says exactly what went wrong - log its
+    // fields, never a stringified "[object Object]".
+    const logQueryError = (source, error) => {
+      console.error(`Dashboard ${source} query failed:`, {
+        message: error?.message,
+        code: error?.code,
+        hint: error?.hint,
+        details: error?.details,
       });
+    };
+
+    const settle = (key, load) => {
+      load()
+        .then((value) => {
+          if (!cancelled) setSrc((prev) => ({ ...prev, [key]: { status: 'ok', ...value } }));
+        })
+        .catch((error) => {
+          logQueryError(key, error);
+          if (!cancelled)
+            setSrc((prev) => ({ ...prev, [key]: { ...prev[key], status: 'error' } }));
+        });
+    };
+
+    // Server-side count - no rows shipped, no silent row-limit truncation.
+    settle('due', async () => ({ count: await getDueCount(userId) }));
+
+    settle('days', async () => ({
+      keys: await getLoopActiveDays(userId, { throwOnError: true }),
+    }));
+
+    settle('activity', async () => {
+      const { data, error } = await supabase
+        .from('daily_activity')
+        .select('date, minutes_focused')
+        .eq('user_id', userId)
+        .gte('date', toLocalDateKey(new Date(Date.now() - GRID_WEEKS * 7 * DAY_MS)));
+      if (error) throw error;
+      const minutes = {};
+      for (const row of data || []) {
+        if (row.date) minutes[row.date] = row.minutes_focused || 0;
+      }
+      return { minutes };
+    });
+
+    settle('profile', async () => {
+      let { data: row, error } = await supabase
+        .from('profiles')
+        .select('total_focus_minutes')
+        .eq('id', userId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!row) {
+        // Identity columns only - column-level grants reject payloads that
+        // name privileged columns; the table defaults supply the zeros.
+        const { data: created, error: createError } = await supabase
+          .from('profiles')
+          .insert({ id: userId, email: user.email })
+          .select('total_focus_minutes')
+          .maybeSingle();
+        if (createError) throw createError;
+        row = created;
+      }
+      return { totalFocusMinutes: row?.total_focus_minutes || 0 };
+    });
+
+    // deck_overview aggregates per deck server-side (totals, due,
+    // MAX(last_reviewed)) - one query, no per-deck fan-out, no client sweep.
+    settle('decks', async () => {
+      const { data, error } = await supabase
+        .from('deck_overview')
+        .select('*')
+        .eq('user_id', userId);
+      if (error) throw error;
+      return { rows: data || [] };
+    });
+
+    settle('topics', async () => ({
+      mastery: await getTopicMastery(userId, { throwOnError: true }),
+    }));
+
     return () => {
       cancelled = true;
     };
-  }, [user?.id, profile?.is_pro, retryToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, retryToken]);
+
+  // Due-cards notification: once per load, only when both inputs are real.
+  useEffect(() => {
+    if (src.due.status !== 'ok' || src.days.status !== 'ok') return;
+    if (notifiedRef.current === retryToken) return;
+    notifiedRef.current = retryToken;
+    maybeNotifyDueCards(src.due.count, {
+      streakSlipping: !src.days.keys.includes(toLocalDateKey(new Date())),
+    });
+  }, [src.due, src.days, retryToken]);
 
   // Stripe success redirect - refresh profile when returned after payment.
   useEffect(() => {
@@ -149,130 +229,19 @@ const Dashboard = () => {
     }
   }, [location.search, refreshProfile, navigate]);
 
-  // Profile stats + decks + per-deck cards + daily activity. Bounded
-  // queries, no per-deck N+1.
+  // Legacy localStorage session history still informs "have they ever
+  // studied" and the last-session fallback.
   useEffect(() => {
-    const fetchAll = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      try {
-        setLoading(true);
-        setFetchError(false);
-        const userId = user.id;
-
-        let { data: profileRow, error: profileError } = await supabase
-          .from('profiles')
-          .select('streak_count, total_focus_minutes')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (!profileRow && !profileError) {
-          // Identity columns only - column-level grants reject payloads that
-          // name privileged columns; the table defaults supply the zeros.
-          const { data: newProfile, error: createError } = await supabase
-            .from('profiles')
-            .insert({
-              id: userId,
-              email: user.email,
-            })
-            .select('streak_count, total_focus_minutes')
-            .maybeSingle();
-          if (createError) console.error('Error creating profile:', createError);
-          else profileRow = newProfile;
-        } else if (profileError) {
-          console.error('Error fetching profile:', profileError);
-        }
-
-        // Decks + one flashcards sweep -> totals, mastered share (box 3+),
-        // in-progress share (boxes 1-2), due counts.
-        const [
-          { data: deckRows, error: deckError },
-          { data: cardRows, error: cardError },
-          { data: activityRows, error: activityError },
-        ] = await Promise.all([
-          supabase.from('decks').select('id, title, updated_at').eq('user_id', userId),
-          supabase.from('flashcards').select('deck_id, box, next_review').eq('user_id', userId).limit(2000),
-          supabase
-            .from('daily_activity')
-            .select('date, minutes_focused')
-            .eq('user_id', userId)
-            .gte('date', toLocalDateKey(new Date(Date.now() - GRID_WEEKS * 7 * DAY_MS))),
-        ]);
-
-        // A failed query resolves ({data: null, error}) instead of throwing,
-        // and null data reads exactly like an empty account - so a network
-        // blip would render the new-user onboarding. Route any query error
-        // to the fetch-error state instead.
-        const queryError = deckError || cardError || activityError;
-        if (queryError) throw queryError;
-
-        const now = Date.now();
-        const byDeck = {};
-        for (const c of cardRows || []) {
-          if (!c.deck_id) continue;
-          const d = (byDeck[c.deck_id] = byDeck[c.deck_id] || {
-            total: 0,
-            matured: 0,
-            inProgress: 0,
-            due: 0,
-          });
-          d.total += 1;
-          if ((c.box || 1) >= 3) d.matured += 1;
-          // In-progress = seen at least once (has a scheduled review) but not
-          // yet mastered. Unseen cards stay off the bar, so the inset track
-          // honestly shows how much of the deck is untouched.
-          else if (c.next_review) d.inProgress += 1;
-          if (c.next_review && new Date(c.next_review).getTime() <= now) d.due += 1;
-        }
-        setDecks(
-          (deckRows || []).map((d) => ({
-            ...d,
-            total: byDeck[d.id]?.total || 0,
-            matured: byDeck[d.id]?.matured || 0,
-            inProgress: byDeck[d.id]?.inProgress || 0,
-            due: byDeck[d.id]?.due || 0,
-          }))
-        );
-
-        const minutes = {};
-        for (const row of activityRows || []) {
-          if (row.date) minutes[row.date] = row.minutes_focused || 0;
-        }
-        setDailyMinutes(minutes);
-
-        setStats((prev) => ({
-          ...prev,
-          streakCount: profileRow?.streak_count || 0,
-          totalFocusMinutes: profileRow?.total_focus_minutes || 0,
-        }));
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        setFetchError(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAll();
-
-    // Legacy localStorage session history still informs "have they ever
-    // studied" and the last-session fallback.
     try {
       const raw = localStorage.getItem('timerSessionHistory');
-      if (raw) {
-        const sessions = JSON.parse(raw);
-        setStats((prev) => ({ ...prev, sessionsCompleted: sessions.length }));
-      }
+      if (raw) setSessionsCompleted(JSON.parse(raw).length);
     } catch (error) {
       console.error('Error loading localStorage stats:', error);
     }
   }, [user, retryToken]);
 
-  /** One Retry re-runs BOTH data effects; skeletons return while it runs. */
+  /** One Retry re-runs every source; skeletons return while it runs. */
   const retryFetch = () => {
-    setFetchError(false);
     setRetryToken((t) => t + 1);
   };
 
@@ -283,19 +252,61 @@ const Dashboard = () => {
     const ok = await setTopicExamDate(user?.id, topicId, examDate);
     setExamSaving(null);
     if (ok) {
-      setTopicMastery((prev) =>
-        prev.map((entry) =>
-          entry.topic.id === topicId
-            ? { ...entry, topic: { ...entry.topic, exam_date: examDate || null } }
-            : entry
-        )
-      );
+      setSrc((prev) => ({
+        ...prev,
+        topics: {
+          ...prev.topics,
+          mastery: prev.topics.mastery.map((entry) =>
+            entry.topic.id === topicId
+              ? { ...entry, topic: { ...entry.topic, exam_date: examDate || null } }
+              : entry
+          ),
+        },
+      }));
     } else {
       setExamError(topicId);
     }
   };
 
   // ------------------------------------------------- derived state ------
+  const activeDays = src.days.keys;
+  const dailyMinutes = src.activity.minutes;
+  const topicMastery = src.topics.mastery;
+  const decks = src.decks.rows;
+  const dueCount = src.due.count;
+
+  // Streak and week momentum derive from the same settled day keys - they
+  // can never paint from a partial fetch.
+  const loopStreak = useMemo(
+    () =>
+      src.days.status === 'ok'
+        ? computeStreakFromDates(activeDays, new Date(), {
+            freezesPerWeek: profile?.is_pro ? Infinity : 1,
+          })
+        : 0,
+    [src.days.status, activeDays, profile?.is_pro]
+  );
+  const weeklyMomentum = useMemo(
+    () => (src.days.status === 'ok' ? countActiveDaysThisWeek(activeDays) : 0),
+    [src.days.status, activeDays]
+  );
+
+  // Zone gating: a zone waits for every source it draws from, then paints
+  // once. A zone is in error only if one of ITS OWN sources failed - error
+  // copy never claims a section failed when its request returned 200.
+  const settled = (s) => s.status !== 'loading';
+  const zoneAReady = settled(src.due) && settled(src.days) && settled(src.decks) && settled(src.topics);
+  const zoneAError = src.due.status === 'error' || src.days.status === 'error';
+  const zoneBReady = settled(src.days) && settled(src.activity) && settled(src.profile);
+  const zoneBError =
+    src.days.status === 'error' || src.activity.status === 'error' || src.profile.status === 'error';
+  const zoneCReady = settled(src.decks);
+  const zoneCError = src.decks.status === 'error';
+  const zoneDReady = settled(src.topics);
+  const zoneDError = src.topics.status === 'error';
+  // Exactly one Retry on the page, hosted by the first errored zone.
+  const retryHost = zoneAError ? 'A' : zoneBError ? 'B' : zoneCError ? 'C' : zoneDError ? 'D' : null;
+
   // Last session = the most recent of the server-backed active days and the
   // local timer history. Never hard-coded.
   const daysSinceLastSession = useMemo(() => {
@@ -327,8 +338,7 @@ const Dashboard = () => {
       ? null
       : formatRelative(new Date(Date.now() - daysSinceLastSession * DAY_MS));
 
-  const dueCount = dueCards.length;
-  const hasAnyData = topicMastery.length > 0 || decks.length > 0 || stats.sessionsCompleted > 0;
+  const hasAnyData = topicMastery.length > 0 || decks.length > 0 || sessionsCompleted > 0;
   const state = !user
     ? 'signedOut'
     : !hasAnyData && dueCount === 0
@@ -367,8 +377,10 @@ const Dashboard = () => {
     () =>
       [...decks].sort((a, b) => {
         if (b.due !== a.due) return b.due - a.due; // most overdue first
-        const at = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-        const bt = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        // Real study recency: MAX(flashcards.last_reviewed) from the view.
+        // NULL = never studied, which sorts as stalest of all.
+        const at = a.last_reviewed ? new Date(a.last_reviewed).getTime() : 0;
+        const bt = b.last_reviewed ? new Date(b.last_reviewed).getTime() : 0;
         return at - bt; // then stalest
       }),
     [decks]
@@ -387,76 +399,34 @@ const Dashboard = () => {
       </div>
 
       <div className="mx-auto w-full max-w-[1080px] px-5 pb-24 md:px-8">
-        {loading && user ? (
-          /* Per-zone skeletons at the real zones' dimensions - STATIC by
-             system rule, so reserved space never performs. */
-          <div aria-busy="true">
-            <span className="sr-only">Loading your dashboard</span>
-            {/* Zone A card: p-8 (64) + metric line (48) + mt-2 body-sm (28)
-                + mt-6 button h-10 (64) = 204px. */}
-            <section className="mt-8">
-              <Skeleton className="h-[204px] rounded-lg" />
-            </section>
-            {/* Zone B strip: 7 rows x 9px cells + 6 x 2px gaps (75) + py-3
-                (24) + borders (2) = 101px. */}
-            <section className="mt-6">
-              <Skeleton className="h-[101px] rounded-md" />
-            </section>
-            {/* Zone C: title-sm heading (24) then 56px rows mirroring the
-                real columns: name / due / staleness / progress. */}
-            <section className="mt-10">
-              <Skeleton className="h-6 w-12" />
-              <div className="mt-3">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="flex h-14 items-center gap-4 border-b border-faint px-2">
-                    <div className="flex-1">
-                      <Skeleton className="h-4 w-2/5" />
-                    </div>
-                    <Skeleton className="h-4 w-16" />
-                    <Skeleton className="hidden h-3 w-24 sm:block" />
-                    <Skeleton className="hidden h-0.5 w-24 sm:block" />
-                  </div>
-                ))}
-              </div>
-            </section>
-            {/* Zone D: body-sm heading (20) then py-2.5 rows whose tallest
-                element is the 26px date input. */}
-            <section className="mt-14">
-              <Skeleton className="h-5 w-36" />
-              <div className="mt-2">
-                {[0, 1].map((i) => (
-                  <div key={i} className="flex items-center gap-4 border-b border-faint py-2.5">
-                    <div className="flex-1">
-                      <Skeleton className="h-4 w-1/3" />
-                    </div>
-                    <Skeleton className="h-3 w-14" />
-                    <Skeleton className="h-[26px] w-32" />
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-        ) : fetchError && user ? (
-          /* The page's data is one fetch; when it fails there is nothing
-             honest to render below, so say so once and offer the way back.
-             Retry is secondary - Zone A owns the page's single primary. */
-          <section className="mt-8">
-            <Card className="p-8">
-              <p className="text-title-sm text-primary">
-                Your queue, decks and stats didn&apos;t load.
-              </p>
-              <div className="mt-4">
-                <Button variant="secondary" onClick={retryFetch}>
-                  Retry
-                </Button>
-              </div>
-            </Card>
-          </section>
-        ) : (
-          <>
+        <>
+            {/* Each zone gates on ITS OWN sources: a static skeleton at the
+                real zone's dimensions until they all settle (so a zone paints
+                exactly once - no partial sums mid-read), zone-scoped error
+                copy if one of them failed, real content otherwise. A failed
+                deck query can no longer blank a queue that loaded fine. */}
             {/* ---------------------------------- ZONE A: state of things ----- */}
             <section className="mt-8">
-              {state === 'signedOut' ? (
+              {user && !zoneAReady ? (
+                /* Zone A card: p-8 (64) + metric line (48) + mt-2 body-sm (28)
+                    + mt-6 button h-10 (64) = 204px. */
+                <div aria-busy="true">
+                  <span className="sr-only">Loading your dashboard</span>
+                  <Skeleton className="h-[204px] rounded-lg" />
+                </div>
+              ) : user && zoneAError ? (
+                /* Only the queue's own sources failed - the zones below still
+                   render whatever loaded. Retry is secondary; Zone A owns the
+                   page's single primary. */
+                <Card className="p-8">
+                  <p className="text-title-sm text-primary">Your review queue didn&apos;t load.</p>
+                  <div className="mt-4">
+                    <Button variant="secondary" onClick={retryFetch}>
+                      Retry
+                    </Button>
+                  </div>
+                </Card>
+              ) : state === 'signedOut' ? (
                 <Card className="p-8">
                   <h1 className="text-display-sm text-primary">Sign in to see your queue</h1>
                   <p className="mt-2 max-w-[52ch] text-body-sm text-secondary">
@@ -586,7 +556,24 @@ const Dashboard = () => {
             </section>
 
             {/* -------------------------------- ZONE B: continuity strip ------ */}
-            {user ? (
+            {user && !zoneBReady ? (
+              /* Zone B strip: 7 rows x 9px cells + 6 x 2px gaps (75) + py-3
+                  (24) + borders (2) = 101px. */
+              <section className="mt-6" aria-busy="true">
+                <Skeleton className="h-[101px] rounded-md" />
+              </section>
+            ) : user && zoneBError ? (
+              <section className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-md border border-line bg-surface px-4 py-3 shadow-edge">
+                <span className="text-body-sm text-secondary">
+                  Your activity and focus stats didn&apos;t load.
+                </span>
+                {retryHost === 'B' ? (
+                  <Button variant="ghost" size="sm" onClick={retryFetch}>
+                    Retry
+                  </Button>
+                ) : null}
+              </section>
+            ) : user ? (
               <section className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-md border border-line bg-surface px-4 py-3 shadow-edge">
                 <div
                   className="grid shrink-0 grid-flow-col grid-rows-7 gap-[2px]"
@@ -624,7 +611,7 @@ const Dashboard = () => {
                     <span className="tabular-nums text-primary">{weeklyMomentum}/7</span> days this week
                   </span>
                   <span className="text-label-sm text-secondary">
-                    <span className="tabular-nums text-primary">{stats.totalFocusMinutes}</span> focus
+                    <span className="tabular-nums text-primary">{src.profile.totalFocusMinutes}</span> focus
                     minutes total
                   </span>
                 </div>
@@ -632,7 +619,37 @@ const Dashboard = () => {
             ) : null}
 
             {/* ------------------------------------------ ZONE C: decks ------- */}
-            {user && (sortedDecks.length > 0 || hasAnyData) ? (
+            {user && !zoneCReady ? (
+              /* Zone C: title-sm heading (24) then 56px rows mirroring the
+                  real columns: name / due / staleness / progress. */
+              <section className="mt-10" aria-busy="true">
+                <Skeleton className="h-6 w-12" />
+                <div className="mt-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="flex h-14 items-center gap-4 border-b border-faint px-2">
+                      <div className="flex-1">
+                        <Skeleton className="h-4 w-2/5" />
+                      </div>
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="hidden h-3 w-24 sm:block" />
+                      <Skeleton className="hidden h-0.5 w-24 sm:block" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : user && zoneCError ? (
+              <section className="mt-10">
+                <h2 className="text-title-sm text-primary">Decks</h2>
+                <p className="mt-3 text-body-sm text-secondary">Your decks didn&apos;t load.</p>
+                {retryHost === 'C' ? (
+                  <div className="mt-3">
+                    <Button variant="secondary" onClick={retryFetch}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : null}
+              </section>
+            ) : user && (sortedDecks.length > 0 || hasAnyData) ? (
               <section className="mt-10">
                 <h2 className="text-title-sm text-primary">Decks</h2>
                 <div className="mt-3">
@@ -649,8 +666,10 @@ const Dashboard = () => {
                   ) : (
                     sortedDecks.map((deck) => {
                       const masteredPct = deck.total > 0 ? (deck.matured / deck.total) * 100 : 0;
-                      const inProgressPct = deck.total > 0 ? (deck.inProgress / deck.total) * 100 : 0;
-                      const tier = stalenessTier(deck.updated_at);
+                      const inProgressPct = deck.total > 0 ? (deck.in_progress / deck.total) * 100 : 0;
+                      // Real study recency (MAX(last_reviewed) via the view);
+                      // NULL means never studied and renders as exactly that.
+                      const tier = stalenessTier(deck.last_reviewed);
                       return (
                         <div
                           key={deck.id}
@@ -684,8 +703,8 @@ const Dashboard = () => {
                             {deck.due} due
                           </span>
                           <Staleness
-                            at={deck.updated_at}
-                            never="never opened"
+                            at={deck.last_reviewed}
+                            never="never studied"
                             className={`hidden w-24 shrink-0 justify-end sm:inline-flex ${
                               tier === 'fresh' || tier === null
                                 ? 'group-hover:text-secondary group-active:text-secondary'
@@ -720,7 +739,36 @@ const Dashboard = () => {
             ) : null}
 
             {/* -------------------------------------- ZONE D: recessed -------- */}
-            {user && topicMastery.length > 0 ? (
+            {user && !zoneDReady ? (
+              /* Zone D: body-sm heading (20) then py-2.5 rows whose tallest
+                  element is the 26px date input. */
+              <section className="mt-14" aria-busy="true">
+                <Skeleton className="h-5 w-36" />
+                <div className="mt-2">
+                  {[0, 1].map((i) => (
+                    <div key={i} className="flex items-center gap-4 border-b border-faint py-2.5">
+                      <div className="flex-1">
+                        <Skeleton className="h-4 w-1/3" />
+                      </div>
+                      <Skeleton className="h-3 w-14" />
+                      <Skeleton className="h-[26px] w-32" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : user && zoneDError ? (
+              <section className="mt-14">
+                <h2 className="text-body-sm text-tertiary">Topics and exam dates</h2>
+                <p className="mt-2 text-body-sm text-tertiary">Topics didn&apos;t load.</p>
+                {retryHost === 'D' ? (
+                  <div className="mt-2">
+                    <Button variant="secondary" onClick={retryFetch}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : null}
+              </section>
+            ) : user && topicMastery.length > 0 ? (
               <section className="mt-14">
                 <h2 className="text-body-sm text-tertiary">Topics and exam dates</h2>
                 <div className="mt-2">
@@ -810,9 +858,7 @@ const Dashboard = () => {
                 ))}
               </nav>
             ) : null}
-          </>
-        )}
-
+        </>
       </div>
     </div>
   );
