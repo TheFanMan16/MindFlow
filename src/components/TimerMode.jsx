@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTimer } from '../context/TimerContext';
-import { supabase } from '../lib/supabaseClient';
 import { capture } from '../lib/analytics';
 import { recordActivationMilestone } from '../utils/activation';
 import { useAccurateTimer } from '../hooks/useAccurateTimer';
@@ -626,81 +625,13 @@ const TimerMode = () => {
       const minutesToSave = Math.floor(sessionSecondsRef.current / 60);
 
       if (minutesToSave > 0) {
-        try {
-          // Get current total_focus_minutes
-          const { data: currentProfile, error: fetchError } = await supabase
-            .from('profiles')
-            .select('total_focus_minutes')
-            .eq('id', user.id)
-            .single();
-
-          if (fetchError) {
-            console.error('Error fetching profile for update:', fetchError);
-            return;
-          }
-
-          const currentTotal = currentProfile?.total_focus_minutes || 0;
-
-          // Increment by the minutes we've accumulated
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ total_focus_minutes: currentTotal + minutesToSave })
-            .eq('id', user.id);
-
-          if (updateError) {
-            console.error('Error updating total_focus_minutes:', updateError);
-          } else {
-            // Upsert into daily_activity table for heatmap
-            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-            try {
-              // Check if row exists for today
-              const { data: existingRow, error: dailyFetchError } = await supabase
-                .from('daily_activity')
-                .select('minutes_focused')
-                .eq('user_id', user.id)
-                .eq('date', today)
-                .maybeSingle();
-
-              if (dailyFetchError && dailyFetchError.code !== 'PGRST116') {
-                // PGRST116 is "not found" which is fine
-                console.error('Error checking daily_activity:', dailyFetchError);
-              } else if (existingRow) {
-                // Row exists, increment
-                const { error: dailyUpdateError } = await supabase
-                  .from('daily_activity')
-                  .update({ minutes_focused: (existingRow.minutes_focused || 0) + minutesToSave })
-                  .eq('user_id', user.id)
-                  .eq('date', today);
-
-                if (dailyUpdateError) {
-                  console.error('Error updating daily_activity:', dailyUpdateError);
-                }
-              } else {
-                // Row doesn't exist, insert new
-                const { error: insertError } = await supabase
-                  .from('daily_activity')
-                  .insert({
-                    user_id: user.id,
-                    date: today,
-                    minutes_focused: minutesToSave,
-                  });
-
-                if (insertError) {
-                  console.error('Error inserting daily_activity:', insertError);
-                  // If the table doesn't exist yet, that's okay - user needs to run migration
-                }
-              }
-            } catch (error) {
-              console.error('Error in daily_activity upsert:', error);
-              // Continue execution even if daily_activity fails
-            }
-
-            // Reset the counter (keep any partial minute)
-            sessionSecondsRef.current = sessionSecondsRef.current % 60;
-            setSessionMinutes(0); // Reset displayed minutes after saving
-          }
-        } catch (error) {
-          console.error('Error in incremental save:', error);
+        const result = await recordFocusMinutes(user.id, minutesToSave);
+        if (result.ok) {
+          // Reset the counter (keep any partial minute). On failure the
+          // seconds stay banked, so the next tick or the stop path retries
+          // the same minutes instead of losing them.
+          sessionSecondsRef.current = sessionSecondsRef.current % 60;
+          setSessionMinutes(0);
         }
       }
     }, 60000); // Check every 60 seconds
@@ -926,21 +857,23 @@ const TimerMode = () => {
       }
       distractionsRef.current = [];
 
-      // Save any remaining partial minutes
-      const remainingSeconds = sessionSecondsRef.current;
-      if (remainingSeconds > 0 && user?.id) {
-        const partialMinutes = Math.floor(remainingSeconds / 60);
-        if (partialMinutes > 0) {
-          recordFocusMinutes(user.id, partialMinutes).then((result) => {
-            if (!result.ok) {
-              toast.error('Could not save your focus time for this session.');
-            }
-          });
-        }
+      // Save any remaining partial minutes. Only drop the seconds once the
+      // write succeeds - on failure they stay banked so the next session's
+      // incremental save retries them instead of losing them.
+      const partialMinutes = Math.floor(sessionSecondsRef.current / 60);
+      if (partialMinutes > 0 && user?.id) {
+        recordFocusMinutes(user.id, partialMinutes).then((result) => {
+          if (result.ok) {
+            sessionSecondsRef.current = sessionSecondsRef.current % 60;
+          } else {
+            toast.error('Could not save your focus time for this session.');
+          }
+        });
+      } else {
+        sessionSecondsRef.current = 0;
       }
 
       // Reset session tracking
-      sessionSecondsRef.current = 0;
       sessionStartTimeRef.current = null;
       setSessionMinutes(0);
     }

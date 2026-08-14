@@ -1,9 +1,12 @@
 /**
  * AI Limits Utility
- * 
- * Manages AI feature usage limits for free vs pro users.
- * Free users get 5 AI uses per day, pro users get unlimited.
- * Uses Supabase profiles table for persistent, secure limit tracking.
+ *
+ * Read-side helpers for AI usage limits (5/day free, unlimited pro).
+ * The COUNTING is server-owned: the gemini-chat Edge Function and the
+ * Express AI routes consume credits via the consume_ai_credit RPC, and
+ * column-level grants forbid the client from writing ai_usage_count at
+ * all. What lives here is display logic only - reading the count and
+ * deciding whether to show the upgrade prompt before a request is sent.
  */
 
 import { supabase } from '../lib/supabaseClient';
@@ -38,42 +41,6 @@ export async function getAIUsageCount(userId) {
 }
 
 /**
- * Increment AI usage count in Supabase profiles table
- * @param {string} userId - User ID
- * @returns {Promise<number>} New AI usage count after increment
- */
-export async function incrementAIUsage(userId) {
-  if (!userId) {
-    console.error('incrementAIUsage called without a user');
-    return 0;
-  }
-
-  try {
-    // Get current count first
-    const currentCount = await getAIUsageCount(userId);
-    const newCount = currentCount + 1;
-
-    // Update in Supabase
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ ai_usage_count: newCount })
-      .eq('id', userId)
-      .select('ai_usage_count')
-      .single();
-
-    if (error) {
-      console.error('Error incrementing AI usage:', error);
-      return currentCount;
-    }
-
-    return data?.ai_usage_count || newCount;
-  } catch (error) {
-    console.error('Error in incrementAIUsage:', error);
-    return 0;
-  }
-}
-
-/**
  * Check if user can use AI feature
  * @param {boolean} isPro - Whether user has pro plan
  * @param {number} aiUsageCount - Current AI usage count from profile
@@ -94,30 +61,4 @@ export function canUseAI(isPro = false, aiUsageCount = 0) {
     remaining,
     limit: FREE_USER_LIMIT,
   };
-}
-
-/**
- * Reset AI usage count (for testing or admin purposes)
- * @param {string} userId - User ID
- * @returns {Promise<boolean>} Success status
- */
-export async function resetAIUsage(userId) {
-  if (!userId) return false;
-
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ ai_usage_count: 0 })
-      .eq('id', userId);
-
-    if (error) {
-      console.error('Error resetting AI usage:', error);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error in resetAIUsage:', error);
-    return false;
-  }
 }

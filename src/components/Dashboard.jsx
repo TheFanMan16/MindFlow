@@ -169,15 +169,13 @@ const Dashboard = () => {
           .maybeSingle();
 
         if (!profileRow && !profileError) {
+          // Identity columns only - column-level grants reject payloads that
+          // name privileged columns; the table defaults supply the zeros.
           const { data: newProfile, error: createError } = await supabase
             .from('profiles')
             .insert({
               id: userId,
               email: user.email,
-              streak_count: 0,
-              total_focus_minutes: 0,
-              is_pro: false,
-              is_admin: false,
             })
             .select('streak_count, total_focus_minutes')
             .maybeSingle();

@@ -166,67 +166,60 @@ Deno.serve(async (req) => {
           },
         })
 
-    // 4. Query profiles table using user's ID
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('is_pro, ai_usage_count')
-      .eq('id', userId)
-      .single()
+    // 4. Extract and validate prompt/options BEFORE consuming a credit -
+    // a malformed request must not burn quota.
+    const {
+      prompt,
+      model = 'gemini-1.5-flash',
+      temperature = 0.7,
+      maxTokens = 2048,
+      format = 'text'
+    } = requestBody
 
-    if (profileError) {
-      console.error('Error querying profile:', profileError)
+    if (!prompt) {
+      console.error('Missing prompt in request body')
       return new Response(
-        JSON.stringify({ error: 'Failed to retrieve user profile' }),
-        { 
+        JSON.stringify({ error: 'Missing prompt in request body' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // 5. Atomically consume one AI credit. consume_ai_credit does the daily
+    // reset + limit check + increment in one guarded UPDATE server-side, so
+    // metering no longer depends on the client incrementing its own counter
+    // (which column privileges now forbid anyway). Consume BEFORE generation:
+    // increment-after would let N concurrent requests all pass at count 4.
+    const { data: credit, error: creditError } = isServiceRoleKey
+      ? await supabaseClient.rpc('consume_ai_credit', { p_user_id: userId })
+      : await supabaseClient.rpc('consume_ai_credit')
+
+    if (creditError) {
+      console.error('consume_ai_credit failed:', creditError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to check AI usage' }),
+        {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       )
     }
 
-    const isPro = profile?.is_pro === true
-    const aiUsageCount = profile?.ai_usage_count || 0
-
-    console.log('User profile:', { isPro, aiUsageCount })
-
-    // 4. Check AI usage limits for free users
-    if (!isPro) {
-      if (aiUsageCount >= FREE_USER_LIMIT) {
-        console.log(`Free user limit exceeded: ${aiUsageCount}/${FREE_USER_LIMIT}`)
-        return new Response(
-          JSON.stringify({ 
-            error: `Daily AI limit reached (${FREE_USER_LIMIT}/${FREE_USER_LIMIT}). Upgrade to Pro for unlimited AI.`
-          }),
-          { 
-            status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          }
-        )
-      }
-      console.log(`Free user usage: ${aiUsageCount}/${FREE_USER_LIMIT}`)
-    } else {
-      console.log('Pro user - unlimited AI access')
-    }
-
-    // 6. Extract prompt and options from request body (already parsed above)
-    const { 
-      prompt, 
-      model = 'gemini-1.5-flash', 
-      temperature = 0.7, 
-      maxTokens = 2048, 
-      format = 'text' 
-    } = requestBody
-    
-    if (!prompt) {
-      console.error('Missing prompt in request body')
+    if (!credit?.allowed) {
+      console.log(`Free user limit exceeded (server-metered)`)
       return new Response(
-        JSON.stringify({ error: 'Missing prompt in request body' }),
-        { 
-          status: 400,
+        JSON.stringify({
+          error: `Daily AI limit reached (${FREE_USER_LIMIT}/${FREE_USER_LIMIT}). Upgrade to Pro for unlimited AI.`
+        }),
+        {
+          status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       )
     }
+    console.log('AI credit consumed:', credit)
 
     // 7. Get API Key from Environment
     console.log('Retrieving API key from environment...')
@@ -307,11 +300,11 @@ Deno.serve(async (req) => {
     console.error('Error stack:', error.stack)
     console.error('Error name:', error.name)
     
-    // Return error with CORS headers so the backend sees the real error
+    // Return error with CORS headers so the backend sees the real error.
+    // Stack traces stay in the function logs - never in the response body.
     return new Response(
-      JSON.stringify({ 
-        error: error.message || 'Internal server error',
-        details: error.stack || undefined
+      JSON.stringify({
+        error: error.message || 'Internal server error'
       }),
       {
         status: 500,

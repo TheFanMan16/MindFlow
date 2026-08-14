@@ -48,15 +48,13 @@ export const AuthProvider = ({ children }) => {
       } else {
         // Profile doesn't exist yet, create a default one
         console.log('Profile not found, creating default profile...');
+        // Identity columns only: column-level grants reject any payload that
+        // names a privileged column (is_pro, counters); defaults fill those.
         const { data: newProfile, error: createError } = await supabase
           .from('profiles')
           .insert({
             id: userId,
             email: userEmail || user?.email || '',
-            is_pro: false,
-            is_admin: false,
-            streak_count: 0,
-            total_focus_minutes: 0,
           })
           .select()
           .maybeSingle();

@@ -7,7 +7,7 @@ import { recordRecallAttempt, findOrCreateTopic, getLoopStreak } from '../utils/
 import { downloadRecapImage } from '../utils/recapImage';
 import { saveGeneratedDeck } from '../utils/deckUtils';
 import { useAuth } from '../context/AuthContext';
-import { canUseAI, incrementAIUsage, getAIUsageCount } from '../utils/aiLimits';
+import { canUseAI, getAIUsageCount } from '../utils/aiLimits';
 import { capture } from '../lib/analytics';
 import { recordActivationMilestone } from '../utils/activation';
 import { toast } from 'react-hot-toast';
@@ -421,17 +421,19 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
         });
       }
 
-      // Increment AI usage in Supabase ONLY after successful response
+      // The Edge Function consumed the credit server-side (client writes to
+      // ai_usage_count are forbidden by column grants) - re-read the count so
+      // the local pre-check and any usage display stay in sync.
       try {
-        const newCount = await incrementAIUsage(user.id);
+        const newCount = await getAIUsageCount(user.id);
         setAiUsageCount(newCount);
         // Refresh profile to sync with AuthContext
         if (refreshProfile) {
           await refreshProfile();
         }
       } catch (error) {
-        console.error('Error incrementing AI usage:', error);
-        // Non-fatal: usage was already tracked by Edge Function, but local state might be stale
+        console.error('Error refreshing AI usage:', error);
+        // Non-fatal: display-only staleness; the server already metered.
       }
     } catch (error) {
       if (error instanceof AiCancelledError) {
@@ -440,6 +442,12 @@ Generate exactly 3 quiz questions based only on the concepts the student missed.
       }
       if (error instanceof AiTimeoutError) {
         setAnalysisError(AI_TIMEOUT_MESSAGE);
+        return;
+      }
+      // The local pre-check can be stale; the server 403 is authoritative.
+      if (typeof error?.message === 'string' && error.message.includes('Daily AI limit reached')) {
+        capture('quota_hit', { kind: 'ai_daily' });
+        setShowUpgradeModal(true);
         return;
       }
       if (import.meta.env.DEV) {

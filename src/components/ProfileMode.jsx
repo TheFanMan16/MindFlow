@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 import ConfirmModal from './ConfirmModal';
 import ProgressHeatmap from './ProgressHeatmap';
 import { Breadcrumb, Card, Button, Badge, StatTile, Skeleton } from './ui';
+import { getLoopStreak } from '../utils/studyLoop';
 
 export default function ProfileMode() {
   const navigate = useNavigate();
@@ -18,11 +19,10 @@ export default function ProfileMode() {
   // session lookup fails AND no fallback email exists in context.
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [stats] = useState({
-    streakCount: 0,
-    totalFocusMinutes: 0,
-    setsCreated: 0,
-  });
+  // null = loading (tiles render skeletons); values of null inside the
+  // object = fetch failed (tiles render the em-dash empty state). Never
+  // hardcoded zeros - a fake 0 reads as real data.
+  const [stats, setStats] = useState(null);
 
   // Get user data from Supabase session. Extracted so the error state's
   // Retry button can re-run the same fetch.
@@ -54,6 +54,40 @@ export default function ProfileMode() {
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
+
+  // Real values for the two tiles: lifetime minutes from the profile row,
+  // streak derived from persisted active days exactly like the dashboard
+  // (getLoopStreak, incl. the free-tier streak-freeze rule).
+  useEffect(() => {
+    if (!user?.id) {
+      setStats({ totalFocusMinutes: null, streakCount: null });
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      supabase
+        .from('profiles')
+        .select('total_focus_minutes')
+        .eq('id', user.id)
+        .maybeSingle(),
+      getLoopStreak(user.id, { isPro: profile?.is_pro === true }),
+    ])
+      .then(([{ data: profileRow, error: profileError }, streak]) => {
+        if (cancelled) return;
+        if (profileError) throw profileError;
+        setStats({
+          totalFocusMinutes: profileRow?.total_focus_minutes ?? 0,
+          streakCount: streak ?? 0,
+        });
+      })
+      .catch((error) => {
+        console.error('Error loading profile stats:', error);
+        if (!cancelled) setStats({ totalFocusMinutes: null, streakCount: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, profile?.is_pro]);
 
 
   const handleSignOut = async () => {
@@ -165,13 +199,17 @@ export default function ProfileMode() {
                 <StatTile
                   inset
                   label="Focus Minutes"
-                  value={stats.totalFocusMinutes}
+                  loading={stats === null}
+                  value={stats?.totalFocusMinutes}
+                  emptyHint="not loaded — reopen to retry"
                   format={(n) => formatFocusTime(Math.round(n))}
                 />
                 <StatTile
                   inset
                   label="Streak"
-                  value={stats.streakCount}
+                  loading={stats === null}
+                  value={stats?.streakCount}
+                  emptyHint="not loaded — reopen to retry"
                   unit="days"
                 />
               </div>

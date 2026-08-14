@@ -83,6 +83,12 @@ const PDFParse = pdfParseLib.PDFParse;
 const { createClient } = require('@supabase/supabase-js');
 const app = express();
 
+// Render terminates TLS at exactly one proxy hop; without this, express-rate-limit
+// keys every request to the proxy's IP and one abuser exhausts everyone's quota
+// (or X-Forwarded-For spoofing bypasses it). `1` not `true`: express-rate-limit v7
+// rejects a blanket trust-all as spoofable.
+app.set('trust proxy', 1);
+
 // Configure Multer for PDF file uploads (memory storage)
 const storage = multer.memoryStorage();
 const upload = multer({
