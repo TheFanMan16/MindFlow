@@ -1,0 +1,94 @@
+/* Geist as a VARIABLE font (the type scale uses weights 550/560, which only
+   exist on the variable axis); Geist Mono for genuinely tabular log
+   timestamps only - monospace is not a labeling style here. */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..700&display=swap');
+
+/* Design tokens - the single source of truth. Tailwind mirrors these. */
+@import './styles/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CLS guard: metric-matched local fallbacks so text set while Geist loads
+   (font-display: swap) occupies the same space after the swap. */
+@font-face {
+  font-family: 'Geist Fallback';
+  src: local('Arial');
+  size-adjust: 104%;
+  ascent-override: 96%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Geist Mono Fallback';
+  src: local('Consolas'), local('Courier New');
+  size-adjust: 108%;
+  ascent-override: 96%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden; /* Stop the browser window from scrolling */
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Every number in the product renders tabular with a slashed zero -
+       set once at the root rather than policed per element. */
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+
+  code, kbd, samp {
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+
+  /* One focus treatment for the whole app: a 2px accent ring at 45%
+     opacity, offset 2px. Outline follows the element's own border-radius,
+     so every control keeps its shape. :focus-visible only - pointer focus
+     stays quiet. Components must never re-declare or suppress this. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 2px; /* fallback shape for radius-less inline links only */
+  }
+
+  ::selection {
+    background: var(--accent-wash);
+    color: var(--text-primary);
+  }
+
+  #root {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden; /* Stop the root container from scrolling */
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@layer utilities {
+  /* CSS-level reduced-motion floor. JS-driven (framer) animation is gated
+     per-component via useReducedMotion plus the root MotionConfig - this
+     rule cannot reach it. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

@@ -1,0 +1,68 @@
+# CI: every push and PR runs the full gate the repo already enforces locally.
+# Three jobs, because a red X must say WHICH law was broken at a glance:
+#   test    - vitest suite (jsdom; the vitest pool is pinned to threads in
+#             vite.config.js, which also works on Linux runners)
+#   design  - token purity (scripts/check-colors.mjs: any hex outside
+#             tokens.css fails, Google-logo allowance excepted)
+#   secrets - gitleaks over the CURRENT TREE (not history: old commits contain
+#             the public-by-design Supabase anon key, which would flag forever;
+#             this gate exists to stop NEW secrets landing)
+name: CI
+
+on:
+  push:
+    branches: [main, audit/cleanup]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:run
+
+  design:
+    name: Token purity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run lint:colors
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The client hard-fails without its five required VITE_ vars by design.
+      # CI stubs them: this job proves the build compiles, not the deploy env.
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://stub.supabase.co
+          VITE_SUPABASE_ANON_KEY: stub
+          VITE_STRIPE_PUBLISHABLE_KEY: pk_test_stub
+          VITE_STRIPE_PRICE_ID: price_stub
+          VITE_API_BASE_URL: http://localhost:3000
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false

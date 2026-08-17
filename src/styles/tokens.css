@@ -1,0 +1,114 @@
+/**
+ * MindFlow design tokens - the single source of truth. Tailwind mirrors
+ * these; scripts/check-colors.mjs enforces that no other file carries a hex.
+ *
+ * Direction: warm amber accent on cool near-black. Elevation = lightness,
+ * not shadow. Hairlines are opaque and come in three deliberate weights.
+ * Contrast figures below are measured against --bg-surface and verified -
+ * do not "improve" them by darkening any text token.
+ *
+ * THE GOVERNING RULE: the accent has exactly one job per screen - the
+ * single most important action plus the one number it operates on.
+ * Hierarchy comes from density, surface layering and type weight, never
+ * from color variety.
+ */
+:root {
+  /* ------------------------------------------------------- surfaces --- */
+  /* Cool near-black, layered. Never pure #000. */
+  --bg-canvas: #0A0C0E;
+  --bg-inset: #07080A;   /* wells, input fills - darker than canvas */
+  --bg-surface: #111417; /* standard panel */
+  --bg-raised: #171B1F;  /* nested / emphasized panel */
+  --bg-hover: #1C2126;
+  --bg-active: #232A30;
+
+  /* ------------------------------------------------------ hairlines --- */
+  --line-faint: #191D21;  /* internal dividers */
+  --line: #262C32;        /* panel edges */
+  --line-strong: #363E45; /* focused / selected edges */
+
+  /* ----------------------------------------------------------- text --- */
+  /* Never pure white - halation on dark is a tell.
+     vs --bg-surface: primary 15.43 / secondary 7.05 / tertiary 4.74. */
+  --text-primary: #E8EBED;
+  --text-secondary: #98A1A9;
+  --text-tertiary: #7A828A;
+  --text-disabled: #454C53; /* exempt from contrast rules - disabled only */
+
+  /* --------------------------------------------------------- accent --- */
+  /* Warm amber on cool ground. accent 9.02 on surface; accent-ink 9.16
+     on accent fills. */
+  --accent: #E9A94D;
+  --accent-hover: #F4B85F;
+  --accent-press: #D6963C;
+  --accent-ink: #16110A; /* text on accent fills */
+  --accent-wash: rgba(233, 169, 77, 0.10);
+  --accent-line: rgba(233, 169, 77, 0.28);
+  --focus-ring: rgba(233, 169, 77, 0.45); /* focus-visible ONLY: 2px ring, 2px offset */
+
+  /* ------------------------------------------------------- semantic --- */
+  /* Muted, never saturated. positive 6.01 / negative 4.78 on surface. */
+  --positive: #6E9E78;
+  --negative: #C9635E;
+  --negative-wash: rgba(201, 99, 94, 0.10);
+  --negative-line: rgba(201, 99, 94, 0.28); /* red hairline for error edges */
+  --positive-wash: rgba(110, 158, 120, 0.10);
+
+  /* ------------------------------------------------------ elevation --- */
+  /* On dark, elevation is a top edge highlight, not a drop shadow.
+     --shadow-raised is reserved for elements that genuinely float. */
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.55), 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+
+  /* --------------------------------------------------------- radius --- */
+  /* NESTED RULE: inner radius = outer radius minus inner padding.
+     Never the same radius on a parent and its child. */
+  --r-sm: 6px;    /* controls, chips */
+  --r-md: 10px;   /* inner panels */
+  --r-lg: 14px;   /* outer cards, floating panels */
+  --r-full: 999px; /* status pills ONLY */
+
+  /* Activity-grid ramp - sequential, one hue, light to dark. Empty is a
+     solid dark step, then accent at .30/.58/.85 (mindflow-design skill). */
+  --grid-empty: #161A1E;
+  --grid-l1: rgba(233, 169, 77, 0.30);
+  --grid-l2: rgba(233, 169, 77, 0.58);
+  --grid-l3: rgba(233, 169, 77, 0.85);
+
+  /* --------------------------------------------------------- motion --- */
+  --dur-micro: 120ms;
+  --dur-base: 180ms;
+  --dur-enter: 260ms;
+  --dur-layout: 380ms;
+  --ease-out: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-std: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---------------------------------------------------------- fonts --- */
+  --font-sans: 'Geist', 'Geist Fallback', 'Instrument Sans', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, monospace;
+
+  /* ----------------------------------------------- legacy aliases ----- */
+  /* Old semantic names still referenced by components resolve to the new
+     tokens, keeping this file the single source. Do not use in new code. */
+  --on-accent: var(--accent-ink);
+  --accent-ring: var(--focus-ring);
+  --success: var(--positive);
+  --success-wash: var(--positive-wash);
+  --danger: var(--negative);
+  --danger-wash: var(--negative-wash);
+  --danger-line: var(--negative-line);
+  /* NO TOKEN EQUIVALENT in the new spec - flagged in the migration report:
+     warning collapses into the accent family (amber IS the warning hue
+     here); feature identity tints have no home and go neutral. */
+  --warning: var(--accent);
+  --warning-wash: var(--accent-wash);
+  --tint-focus: var(--text-secondary);
+  --tint-recall: var(--text-secondary);
+  --tint-feynman: var(--text-secondary);
+  --tint-flashcards: var(--text-secondary);
+  --tint-focus-wash: var(--bg-raised);
+  --tint-recall-wash: var(--bg-raised);
+  --tint-feynman-wash: var(--bg-raised);
+  --tint-flashcards-wash: var(--bg-raised);
+}
