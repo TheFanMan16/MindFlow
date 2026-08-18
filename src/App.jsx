@@ -86,6 +86,14 @@ function App() {
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const { sentryTriggered, setSentryTriggered } = useAuth();
 
+  // The auth listener effect below must run exactly ONCE for App's lifetime,
+  // but navigate's identity changes on every route change - so the effect
+  // reaches it through this ref instead of depending on it.
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  });
+
   // Spatial route direction: previous pathname -> current, on the sidebar
   // axis. Computed per render (location changes re-render App), consumed by
   // AnimatePresence/PageTransition below.
@@ -182,7 +190,7 @@ function App() {
           setSession(session);
           setIsPasswordRecovery(true);
           setLoading(false);
-          navigate('/update-password');
+          navigateRef.current('/update-password');
           return; // Exit early, don't process other logic
         }
 
@@ -192,10 +200,12 @@ function App() {
           setSession(session);
           setLoading(false);
           setIsPasswordRecovery(false);
-          // Navigate to dashboard if we're on the root/login page
-          const currentPath = location.pathname;
+          // Navigate to dashboard if we're on the root/login page.
+          // window.location, not the useLocation() closure: this listener is
+          // mounted once, so the hook value here would go stale.
+          const currentPath = window.location.pathname;
           if (currentPath === '/' || currentPath === '/login') {
-            navigate('/dashboard');
+            navigateRef.current('/dashboard');
           }
           return;
         }
@@ -222,8 +232,8 @@ function App() {
         if (event === 'INITIAL_SESSION' && !session) {
           console.log('INITIAL_SESSION event without session');
 
-          // Check if we're on update-password route
-          const currentPath = location.pathname;
+          // Check if we're on update-password route (window.location: see above)
+          const currentPath = window.location.pathname;
           if (currentPath.includes('/update-password')) {
             setSession(null);
             setIsPasswordRecovery(true);
@@ -283,7 +293,15 @@ function App() {
       }
       subscription.unsubscribe();
     };
-  }, [navigate]); // Include navigate in dependency array
+    // Subscribe ONCE for App's lifetime. The old [navigate] dep re-ran this
+    // effect on every route change (navigate is a new function per location),
+    // re-creating the Supabase auth subscription mid-navigation; Supabase
+    // re-emits INITIAL_SESSION to every new subscriber, and for a signed-in
+    // user that setSession(newSessionObject) re-rendered App in the middle of
+    // the AnimatePresence mode="wait" exit and permanently wedged it - the
+    // URL changed but the old page never left (black screen / dead clicks).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Check if we're on the update-password route (allow it even with/without session for recovery)
   const isUpdatePasswordRoute = location.pathname === '/update-password';
