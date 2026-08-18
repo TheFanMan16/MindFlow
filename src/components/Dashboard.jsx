@@ -492,9 +492,11 @@ const Dashboard = () => {
         </span>
       </div>
 
-      {/* The page shell: content left-aligned to the shell, max-width 1136,
-          34px above and 64px below (mindflow-design skill - every route). */}
-      <div className="w-full max-w-[1136px] px-10 pb-16 pt-[34px]">
+      {/* The page shell: max-width 1136 centered (mx-auto), 34px above and
+          64px below. Centered to match every other route's shell (they all
+          carry mx-auto) - without it the column pins to the sidebar and wide
+          viewports read as a broken half-empty page. */}
+      <div className="mx-auto w-full max-w-[1136px] px-10 pb-16 pt-[34px]">
         <>
             {/* Each zone gates on ITS OWN sources: a static skeleton at the
                 real zone's dimensions until they all settle (so a zone paints
